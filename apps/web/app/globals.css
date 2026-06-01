@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans bg-white text-stone-900 dark:bg-stone-950 dark:text-stone-100 min-h-screen antialiased selection:bg-amber-100 dark:selection:bg-stone-800 selection:text-stone-900 transition-colors duration-200 relative;
+    background-image: radial-gradient(circle at 1px 1px, theme('colors.stone.200') 1px, transparent 0);
+    background-size: 24px 24px;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading tracking-tight;
+  }
+  
+  .dark body {
+    background-image: radial-gradient(circle at 1px 1px, theme('colors.stone.800') 1px, transparent 0);
+  }
+
+  /* Lively subtle shifting accent overlay */
+  body::before {
+    content: "";
+    @apply absolute inset-0 -z-10 pointer-events-none opacity-20 dark:opacity-[0.03] transition-all;
+    background: radial-gradient(circle at 50% 20%, #A3B19B 0%, transparent 60%);
+    animation: shiftAccent 12s ease-in-out infinite alternate;
+  }
+
+  a {
+    @apply text-stone-950 dark:text-stone-50 hover:text-amber-800 dark:hover:text-amber-400 transition-colors duration-200 no-underline font-semibold;
+  }
+}
+
+@keyframes shiftAccent {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 100% 50%; }
+}
+
+@layer utilities {
+  .panel {
+    @apply rounded-md bg-stone-50/50 dark:bg-stone-900/60 p-6 shadow-sm hover:shadow transition-all duration-200;
+  }
+
+  .panel-tall {
+    @apply panel border-l border-r border-t-0 border-b-0 border-stone-300 dark:border-stone-800 hover:border-stone-400 dark:hover:border-stone-700;
+  }
+
+  .panel-wide {
+    @apply panel border-t border-b border-l-0 border-r-0 border-stone-300 dark:border-stone-800 hover:border-stone-400 dark:hover:border-stone-700;
+  }
+
+  .premium-gradient-text {
+    @apply text-stone-950 dark:text-white font-bold tracking-tight;
+  }
+  
+  .glass-nav {
+    @apply sticky top-0 z-50 mx-auto max-w-full border-b border-stone-300 dark:border-stone-800 bg-white/95 dark:bg-stone-950/95 backdrop-blur-md shadow-sm px-6 py-4 transition-all duration-200;
+  }
+
+  /* Outline buttons with full dark border in light, glow/shimmer in dark */
+  .btn-primary, .btn-secondary, .btn-accent {
+    @apply inline-flex items-center justify-center rounded-md border-2 border-stone-950 dark:border-stone-800 bg-white dark:bg-stone-950 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-stone-950 dark:text-stone-200 transition-all duration-200 cursor-pointer;
+  }
+
+  .btn-primary:hover, .btn-secondary:hover, .btn-accent:hover {
+    @apply bg-[#F1F5F0] dark:bg-stone-950 dark:border-amber-500/85 dark:text-amber-400 dark:shadow-[0_0_12px_rgba(245,158,11,0.25)] scale-[1.01] transition-all duration-200;
+  }
+
+  .btn-primary:active, .btn-secondary:active, .btn-accent:active {
+    @apply bg-[#e2ede0] dark:bg-stone-950 dark:border-amber-600 dark:shadow-[0_0_16px_rgba(245,158,11,0.35)] scale-[0.99] transition-all duration-200;
+  }
+
+  .input-field {
+    @apply w-full rounded-md border border-stone-300 dark:border-stone-800 bg-white dark:bg-stone-900 px-4 py-2.5 text-stone-950 dark:text-stone-50 placeholder-stone-400 dark:placeholder-stone-600 shadow-sm outline-none focus:border-stone-900 dark:focus:border-stone-300 focus:ring-1 focus:ring-stone-400/50 transition-all duration-200;
+  }
+
+  /* Custom high-contrast scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-stone-50 dark:bg-stone-950;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-md bg-stone-300 dark:bg-stone-800 hover:bg-stone-400 dark:hover:bg-stone-700 transition-colors;
+  }
+}
+
+
+

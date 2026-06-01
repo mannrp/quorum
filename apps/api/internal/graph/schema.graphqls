@@ -1,0 +1,217 @@
+type User {
+  id: ID!
+  authUserId: String!
+  username: String!
+  email: String
+  fullName: String!
+  bio: String
+  discipline: String
+  university: String
+  linkedinUrl: String
+  githubUrl: String
+  portfolioUrl: String
+  resumeUrl: String
+  avatarUrl: String
+  tags: [Tag!]!
+  createdAt: String!
+}
+
+type Tag {
+  id: ID!
+  name: String!
+  isPredefined: Boolean!
+}
+
+type Team {
+  id: ID!
+  name: String!
+  description: String
+  isComplete: Boolean!
+  maxSize: Int!
+  discipline: String
+  members: [TeamMembership!]!
+  project: Project
+  createdBy: User!
+  createdAt: String!
+}
+
+type TeamMembership {
+  id: ID!
+  user: User!
+  team: Team!
+  role: TeamRole!
+  joinedAt: String!
+}
+
+type TeamJoinRequest {
+  id: ID!
+  team: Team!
+  user: User!
+  message: String
+  status: ApplicationStatus!
+  createdAt: String!
+}
+
+type Project {
+  id: ID!
+  title: String!
+  description: String!
+  constraints: String
+  disciplines: [String!]!
+  teamSizeMin: Int!
+  teamSizeMax: Int!
+  status: ProjectStatus!
+  owner: User!
+  team: Team
+  fileUrl: String
+  videoUrl: String
+  applications: [ProjectApplication!]!
+  createdAt: String!
+}
+
+type ProjectApplication {
+  id: ID!
+  project: Project!
+  team: Team!
+  message: String
+  status: ApplicationStatus!
+  createdAt: String!
+}
+
+type Message {
+  id: ID!
+  sender: User!
+  receiver: User!
+  body: String!
+  read: Boolean!
+  createdAt: String!
+}
+
+type Notification {
+  id: ID!
+  type: String!
+  payload: String!
+  read: Boolean!
+  createdAt: String!
+}
+
+type UploadSignature {
+  url: String!
+  key: String!
+  publicUrl: String
+  expiresAt: String!
+  fields: [UploadField!]!
+}
+
+type UploadField {
+  name: String!
+  value: String!
+}
+
+enum TeamRole { LEAD CO_LEAD MEMBER }
+enum ProjectStatus { OPEN IN_REVIEW CLAIMED CLOSED }
+enum ApplicationStatus { PENDING ACCEPTED REJECTED }
+enum UploadAssetKind { RESUME PROJECT_FILE AVATAR VIDEO }
+
+input UpdateProfileInput {
+  fullName: String!
+  bio: String
+  discipline: String
+  university: String
+  linkedinUrl: String
+  githubUrl: String
+  portfolioUrl: String
+  resumeUrl: String
+  avatarUrl: String
+}
+
+input BootstrapProfileInput {
+  username: String!
+  email: String
+  fullName: String!
+  discipline: String
+  university: String
+}
+
+input CreateTeamInput {
+  name: String!
+  description: String
+  discipline: String
+  maxSize: Int = 12
+}
+
+input UpdateTeamInput {
+  name: String!
+  description: String
+  discipline: String
+  maxSize: Int!
+  isComplete: Boolean!
+}
+
+input CreateProjectInput {
+  title: String!
+  description: String!
+  constraints: String
+  disciplines: [String!]!
+  teamSizeMin: Int = 10
+  teamSizeMax: Int = 12
+  fileUrl: String
+  videoUrl: String
+}
+
+input UpdateProjectInput {
+  title: String!
+  description: String!
+  constraints: String
+  disciplines: [String!]!
+  teamSizeMin: Int!
+  teamSizeMax: Int!
+  status: ProjectStatus!
+  fileUrl: String
+  videoUrl: String
+}
+
+input SignUploadInput {
+  kind: UploadAssetKind!
+  filename: String!
+  contentType: String!
+  size: Int!
+}
+
+type Query {
+  me: User
+  user(username: String!): User
+  users(discipline: String, tag: String, search: String): [User!]!
+  team(id: ID!): Team
+  teams(discipline: String, hasProject: Boolean, isComplete: Boolean, search: String): [Team!]!
+  project(id: ID!): Project
+  projects(discipline: String, status: ProjectStatus, search: String): [Project!]!
+  myMessages(withUser: ID!): [Message!]!
+  myInbox: [User!]!
+  myNotifications: [Notification!]!
+}
+
+type Mutation {
+  bootstrapProfile(input: BootstrapProfileInput!): User!
+  updateProfile(input: UpdateProfileInput!): User!
+  createTeam(input: CreateTeamInput!): Team!
+  updateTeam(id: ID!, input: UpdateTeamInput!): Team!
+  deleteTeam(id: ID!): Boolean!
+  removeMember(teamId: ID!, userId: ID!): Boolean!
+  promoteMember(teamId: ID!, userId: ID!, role: TeamRole!): TeamMembership!
+  requestJoin(teamId: ID!, message: String): TeamJoinRequest!
+  respondToJoinRequest(requestId: ID!, accept: Boolean!): Boolean!
+  createProject(input: CreateProjectInput!): Project!
+  updateProject(id: ID!, input: UpdateProjectInput!): Project!
+  deleteProject(id: ID!): Boolean!
+  applyToProject(projectId: ID!, teamId: ID!, message: String): ProjectApplication!
+  respondToApplication(applicationId: ID!, accept: Boolean!): Boolean!
+  associateProject(teamId: ID!, projectId: ID!): Team!
+  sendMessage(receiverId: ID!, body: String!): Message!
+  markRead(messageId: ID!): Boolean!
+  markNotificationRead(notificationId: ID!): Boolean!
+  signUpload(input: SignUploadInput!): UploadSignature!
+  removeUser(userId: ID!): Boolean!
+  removeTeam(teamId: ID!): Boolean!
+  removeProject(projectId: ID!): Boolean!
+}
