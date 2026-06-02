@@ -11,8 +11,8 @@ const config: Config = {
         surface: "#F5F9FC"
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "sans-serif"],
-        heading: ["var(--font-plus-jakarta)", "sans-serif"],
+        sans: ["var(--font-sans)", "sans-serif"],
+        serif: ["var(--font-serif)", "sans-serif"],
       }
     }
   },
