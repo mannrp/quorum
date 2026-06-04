@@ -48,18 +48,18 @@ export function DeadlineDisplay({ deadlineAt, label = "Universal Match Deadline"
   });
 
   return (
-    <div className={`p-3 border rounded-lg space-y-1 text-xs ${isExpired ? "bg-rose-50/50 border-rose-250 dark:bg-rose-950/15 dark:border-rose-900 text-rose-800 dark:text-rose-350" : "bg-[#f8f9fa] dark:bg-[#111422] border-stone-250 dark:border-stone-850 text-stone-700 dark:text-slate-350"}`}>
+    <div className={`p-3 border rounded-none space-y-1 text-xs ${isExpired ? "bg-[var(--color-danger-bg)] border-[var(--color-danger)] text-[var(--color-danger)]" : "bg-[var(--bg-app)] border-[var(--border-app)] text-[var(--text-app)]"}`}>
       <div className="flex items-center justify-between font-bold">
-        <span>{label}</span>
-        <span className={`${isExpired ? "text-rose-600 dark:text-rose-450" : "text-amber-600 dark:text-amber-400"}`}>
+        <span className="font-serif uppercase tracking-tight">{label}</span>
+        <span className={`font-mono ${isExpired ? "text-[var(--color-danger)]" : "text-[var(--color-warning)]"}`}>
           {timeLeft}
         </span>
       </div>
-      <div className="text-[10px] text-stone-400">
+      <div className="text-[10px] text-stone-400 font-mono">
         Expires: {dateStr}
       </div>
       {consequenceText && (
-        <div className="text-[10px] italic opacity-85 mt-1 border-t border-stone-200/50 dark:border-stone-800/50 pt-1">
+        <div className="text-[10px] italic opacity-85 mt-1 border-t border-[var(--border-subtle)] pt-1">
           {consequenceText}
         </div>
       )}
