@@ -51,25 +51,48 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input model.Update
 	if err != nil {
 		return nil, err
 	}
-	user, err := r.Queries.UpdateProfile(ctx, db.UpdateProfileParams{
-		ID:                    current.ID,
-		FullName:              input.FullName,
-		Bio:                   text(input.Bio),
-		Discipline:            text(input.Discipline),
-		University:            text(input.University),
-		LinkedinUrl:           text(input.LinkedinURL),
-		GithubUrl:             text(input.GithubURL),
-		PortfolioUrl:          text(input.PortfolioURL),
-		ResumeUrl:             text(input.ResumeURL),
-		AvatarUrl:             text(input.AvatarURL),
-		UserIntent:            derefString(input.UserIntent, current.UserIntent),
-		ResumeVisibility:      derefResumeVisibility(input.ResumeVisibility, current.ResumeVisibility),
-		Discord:               text(input.Discord),
-		AvailabilityNote:      text(input.AvailabilityNote),
-		PreferredProjectAreas: input.PreferredProjectAreas,
-		ProfileComplete:       derefBool(input.ProfileComplete, profileComplete(input)),
-	})
-	if err != nil {
+	skills, replaceSkills := profileSkills(input)
+	var user db.User
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		user, err = q.UpdateProfile(ctx, db.UpdateProfileParams{
+			ID:                    current.ID,
+			FullName:              input.FullName,
+			Bio:                   text(input.Bio),
+			Discipline:            text(input.Discipline),
+			University:            text(input.University),
+			LinkedinUrl:           text(input.LinkedinURL),
+			GithubUrl:             text(input.GithubURL),
+			PortfolioUrl:          text(input.PortfolioURL),
+			ResumeUrl:             text(input.ResumeURL),
+			AvatarUrl:             text(input.AvatarURL),
+			UserIntent:            derefString(input.UserIntent, current.UserIntent),
+			ResumeVisibility:      derefResumeVisibility(input.ResumeVisibility, current.ResumeVisibility),
+			Discord:               text(input.Discord),
+			AvailabilityNote:      text(input.AvailabilityNote),
+			PreferredProjectAreas: input.PreferredProjectAreas,
+			ProfileComplete:       derefBool(input.ProfileComplete, profileComplete(input, skills, replaceSkills)),
+		})
+		if err != nil {
+			return err
+		}
+		if !replaceSkills {
+			return nil
+		}
+		if err := q.ClearUserTags(ctx, current.ID); err != nil {
+			return err
+		}
+		for _, skill := range skills {
+			tag, err := q.UpsertTag(ctx, skill)
+			if err != nil {
+				return err
+			}
+			if err := q.AddUserTag(ctx, db.AddUserTagParams{UserID: current.ID, TagID: tag.ID}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 	return r.user(ctx, user)
@@ -732,14 +755,14 @@ func (r *mutationResolver) UpdateProject(ctx context.Context, id string, input m
 	if err := r.withTx(ctx, func(q *db.Queries) error {
 		var err error
 		project, err = q.UpdateProject(ctx, db.UpdateProjectParams{
-			ID: projectID, Title: input.Title, Summary: input.Summary, Description: input.Description, Constraints: text(input.Constraints),
+			ID: projectID, Title: input.Title, Summary: derefString(input.Summary, before.Summary), Description: input.Description, Constraints: textOrCurrent(input.Constraints, before.Constraints),
 			Disciplines: input.Disciplines, TeamSizeMin: int32(input.TeamSizeMin), TeamSizeMax: int32(input.TeamSizeMax),
-			LifecycleState: derefProjectLifecycle(input.LifecycleState, string(model.ProjectLifecycleStateOpen)),
-			FileUrl:        text(input.FileURL), VideoUrl: text(input.VideoURL),
-			ApprovalState:  derefProjectApproval(input.ApprovalState, string(model.ProjectApprovalStateUnverified)),
-			RequiredSkills: input.RequiredSkills, NiceToHaveSkills: input.NiceToHaveSkills, Deliverables: text(input.Deliverables),
-			Timeline: text(input.Timeline), EvaluationCriteria: text(input.EvaluationCriteria), ExternalResources: input.ExternalResources,
-			OwnerContactPreference: text(input.OwnerContactPreference), ApplicationQuestions: []byte(derefString(input.ApplicationQuestions, "[]")),
+			LifecycleState: lifecycleForProjectUpdate(input.LifecycleState, input.Status, before.LifecycleState),
+			FileUrl:        textOrCurrent(input.FileURL, before.FileUrl), VideoUrl: textOrCurrent(input.VideoURL, before.VideoUrl),
+			ApprovalState:  derefProjectApproval(input.ApprovalState, before.ApprovalState),
+			RequiredSkills: stringsOrCurrent(input.RequiredSkills, before.RequiredSkills), NiceToHaveSkills: stringsOrCurrent(input.NiceToHaveSkills, before.NiceToHaveSkills), Deliverables: textOrCurrent(input.Deliverables, before.Deliverables),
+			Timeline: textOrCurrent(input.Timeline, before.Timeline), EvaluationCriteria: textOrCurrent(input.EvaluationCriteria, before.EvaluationCriteria), ExternalResources: stringsOrCurrent(input.ExternalResources, before.ExternalResources),
+			OwnerContactPreference: textOrCurrent(input.OwnerContactPreference, before.OwnerContactPreference), ApplicationQuestions: bytesOrCurrent(input.ApplicationQuestions, before.ApplicationQuestions),
 		})
 		if err != nil {
 			return err
@@ -1614,6 +1637,67 @@ func (r *queryResolver) MyTeamInvitations(ctx context.Context) ([]*model.TeamInv
 	out := make([]*model.TeamInvitation, 0, len(rows))
 	for _, row := range rows {
 		mapped, err := r.teamInvitation(ctx, row)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, mapped)
+	}
+	return out, nil
+}
+
+// MyJoinRequests is the resolver for the myJoinRequests field.
+func (r *queryResolver) MyJoinRequests(ctx context.Context, status *model.JoinRequestStatus) ([]*model.TeamJoinRequest, error) {
+	current, err := requireUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.expireDueWorkflows(ctx, r.Queries); err != nil {
+		return nil, err
+	}
+	var statusText *string
+	if status != nil {
+		value := string(*status)
+		statusText = &value
+	}
+	rows, err := r.Queries.ListJoinRequestsForUser(ctx, db.ListJoinRequestsForUserParams{UserID: current.ID, Status: text(statusText)})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*model.TeamJoinRequest, 0, len(rows))
+	for _, row := range rows {
+		mapped, err := r.joinRequest(ctx, row)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, mapped)
+	}
+	return out, nil
+}
+
+// TeamJoinRequests is the resolver for the teamJoinRequests field.
+func (r *queryResolver) TeamJoinRequests(ctx context.Context, teamID string, status *model.JoinRequestStatus) ([]*model.TeamJoinRequest, error) {
+	tid, err := uuid(teamID)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.requireTeamLead(ctx, tid); err != nil {
+		return nil, err
+	}
+	if err := r.expireDueWorkflows(ctx, r.Queries); err != nil {
+		return nil, err
+	}
+	var statusText *string
+	if status != nil {
+		value := string(*status)
+		statusText = &value
+	}
+	rows, err := r.Queries.ListJoinRequestsForTeam(ctx, db.ListJoinRequestsForTeamParams{TeamID: tid, Status: text(statusText)})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*model.TeamJoinRequest, 0, len(rows))
+	for _, row := range rows {
+		mapped, err := r.joinRequest(ctx, row)
 		if err != nil {
 			return nil, err
 		}

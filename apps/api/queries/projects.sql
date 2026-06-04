@@ -18,11 +18,10 @@ WHERE owner_id = $1
 ORDER BY created_at DESC;
 
 -- name: ListProjectApplications :many
-SELECT pa.*, t.name AS team_name
-FROM project_applications pa
-JOIN teams t ON t.id = pa.team_id
-WHERE pa.project_id = $1
-ORDER BY pa.created_at DESC;
+SELECT *
+FROM project_applications
+WHERE project_id = $1
+ORDER BY created_at DESC;
 
 -- name: GetProjectApplication :one
 SELECT *

@@ -13,15 +13,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [me, setMe] = useState<User | null>(null);
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [isApplyOpen, setIsApplyOpen] = useState(false);
-  const [answers, setAnswers] = useState({
-    q1: "We are extremely interested in this project due to our experience in container orchestration.",
-    q2: "Our team has completed coursework in SOEN 387 and has hands-on React / Node.js skills.",
-    q3: "We will adopt a test-driven development flow and build an automated CI/CD pipeline.",
-    message: "We have complete discipline coverage for this project scope."
-  });
+  const [interest, setInterest] = useState("");
+  const [experience, setExperience] = useState("");
+  const [approach, setApproach] = useState("");
+  const [message, setMessage] = useState("");
+  const [customAnswers, setCustomAnswers] = useState<string[]>([]);
+  const [isReviewStep, setIsReviewStep] = useState(false);
 
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [isSubmitApprovalOpen, setIsSubmitApprovalOpen] = useState(false);
+  const [submittingApproval, setSubmittingApproval] = useState(false);
 
   const project = data?.project;
 
@@ -64,11 +66,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
     const answerPayload = JSON.stringify({
       defaultQuestions: {
-        interest: answers.q1,
-        experience: answers.q2,
-        approach: answers.q3
+        interest,
+        experience,
+        approach
       },
       customQuestions: project.applicationQuestions || "",
+      customAnswers: customAnswers,
       submittedAt: new Date().toISOString()
     });
 
@@ -78,17 +81,50 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         `mutation Apply($input: ApplyToProjectInput!) {
           applyToProjectInput(input: $input) { id status }
         }`,
-        { input: { projectId: id, teamId: myTeam.id, message: answers.message, answers: answerPayload } },
+        { input: { projectId: id, teamId: myTeam.id, message, answers: answerPayload } },
         token
       );
       setNotice("Application submitted successfully.");
       setIsApplyOpen(false);
+      // reset form
+      setInterest("");
+      setExperience("");
+      setApproach("");
+      setMessage("");
+      setCustomAnswers([]);
+      setIsReviewStep(false);
       await reload();
     } catch (err) {
       setNotice(userFacingError(err));
       setIsApplyOpen(false);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleConfirmSubmitApproval = async () => {
+    setSubmittingApproval(true);
+    setNotice(null);
+    try {
+      const token = getAuthToken();
+      await graphqlRequest(
+        `mutation SubmitApproval($projectId: ID!) {
+          submitProjectForApproval(projectId: $projectId) {
+            id
+            approvalState
+          }
+        }`,
+        { projectId: id },
+        token
+      );
+      setNotice("Project successfully submitted for professor approval!");
+      setIsSubmitApprovalOpen(false);
+      await reload();
+    } catch (err) {
+      setNotice(userFacingError(err));
+      setIsSubmitApprovalOpen(false);
+    } finally {
+      setSubmittingApproval(false);
     }
   };
 
@@ -123,8 +159,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       <div className="panel flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold font-serif text-[#000b60] dark:text-[#a5b4fc] tracking-tight">{project.title}</h1>
+            <h1 className="text-2xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">{project.title}</h1>
             <Status value={project.status} />
+            <Status value={project.approvalState || "UNVERIFIED"} />
           </div>
           <div className="flex flex-wrap gap-1.5">
             {project.disciplines.map((discipline) => (
@@ -134,13 +171,37 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           {notice && <p className="text-xs text-emerald-600 font-bold">{notice}</p>}
         </div>
 
-        <button
-          onClick={() => setIsApplyOpen(true)}
-          disabled={project.status === "CLAIMED"}
-          className={`btn-primary w-full sm:w-auto text-xs ${project.status === "CLAIMED" ? "opacity-50 cursor-not-allowed hover:bg-[#283593]" : ""}`}
-        >
-          {project.status === "CLAIMED" ? "Project Claimed" : "Apply with Team"}
-        </button>
+        {me && me.id !== project.owner.id ? (
+          <button
+            onClick={() => setIsApplyOpen(true)}
+            disabled={project.status === "CLAIMED"}
+            className={`btn-primary w-full sm:w-auto text-xs ${project.status === "CLAIMED" ? "opacity-50 cursor-not-allowed hover:bg-[var(--btn-primary-hover)]" : ""}`}
+          >
+            {project.status === "CLAIMED" ? "Project Claimed" : "Apply with Team"}
+          </button>
+        ) : me ? (
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
+            <Link href={`/projects/${id}/edit`} className="btn-secondary py-2 px-3.5 text-xs text-center">
+              Edit Project
+            </Link>
+            {project.permissions?.canSubmitForApproval && (project.approvalState || "UNVERIFIED") !== "PROFESSOR_APPROVED" && (project.approvalState || "UNVERIFIED") !== "SUBMITTED_FOR_APPROVAL" && (
+              <button
+                onClick={() => setIsSubmitApprovalOpen(true)}
+                className="btn-primary py-2 px-3.5 text-xs"
+              >
+                Submit for Approval
+              </button>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={() => setIsApplyOpen(true)}
+            disabled={project.status === "CLAIMED"}
+            className={`btn-primary w-full sm:w-auto text-xs ${project.status === "CLAIMED" ? "opacity-50 cursor-not-allowed hover:bg-[var(--btn-primary-hover)]" : ""}`}
+          >
+            {project.status === "CLAIMED" ? "Project Claimed" : "Apply with Team"}
+          </button>
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
@@ -159,11 +220,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           {/* Received applications */}
           <Section title="Received Roster Claims">
             {project.applications.length > 0 ? (
-              <div className="space-y-4 divide-y divide-stone-150 dark:divide-stone-850">
+              <div className="space-y-4 divide-y divide-[var(--border-subtle)]">
                 {project.applications.map((application) => (
                   <div key={application.id} className="pt-4 first:pt-0 flex items-start justify-between gap-4">
                     <div className="space-y-1">
-                      <Link href={`/teams/${application.team.id}`} className="font-bold text-stone-900 dark:text-indigo-300 hover:underline text-xs">
+                      <Link href={`/teams/${application.team.id}`} className="font-bold text-[var(--accent-app)] hover:underline text-xs">
                         {application.team.name}
                       </Link>
                       {application.message && (
@@ -184,20 +245,27 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         <div className="space-y-6">
           <Section title="Target Criteria">
             <div className="space-y-4 text-xs">
-              <div className="flex justify-between py-2 border-b border-stone-200 dark:border-stone-800">
+              <div className="flex justify-between py-2 border-b border-[var(--border-subtle)]">
                 <span className="text-stone-500">Min Team Size:</span>
-                <span className="font-semibold text-stone-800 dark:text-slate-200">{project.teamSizeMin} Students</span>
+                <span className="font-semibold text-stone-850 dark:text-slate-200">{project.teamSizeMin} Students</span>
               </div>
-              <div className="flex justify-between py-2 border-b border-stone-200 dark:border-stone-800">
+              <div className="flex justify-between py-2 border-b border-[var(--border-subtle)]">
                 <span className="text-stone-500">Max Team Size:</span>
-                <span className="font-semibold text-stone-800 dark:text-slate-200">{project.teamSizeMax} Students</span>
+                <span className="font-semibold text-stone-850 dark:text-slate-200">{project.teamSizeMax} Students</span>
               </div>
-              <div className="flex justify-between py-2 border-b border-stone-200 dark:border-stone-800">
+              <div className="flex justify-between py-2 border-b border-[var(--border-subtle)]">
                 <span className="text-stone-500">Sponsor Owner:</span>
-                <Link href={`/profile/${project.owner.username}`} className="font-semibold text-[#283593] dark:text-indigo-400">
+                <Link href={`/profile/${project.owner.username}`} className="font-semibold text-[var(--accent-app)]">
                   {project.owner.fullName}
                 </Link>
               </div>
+              {me && me.id !== project.owner.id && (
+                <div className="pt-2">
+                  <Link href={`/inbox?userId=${project.owner.id}`} className="btn-secondary w-full py-1.5 text-[11px] block text-center">
+                    ✉ Message Owner
+                  </Link>
+                </div>
+              )}
             </div>
           </Section>
 
@@ -206,12 +274,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               {project.fileUrl || project.videoUrl ? (
                 <div className="space-y-2">
                   {project.fileUrl && (
-                    <a href={project.fileUrl} target="_blank" rel="noreferrer" className="block text-xs text-[#283593] dark:text-indigo-400 hover:underline font-semibold">
+                    <a href={project.fileUrl} target="_blank" rel="noreferrer" className="block text-xs text-[var(--accent-app)] hover:underline font-semibold">
                       📄 Specifications Sheet.pdf
                     </a>
                   )}
                   {project.videoUrl && (
-                    <a href={project.videoUrl} target="_blank" rel="noreferrer" className="block text-xs text-[#283593] dark:text-indigo-400 hover:underline font-semibold">
+                    <a href={project.videoUrl} target="_blank" rel="noreferrer" className="block text-xs text-[var(--accent-app)] hover:underline font-semibold">
                       🎬 Video Brief / Requirements
                     </a>
                   )}
@@ -246,62 +314,175 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             <button onClick={() => setIsApplyOpen(false)} className="btn-secondary py-1.5 px-3.5 text-xs mt-2">Dismiss</button>
           </div>
         ) : (
-          <form onSubmit={handleApplySubmit} className="space-y-4">
-            <div className="p-3 bg-indigo-50 dark:bg-indigo-950/20 text-[10px] border-l-4 border-l-[#283593] text-stone-600 dark:text-slate-350 leading-relaxed">
-              Applying on behalf of team: <strong>{myTeam.name}</strong> ({myTeam.maxSize} max slots).
-            </div>
+          (() => {
+            let customQuestionsList: string[] = [];
+            try {
+              if (project?.applicationQuestions) {
+                customQuestionsList = JSON.parse(project.applicationQuestions);
+                if (!Array.isArray(customQuestionsList)) {
+                  customQuestionsList = [];
+                }
+              }
+            } catch (e) {
+              if (project?.applicationQuestions?.trim()) {
+                customQuestionsList = [project.applicationQuestions];
+              }
+            }
 
-            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">1. Why is your team interested in this project?</label>
-                <textarea
-                  required
-                  value={answers.q1}
-                  onChange={(e) => setAnswers({ ...answers, q1: e.target.value })}
-                  className="input-field text-xs min-h-16"
-                />
-              </div>
+            const handleCustomAnswerChange = (idx: number, val: string) => {
+              setCustomAnswers((prev) => {
+                const next = [...prev];
+                next[idx] = val;
+                return next;
+              });
+            };
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">2. What relevant skills or experience does your team bring?</label>
-                <textarea
-                  required
-                  value={answers.q2}
-                  onChange={(e) => setAnswers({ ...answers, q2: e.target.value })}
-                  className="input-field text-xs min-h-16"
-                />
-              </div>
+            const handleNextStep = (e: React.FormEvent) => {
+              e.preventDefault();
+              setIsReviewStep(true);
+            };
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">3. How would your team approach the project?</label>
-                <textarea
-                  required
-                  value={answers.q3}
-                  onChange={(e) => setAnswers({ ...answers, q3: e.target.value })}
-                  className="input-field text-xs min-h-16"
-                />
-              </div>
+            if (isReviewStep) {
+              return (
+                <div className="space-y-4">
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/20 text-[10px] border-l-4 border-l-amber-500 text-stone-700 dark:text-slate-350 leading-relaxed font-semibold">
+                    Please review your application responses carefully before submitting.
+                  </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Additional Message to Sponsor</label>
-                <textarea
-                  value={answers.message}
-                  onChange={(e) => setAnswers({ ...answers, message: e.target.value })}
-                  className="input-field text-xs min-h-16"
-                />
-              </div>
-            </div>
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 text-xs">
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-stone-500 uppercase text-[9px] font-mono">1. Interest in Project</h4>
+                      <p className="bg-[var(--bg-app)] p-2.5 rounded-none border border-[var(--border-app)] whitespace-pre-wrap">{interest || "(Blank)"}</p>
+                    </div>
 
-            <div className="flex gap-2 justify-end pt-3 border-t border-stone-200 dark:border-stone-800">
-              <button type="button" onClick={() => setIsApplyOpen(false)} className="btn-secondary py-2 text-xs" disabled={submitting}>
-                Cancel
-              </button>
-              <button type="submit" className="btn-primary py-2 text-xs" disabled={submitting}>
-                {submitting ? "Submitting application..." : "Submit Claim Application"}
-              </button>
-            </div>
-          </form>
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-stone-500 uppercase text-[9px] font-mono">2. Team Skills & Experience</h4>
+                      <p className="bg-[var(--bg-app)] p-2.5 rounded-none border border-[var(--border-app)] whitespace-pre-wrap">{experience || "(Blank)"}</p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-stone-500 uppercase text-[9px] font-mono">3. Team Project Approach</h4>
+                      <p className="bg-[var(--bg-app)] p-2.5 rounded-none border border-[var(--border-app)] whitespace-pre-wrap">{approach || "(Blank)"}</p>
+                    </div>
+
+                    {customQuestionsList.map((q, idx) => (
+                      <div key={idx} className="space-y-1">
+                        <h4 className="font-bold text-stone-500 uppercase text-[9px] font-mono">Custom: {q}</h4>
+                        <p className="bg-[var(--bg-app)] p-2.5 rounded-none border border-[var(--border-app)] whitespace-pre-wrap">{customAnswers[idx] || "(Blank)"}</p>
+                      </div>
+                    ))}
+
+                    {message && (
+                      <div className="space-y-1">
+                        <h4 className="font-bold text-stone-500 uppercase text-[9px] font-mono">Additional Message</h4>
+                        <p className="bg-[var(--bg-app)] p-2.5 rounded-none border border-[var(--border-app)] whitespace-pre-wrap">{message}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 justify-end pt-3 border-t border-stone-200 dark:border-stone-800">
+                    <button type="button" onClick={() => setIsReviewStep(false)} className="btn-secondary py-2 text-xs" disabled={submitting}>
+                      Back to Edit
+                    </button>
+                    <button onClick={(e) => void handleApplySubmit(e)} className="btn-primary py-2 text-xs" disabled={submitting}>
+                      {submitting ? "Submitting Application..." : "Confirm & Submit Claims"}
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <form onSubmit={handleNextStep} className="space-y-4">
+                <div className="p-3 bg-[var(--color-info-bg)] text-[10px] border-l-4 border-l-[var(--color-info)] text-[var(--color-info)] leading-relaxed rounded-none font-mono">
+                  Applying on behalf of team: <strong>{myTeam.name}</strong> ({myTeam.maxSize} max slots).
+                </div>
+
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">1. Why is your team interested in this project?</label>
+                    <textarea
+                      required
+                      value={interest}
+                      onChange={(e) => setInterest(e.target.value)}
+                      className="input-field text-xs min-h-16"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">2. What relevant skills or experience does your team bring?</label>
+                    <textarea
+                      required
+                      value={experience}
+                      onChange={(e) => setExperience(e.target.value)}
+                      className="input-field text-xs min-h-16"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">3. How would your team approach the project?</label>
+                    <textarea
+                      required
+                      value={approach}
+                      onChange={(e) => setApproach(e.target.value)}
+                      className="input-field text-xs min-h-16"
+                    />
+                  </div>
+
+                  {customQuestionsList.map((q, idx) => (
+                    <div key={idx} className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Custom: {q}</label>
+                      <textarea
+                        required
+                        value={customAnswers[idx] || ""}
+                        onChange={(e) => handleCustomAnswerChange(idx, e.target.value)}
+                        className="input-field text-xs min-h-16"
+                      />
+                    </div>
+                  ))}
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Additional Message to Sponsor</label>
+                    <textarea
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      className="input-field text-xs min-h-16"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 justify-end pt-3 border-t border-stone-200 dark:border-stone-800">
+                  <button type="button" onClick={() => setIsApplyOpen(false)} className="btn-secondary py-2 text-xs" disabled={submitting}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-primary py-2 text-xs" disabled={submitting}>
+                    Continue to Review
+                  </button>
+                </div>
+              </form>
+            );
+          })()
         )}
+      </Modal>
+
+      {/* Submit for Approval Confirmation Modal */}
+      <Modal isOpen={isSubmitApprovalOpen} onClose={() => setIsSubmitApprovalOpen(false)} title="Submit Capstone Project for Approval">
+        <div className="space-y-4 text-xs">
+          <p className="text-stone-600 dark:text-stone-300 leading-relaxed">
+            Are you sure you want to submit this project challenge for professor approval?
+          </p>
+          <p className="text-stone-500">
+            Once submitted, course directors and professors will be notified to review the details, constraints, and scope. You will receive updates on the status dashboard.
+          </p>
+          <div className="flex gap-2 justify-end pt-3 border-t border-stone-200 dark:border-stone-800">
+            <button onClick={() => setIsSubmitApprovalOpen(false)} className="btn-secondary py-1.5 text-xs" disabled={submittingApproval}>
+              Cancel
+            </button>
+            <button onClick={handleConfirmSubmitApproval} className="btn-primary py-1.5 text-xs" disabled={submittingApproval}>
+              {submittingApproval ? "Submitting..." : "Confirm Submission"}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

@@ -12,11 +12,13 @@ import (
 
 type Querier interface {
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (TeamMembership, error)
+	AddUserTag(ctx context.Context, arg AddUserTagParams) error
 	ApplyToProject(ctx context.Context, arg ApplyToProjectParams) (ProjectApplication, error)
 	ArchiveProject(ctx context.Context, id pgtype.UUID) error
 	ArchiveTeam(ctx context.Context, id pgtype.UUID) error
 	AssociateProject(ctx context.Context, arg AssociateProjectParams) (Team, error)
 	ClaimProject(ctx context.Context, arg ClaimProjectParams) (Project, error)
+	ClearUserTags(ctx context.Context, userID pgtype.UUID) error
 	ConfirmJoinRequest(ctx context.Context, id pgtype.UUID) (TeamJoinRequest, error)
 	ConfirmProjectOfferByOwner(ctx context.Context, id pgtype.UUID) (ProjectApplication, error)
 	ConfirmProjectOfferByTeam(ctx context.Context, id pgtype.UUID) (ProjectApplication, error)
@@ -59,10 +61,11 @@ type Querier interface {
 	ListAdminUsers(ctx context.Context) ([]User, error)
 	ListAuditLogs(ctx context.Context, limit int32) ([]AuditLog, error)
 	ListInboxUsers(ctx context.Context, senderID pgtype.UUID) ([]User, error)
-	ListJoinRequestsForTeam(ctx context.Context, teamID pgtype.UUID) ([]ListJoinRequestsForTeamRow, error)
+	ListJoinRequestsForTeam(ctx context.Context, arg ListJoinRequestsForTeamParams) ([]TeamJoinRequest, error)
+	ListJoinRequestsForUser(ctx context.Context, arg ListJoinRequestsForUserParams) ([]TeamJoinRequest, error)
 	ListMessagesWithUser(ctx context.Context, arg ListMessagesWithUserParams) ([]Message, error)
 	ListNotifications(ctx context.Context, userID pgtype.UUID) ([]Notification, error)
-	ListProjectApplications(ctx context.Context, projectID pgtype.UUID) ([]ListProjectApplicationsRow, error)
+	ListProjectApplications(ctx context.Context, projectID pgtype.UUID) ([]ProjectApplication, error)
 	ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error)
 	ListProjectsForOwner(ctx context.Context, ownerID pgtype.UUID) ([]Project, error)
 	ListTeamInvitationsForTeam(ctx context.Context, teamID pgtype.UUID) ([]TeamInvitation, error)
@@ -87,6 +90,7 @@ type Querier interface {
 	UpdateProjectLifecycleState(ctx context.Context, arg UpdateProjectLifecycleStateParams) (Project, error)
 	UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error)
 	UpdateTeamCapstoneState(ctx context.Context, arg UpdateTeamCapstoneStateParams) error
+	UpsertTag(ctx context.Context, name string) (Tag, error)
 	UpsertUniversalDeadline(ctx context.Context, arg UpsertUniversalDeadlineParams) (UniversalDeadline, error)
 	WithdrawApplication(ctx context.Context, id pgtype.UUID) (ProjectApplication, error)
 	WithdrawCompetingProjectApplications(ctx context.Context, arg WithdrawCompetingProjectApplicationsParams) error

@@ -66,46 +66,46 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto py-4">
-      <div className="flex items-center justify-between border-b border-stone-250 dark:border-stone-850 pb-4">
+      <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-4">
         <div>
-          <h1 className="text-3xl font-bold font-serif text-[#000b60] dark:text-[#a5b4fc]">Updates & Inbox Notices</h1>
+          <h1 className="text-3xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">Updates & Inbox Notices</h1>
           <p className="text-sm text-stone-500">Track notifications, matching confirmations, and sponsor claims.</p>
         </div>
       </div>
 
-      {loading && <Section title="Loading"><p className="text-xs text-stone-500 animate-pulse">Syncing notices...</p></Section>}
-      {error && <Section title="GraphQL Error"><p className="text-xs text-rose-500 font-bold">{error}</p></Section>}
-      {actionError && <Section title="Action Failed"><p className="text-xs text-rose-500 font-bold">{actionError}</p></Section>}
+      {loading && <Section title="Loading"><p className="text-xs text-stone-500 animate-pulse font-mono uppercase tracking-wider">Syncing notices...</p></Section>}
+      {error && <Section title="GraphQL Error"><p className="text-xs text-rose-500 font-mono font-bold uppercase tracking-wider">{error}</p></Section>}
+      {actionError && <Section title="Action Failed"><p className="text-xs text-rose-500 font-mono font-bold uppercase tracking-wider">{actionError}</p></Section>}
 
       <div className="space-y-3">
         {!loading && !error && notifications.map((notification) => (
           <div
             key={notification.id}
             onClick={() => handleNotifClick(notification)}
-            className={`panel p-4 flex items-center justify-between gap-4 cursor-pointer hover:border-indigo-400/50 transition duration-200 ${
+            className={`flex items-center justify-between gap-4 p-4 cursor-pointer transition duration-150 border bg-[var(--surface-app)] rounded-none ${
               notification.read
-                ? "opacity-60"
-                : "border-indigo-200 bg-indigo-50/20 dark:border-indigo-900/50 dark:bg-indigo-950/10"
-            }`}
+                ? "border-[var(--border-subtle)] opacity-60"
+                : "border-[var(--border-app)] border-l-4 border-l-[var(--accent-app)]"
+            } hover:border-[var(--accent-app)]`}
           >
             <div className="flex items-center gap-4">
-              <div className="h-10 w-10 rounded-full bg-[#283593]/10 border border-[#283593]/20 flex items-center justify-center text-sm font-bold text-[#283593] dark:text-indigo-350">
+              <div className="h-8 w-8 rounded-none bg-[var(--bg-app)] border border-[var(--border-app)] flex items-center justify-center text-xs font-mono font-bold text-[var(--accent-app)]">
                 i
               </div>
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-[9px] uppercase tracking-wider text-[#283593] dark:text-indigo-300">
+                  <span className="font-bold text-[9px] font-mono uppercase tracking-wider text-[var(--accent-app)]">
                     {notification.type}
                   </span>
-                  <span className="text-[9px] text-stone-400">{notification.createdAt}</span>
+                  <span className="text-[9px] font-mono text-stone-400">{notification.createdAt}</span>
                 </div>
-                <p className="text-xs font-semibold text-stone-750 dark:text-slate-200">{getNotifText(notification)}</p>
+                <p className="text-xs font-semibold text-[var(--text-app)]">{getNotifText(notification)}</p>
               </div>
             </div>
             {!notification.read && (
               <button
                 onClick={(e) => void markRead(notification.id, e)}
-                className="rounded px-2.5 py-1 text-[10px] font-bold border transition bg-indigo-50 hover:bg-indigo-100/60 dark:bg-[#111422] text-[#283593] dark:text-indigo-300 border-indigo-200/50 dark:border-indigo-900/50 uppercase tracking-wider"
+                className="rounded-none px-2.5 py-1 text-[10px] font-bold border transition bg-[var(--bg-app)] hover:bg-[var(--accent-app)] hover:text-white border-[var(--border-app)] text-[var(--text-app)] uppercase tracking-wider font-mono"
               >
                 Mark Read
               </button>

@@ -11,6 +11,32 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addUserTag = `-- name: AddUserTag :exec
+INSERT INTO user_tags (user_id, tag_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type AddUserTagParams struct {
+	UserID pgtype.UUID `json:"user_id"`
+	TagID  pgtype.UUID `json:"tag_id"`
+}
+
+func (q *Queries) AddUserTag(ctx context.Context, arg AddUserTagParams) error {
+	_, err := q.db.Exec(ctx, addUserTag, arg.UserID, arg.TagID)
+	return err
+}
+
+const clearUserTags = `-- name: ClearUserTags :exec
+DELETE FROM user_tags
+WHERE user_id = $1
+`
+
+func (q *Queries) ClearUserTags(ctx context.Context, userID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, clearUserTags, userID)
+	return err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (auth_user_id, username, email, full_name, discipline, university, user_intent, bio)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -367,5 +393,20 @@ func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (U
 		&i.DeactivatedAt,
 		&i.ArchivedAt,
 	)
+	return i, err
+}
+
+const upsertTag = `-- name: UpsertTag :one
+INSERT INTO tags (name, is_predefined)
+VALUES ($1, false)
+ON CONFLICT (name) DO UPDATE
+SET name = EXCLUDED.name
+RETURNING id, name, is_predefined
+`
+
+func (q *Queries) UpsertTag(ctx context.Context, name string) (Tag, error) {
+	row := q.db.QueryRow(ctx, upsertTag, name)
+	var i Tag
+	err := row.Scan(&i.ID, &i.Name, &i.IsPredefined)
 	return i, err
 }

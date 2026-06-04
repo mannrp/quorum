@@ -30,6 +30,22 @@ JOIN user_tags ut ON ut.tag_id = t.id
 WHERE ut.user_id = $1
 ORDER BY t.name;
 
+-- name: UpsertTag :one
+INSERT INTO tags (name, is_predefined)
+VALUES ($1, false)
+ON CONFLICT (name) DO UPDATE
+SET name = EXCLUDED.name
+RETURNING *;
+
+-- name: ClearUserTags :exec
+DELETE FROM user_tags
+WHERE user_id = $1;
+
+-- name: AddUserTag :exec
+INSERT INTO user_tags (user_id, tag_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
+
 -- name: CreateUser :one
 INSERT INTO users (auth_user_id, username, email, full_name, discipline, university, user_intent, bio)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

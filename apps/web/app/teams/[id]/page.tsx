@@ -77,9 +77,9 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto py-12">
+      <div className="max-w-5xl mx-auto py-12 px-4">
         <Section title="Loading">
-          <p className="text-xs text-stone-500 animate-pulse uppercase tracking-wider">Syncing team registry...</p>
+          <p className="text-xs text-stone-500 font-mono animate-pulse uppercase tracking-wider">Syncing team registry...</p>
         </Section>
       </div>
     );
@@ -87,9 +87,9 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
 
   if (error || !team) {
     return (
-      <div className="max-w-2xl mx-auto py-12">
+      <div className="max-w-2xl mx-auto py-12 px-4">
         <Section title="Error Notice">
-          <p className="text-stone-400 text-xs">{error || "The requested team profile does not exist."}</p>
+          <p className="text-stone-400 text-xs font-mono">{error || "The requested team profile does not exist."}</p>
           <Link href="/teams" className="btn-secondary mt-4 inline-block">Back to Groups Registry</Link>
         </Section>
       </div>
@@ -103,18 +103,18 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   const isMember = !!userMembership;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto py-4">
+    <div className="space-y-6 max-w-5xl mx-auto py-4 px-4">
       {/* Team Header */}
       <div className="panel flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold font-serif text-[#000b60] dark:text-[#a5b4fc] tracking-tight">{team.name}</h1>
+            <h1 className="text-2xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">{team.name}</h1>
             <Status value={team.isComplete ? "COMPLETE" : "RECRUITING"} />
             <Badge label={team.discipline || "CROSS-DISCIPLINARY"} type="discipline" />
           </div>
-          <p className="text-stone-500 leading-relaxed max-w-2xl text-xs">{team.description || "A student-led team coordinating Concordia Capstone achievements."}</p>
-          {notice && <p className="text-xs text-emerald-600 font-bold">{notice}</p>}
-          {confirmNotice && <p className="text-xs text-indigo-600 font-bold">{confirmNotice}</p>}
+          <p className="text-stone-500 leading-relaxed max-w-2xl text-xs font-sans">{team.description || "A student-led team coordinating Concordia Capstone achievements."}</p>
+          {notice && <p className="text-xs text-emerald-600 font-mono font-bold uppercase tracking-wider">{notice}</p>}
+          {confirmNotice && <p className="text-xs text-indigo-600 font-mono font-bold uppercase tracking-wider">{confirmNotice}</p>}
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2 shrink-0">
@@ -131,6 +131,11 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
               Request to Join
             </button>
           )}
+          {me && me.id !== team.createdBy.id && (
+            <Link href={`/inbox?userId=${team.createdBy.id}`} className="btn-secondary w-full sm:w-auto text-center text-xs flex items-center justify-center gap-1">
+              ✉ Message Lead
+            </Link>
+          )}
         </div>
       </div>
 
@@ -138,18 +143,18 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
         {/* Left main content column */}
         <div className="md:col-span-2 space-y-6">
           <Section title="Team Roster Ranks">
-            <div className="divide-y divide-stone-150 dark:divide-stone-850">
+            <div className="divide-y divide-[var(--border-subtle)]">
               {team.members.map((member) => (
                 <div key={member.id} className="flex items-center justify-between py-4 first:pt-0 last:pb-0">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-stone-100 border border-stone-250 dark:border-stone-800 flex items-center justify-center font-bold text-[#283593] dark:text-indigo-400">
+                    <div className="h-10 w-10 rounded-none bg-[var(--bg-app)] border border-[var(--border-app)] flex items-center justify-center font-mono font-bold text-[var(--text-app)] uppercase">
                       {member.user.fullName.charAt(0)}
                     </div>
                     <div>
-                      <Link href={`/profile/${member.user.username}`} className="font-bold text-stone-900 dark:text-indigo-300 hover:underline text-sm">
+                      <Link href={`/profile/${member.user.username}`} className="font-bold text-[var(--text-app)] hover:text-[var(--accent-app)] text-sm">
                         {member.user.fullName}
                       </Link>
-                      <p className="text-[10px] text-stone-500">@{member.user.username} • {member.user.discipline || "SOEN"}</p>
+                      <p className="text-[10px] text-stone-500 font-mono uppercase tracking-wider">@{member.user.username} • {member.user.discipline || "SOEN"}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -159,7 +164,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                         label={member.role === "MEMBER" ? "Promote" : "Demote"}
                         variant="secondary"
                         onClick={() => void promoteMember(member.user.id, member.role)}
-                        className="py-1 px-2.5 text-[10px] rounded-md"
+                        className="py-1 px-2.5 text-[9px] rounded-none font-mono"
                       />
                     )}
                   </div>
@@ -172,34 +177,82 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
         {/* Sidebar details */}
         <div className="space-y-6">
           <Section title="Group Specifications">
-            <div className="space-y-4 text-xs">
-              <div className="flex justify-between py-2 border-b border-stone-200 dark:border-stone-800">
+            <div className="space-y-4 text-xs font-mono">
+              <div className="flex justify-between py-2 border-b border-[var(--border-subtle)]">
                 <span className="text-stone-500">Target Size:</span>
-                <span className="font-semibold text-stone-800 dark:text-slate-200">{team.maxSize} Members</span>
+                <span className="font-semibold text-[var(--text-app)]">{team.maxSize} Members</span>
               </div>
-              <div className="flex justify-between py-2 border-b border-stone-200 dark:border-stone-800">
+              <div className="flex justify-between py-2 border-b border-[var(--border-subtle)]">
                 <span className="text-stone-500">Roster Capacity:</span>
-                <span className="font-semibold text-stone-800 dark:text-slate-200">{team.maxSize - team.members.length} open slots</span>
+                <span className="font-semibold text-[var(--text-app)]">{team.maxSize - team.members.length} open slots</span>
               </div>
-              <div className="flex justify-between py-2 border-b border-stone-200 dark:border-stone-800">
+              <div className="flex justify-between py-2 border-b border-[var(--border-subtle)]">
                 <span className="text-stone-500">Focus Core:</span>
-                <span className="font-semibold text-[#283593] dark:text-indigo-400">{team.discipline || "Cross-disciplinary"}</span>
+                <span className="font-semibold text-[var(--accent-app)]">{team.discipline || "Cross-disciplinary"}</span>
+              </div>
+              {team.discordLink && (
+                <div className="flex justify-between py-2 border-b border-[var(--border-subtle)]">
+                  <span className="text-stone-500">Discord Link:</span>
+                  <a href={team.discordLink} target="_blank" rel="noopener noreferrer" className="font-semibold text-[var(--accent-app)]">
+                    Join Server
+                  </a>
+                </div>
+              )}
+              <div className="flex justify-between py-2 border-b border-[var(--border-subtle)]">
+                <span className="text-stone-500">Recruiting:</span>
+                <span className="font-semibold text-[var(--text-app)]">{team.recruitingState}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-[var(--border-subtle)]">
+                <span className="text-stone-500">Visibility:</span>
+                <span className="font-semibold text-[var(--text-app)]">{team.visibility}</span>
               </div>
             </div>
           </Section>
 
+          {(() => {
+            const existingSkills = team.existingSkills || [];
+            const neededSkills = team.neededSkills || [];
+            if (existingSkills.length === 0 && neededSkills.length === 0) return null;
+            return (
+              <Section title="Roster Skills & Fit">
+                <div className="space-y-4 text-xs">
+                  {existingSkills.length > 0 && (
+                    <div>
+                      <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-stone-400 block mb-1">Existing Competencies</span>
+                      <div className="flex flex-wrap gap-1">
+                        {existingSkills.map(skill => (
+                          <Badge key={skill} label={skill} type="tag" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {neededSkills.length > 0 && (
+                    <div>
+                      <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-[var(--accent-app)] block mb-1">Actively Recruiting For</span>
+                      <div className="flex flex-wrap gap-1">
+                        {neededSkills.map(skill => (
+                          <Badge key={skill} label={skill} type="discipline" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Section>
+            );
+          })()}
+
           <Section title="Linked Capstone Post">
             {team.project ? (
               <div className="space-y-3">
-                <span className="text-[9px] uppercase tracking-wider text-stone-400 font-bold">Assigned Post</span>
-                <Link href={`/projects/${team.project.id}`} className="block font-serif font-bold text-[#000b60] dark:text-[#a5b4fc] hover:underline text-sm leading-snug">
+                <span className="text-[9px] font-mono uppercase tracking-wider text-stone-400 font-bold">Assigned Post</span>
+                <Link href={`/projects/${team.project.id}`} className="block font-serif font-bold text-[var(--text-app)] hover:text-[var(--accent-app)] text-sm leading-snug uppercase tracking-tight">
                   {team.project.title}
                 </Link>
-                <p className="text-xs text-stone-500 line-clamp-2 leading-relaxed">{team.project.description}</p>
+                <p className="text-xs text-stone-500 font-sans line-clamp-2 leading-relaxed">{team.project.description}</p>
               </div>
             ) : (
-              <div className="text-center py-4 space-y-2">
-                <p className="text-xs text-stone-500">No project claims associated.</p>
+              <div className="text-center py-4 space-y-2 border border-dashed border-[var(--border-app)] p-4">
+                <p className="text-xs text-stone-500 font-mono">No project claims associated.</p>
                 <Link href="/projects" className="btn-secondary py-1 px-3 text-xs w-full block text-center">
                   Browse Open Postings
                 </Link>
@@ -212,19 +265,19 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
       {/* Join Request Custom Modal */}
       <Modal isOpen={isJoinOpen} onClose={() => setIsJoinOpen(false)} title={`Apply to Join: ${team.name}`}>
         <form onSubmit={requestJoinSubmit} className="space-y-4">
-          <p className="text-xs text-stone-500 leading-relaxed">
+          <p className="text-xs text-stone-500 leading-relaxed font-sans">
             Specify introduction notes to the team lead explaining why your academic background and project tags align with their capstone objectives.
           </p>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Introduction Note</label>
+            <label className="text-[9px] font-mono font-bold uppercase tracking-wider text-stone-400">Introduction Note</label>
             <textarea
               required
               value={joinMessage}
               onChange={(e) => setJoinMessage(e.target.value)}
-              className="input-field min-h-28 text-xs leading-relaxed"
+              className="input-field min-h-28 text-xs leading-relaxed font-sans"
             />
           </div>
-          <div className="flex gap-2 justify-end pt-3 border-t border-stone-200 dark:border-stone-800">
+          <div className="flex gap-2 justify-end pt-3 border-t border-[var(--border-app)]">
             <button type="button" onClick={() => setIsJoinOpen(false)} className="btn-secondary py-2 text-xs" disabled={submitting}>
               Cancel
             </button>

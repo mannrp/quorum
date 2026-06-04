@@ -77,9 +77,9 @@ export default function CreateProjectPage() {
 
   return (
     <div className="max-w-2xl mx-auto py-4 space-y-6">
-      <div className="border-b border-stone-250 dark:border-stone-850 pb-4">
-        <h1 className="text-3xl font-bold font-serif text-[#000b60] dark:text-[#a5b4fc]">Sponsor Capstone Challenge</h1>
-        <p className="text-sm text-stone-500">Post a new project challenge for Concordia engineering and computer science students.</p>
+      <div className="border-b border-[var(--border-subtle)] pb-4">
+        <h1 className="text-3xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">Sponsor Capstone Challenge</h1>
+        <p className="text-sm text-stone-500 font-sans">Post a new project challenge for Concordia engineering and computer science students.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -149,9 +149,9 @@ export default function CreateProjectPage() {
             </div>
             <ul className="space-y-2">
               {customQuestions.map((q, idx) => (
-                <li key={idx} className="flex items-center justify-between p-2 border border-stone-250 dark:border-stone-850 rounded bg-[#f8f9fa] dark:bg-[#111422] text-xs">
+                <li key={idx} className="flex items-center justify-between p-2 border border-[var(--border-app)] rounded-none bg-[var(--bg-app)] text-xs font-mono">
                   <span>{q}</span>
-                  <button type="button" onClick={() => handleRemoveQuestion(idx)} className="text-rose-500 font-bold hover:underline">Remove</button>
+                  <button type="button" onClick={() => handleRemoveQuestion(idx)} className="text-rose-500 font-bold font-mono hover:underline">Remove</button>
                 </li>
               ))}
             </ul>

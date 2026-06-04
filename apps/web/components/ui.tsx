@@ -5,11 +5,11 @@ export function Section({ title, children, className = "", variant = "wide" }: {
   const panelClass = variant === "tall" ? "panel-tall" : "panel-wide";
   return (
     <section className={`${panelClass} space-y-4 transition-all ${className}`}>
-      <div className="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-3">
-        <h2 className="font-serif text-sm font-bold uppercase tracking-wider text-[#283593] dark:text-[#a5b4fc]">{title}</h2>
-        <div className="h-0.5 w-6 rounded bg-[#283593] dark:bg-[#a5b4fc]"></div>
+      <div className="flex items-center justify-between border-b border-[var(--border-app)] pb-2">
+        <h2 className="font-mono text-xs font-bold uppercase tracking-widest text-[var(--accent-app)]">{title}</h2>
+        <span className="font-mono text-xs text-[var(--accent-app)] font-bold">[-]</span>
       </div>
-      <div className="space-y-4 text-stone-700 dark:text-stone-300 font-normal leading-relaxed text-sm">{children}</div>
+      <div className="space-y-3 text-stone-700 dark:text-stone-300 font-normal leading-relaxed text-sm">{children}</div>
     </section>
   );
 }
@@ -20,24 +20,29 @@ export function Status({ value }: { value: string }) {
       case "OPEN":
       case "PENDING":
       case "RECRUITING":
-        return "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-350 border-indigo-200 dark:border-indigo-900";
+        return "bg-[var(--color-info-bg)] text-[var(--color-info)] border-[var(--color-info)]";
       case "CLAIMED":
       case "ACCEPTED":
       case "COMPLETE":
       case "MATCHED":
-        return "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-350 border-emerald-250 dark:border-emerald-900";
+      case "PROFESSOR_APPROVED":
+        return "bg-[var(--color-success-bg)] text-[var(--color-success)] border-[var(--color-success)]";
       case "REJECTED":
       case "CLOSED":
       case "ARCHIVED":
       case "EXPIRED":
-        return "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-350 border-rose-200 dark:border-rose-900";
+      case "CHANGES_REQUESTED":
+        return "bg-[var(--color-danger-bg)] text-[var(--color-danger)] border-[var(--color-danger)]";
+      case "UNVERIFIED":
+      case "SUBMITTED_FOR_APPROVAL":
+        return "bg-[var(--color-warning-bg)] text-[var(--color-warning)] border-[var(--color-warning)]";
       default:
-        return "bg-stone-50 dark:bg-stone-800 text-stone-600 dark:text-stone-300 border-stone-300 dark:border-stone-700";
+        return "bg-[var(--bg-app)] text-[var(--text-app)] border-[var(--border-app)]";
     }
   };
 
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${getStyle(value)}`}>
+    <span className={`inline-flex items-center rounded-none px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider border ${getStyle(value)}`}>
       {value}
     </span>
   );
@@ -45,13 +50,13 @@ export function Status({ value }: { value: string }) {
 
 export function Badge({ label, type = "tag" }: { label: string; type?: "discipline" | "tag" | "lead" }) {
   const styles = {
-    discipline: "bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-250 border-stone-300 dark:border-stone-750 font-bold uppercase tracking-wider text-[10px]",
-    tag: "bg-indigo-50/50 dark:bg-indigo-950/20 text-[#48626e] dark:text-slate-350 border-stone-250 dark:border-stone-800 font-semibold text-[10px]",
-    lead: "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-350 border-amber-250 dark:border-amber-900 font-bold uppercase tracking-wider text-[10px]",
+    discipline: "bg-[var(--surface-app)] text-[var(--text-app)] border-[var(--border-app)] font-mono font-bold uppercase tracking-wider text-[9px]",
+    tag: "bg-[var(--bg-app)] text-[var(--text-app)] border-[var(--border-subtle)] font-mono font-semibold text-[9px]",
+    lead: "bg-[var(--color-warning-bg)] text-[var(--color-warning)] border-[var(--color-warning)] font-mono font-bold uppercase tracking-wider text-[9px]",
   };
 
   return (
-    <span className={`inline-flex items-center rounded px-2 py-0.5 border ${styles[type]}`}>
+    <span className={`inline-flex items-center rounded-none px-2 py-0.5 border ${styles[type]}`}>
       {label}
     </span>
   );
@@ -69,11 +74,11 @@ export function ActionButton({ label, onClick, variant = "primary", className = 
 
   return (
     <button onClick={handleClick} className={`${btnClass} ${className} relative overflow-hidden`}>
-      <span className={`transition-all duration-200 ${done ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"}`}>
+      <span className={`transition-all duration-150 ${done ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"}`}>
         {label}
       </span>
       {done && (
-        <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-emerald-600 dark:text-emerald-400 animate-pulse">
+        <span className="absolute inset-0 flex items-center justify-center text-xs font-mono font-bold uppercase text-[var(--color-success)] animate-pulse">
           Done
         </span>
       )}
@@ -100,12 +105,12 @@ export function Modal({ isOpen, onClose, title, children }: { isOpen: boolean; o
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm transition-opacity">
-      <div className="w-full max-w-xl bg-white dark:bg-[#161a2b] border border-stone-200 dark:border-stone-850 rounded-lg shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/40">
-          <h3 className="font-serif text-lg font-bold text-[#283593] dark:text-[#a5b4fc]">{title}</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-stone-200 dark:hover:bg-stone-800 text-stone-400 hover:text-stone-600 transition" aria-label="Close modal">
-            <span className="text-xl leading-none">&times;</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs transition-opacity">
+      <div className="w-full max-w-xl bg-[var(--surface-app)] border border-[var(--border-app)] rounded-none shadow-none overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-app)] bg-[var(--bg-app)]">
+          <h3 className="font-serif text-base font-bold uppercase tracking-tight text-[var(--text-app)]">{title}</h3>
+          <button onClick={onClose} className="p-1 rounded-none hover:bg-[var(--bg-app)] text-[var(--text-app)] transition" aria-label="Close modal">
+            <span className="text-xl font-mono leading-none">&times;</span>
           </button>
         </div>
         <div className="p-6 overflow-y-auto space-y-4 text-stone-700 dark:text-stone-300">
@@ -113,6 +118,50 @@ export function Modal({ isOpen, onClose, title, children }: { isOpen: boolean; o
         </div>
       </div>
     </div>
+  );
+}
+
+export function ConfirmDialog({
+  isOpen,
+  onClose,
+  onConfirm,
+  title,
+  message,
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  variant = "primary",
+  disabled = false,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  variant?: "primary" | "danger";
+  disabled?: boolean;
+}) {
+  const confirmClass = variant === "danger"
+    ? "btn-secondary py-2 px-4 text-xs text-rose-500 border-rose-300 dark:border-rose-900"
+    : "btn-primary py-2 px-4 text-xs";
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+      <div className="space-y-5">
+        <div className="text-sm leading-relaxed text-[var(--text-app)]">
+          {message}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-[var(--border-app)] pt-4">
+          <button type="button" onClick={onClose} className="btn-secondary py-2 px-4 text-xs" disabled={disabled}>
+            {cancelLabel}
+          </button>
+          <button type="button" onClick={onConfirm} className={confirmClass} disabled={disabled}>
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -159,11 +208,11 @@ export function Combobox({
 
   return (
     <div ref={containerRef} className="relative w-full">
-      <div className="flex flex-wrap gap-1.5 p-2 border border-[#cbd5e1] dark:border-stone-850 bg-white dark:bg-[#111422] rounded-md shadow-sm min-h-11">
+      <div className="flex flex-wrap gap-1.5 p-2 border border-[var(--border-app)] bg-[var(--surface-app)] rounded-none min-h-11">
         {selected.map((item) => (
-          <span key={item} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-350 border border-indigo-200 dark:border-indigo-900 font-semibold">
+          <span key={item} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-none text-xs bg-[var(--bg-app)] text-[var(--text-app)] border border-[var(--border-subtle)] font-mono font-semibold">
             {item}
-            <button type="button" onClick={() => handleSelect(item)} className="hover:text-rose-500 font-bold transition">&times;</button>
+            <button type="button" onClick={() => handleSelect(item)} className="hover:text-[var(--accent-app)] font-bold transition font-mono">&times;</button>
           </span>
         ))}
         <input
@@ -174,12 +223,12 @@ export function Combobox({
           }}
           onFocus={() => setIsOpen(true)}
           placeholder={selected.length === 0 ? placeholder : ""}
-          className="flex-1 min-w-[120px] bg-transparent outline-none text-sm text-[#191c1d] dark:text-slate-100"
+          className="flex-1 min-w-[120px] bg-transparent outline-none text-sm text-[var(--text-app)] placeholder-stone-400 dark:placeholder-stone-600 font-sans"
         />
       </div>
 
       {isOpen && filtered.length > 0 && (
-        <ul className="absolute z-50 w-full mt-1 max-h-48 overflow-y-auto bg-white dark:bg-[#161a2b] border border-stone-200 dark:border-stone-800 rounded-md shadow-lg divide-y divide-stone-100 dark:divide-stone-800">
+        <ul className="absolute z-50 w-full mt-1 max-h-48 overflow-y-auto bg-[var(--surface-app)] border border-[var(--border-app)] rounded-none divide-y divide-[var(--border-subtle)]">
           {filtered.map((opt) => {
             const isSel = selected.includes(opt);
             return (
@@ -187,7 +236,7 @@ export function Combobox({
                 <button
                   type="button"
                   onClick={() => handleSelect(opt)}
-                  className={`w-full px-4 py-2 text-left text-xs transition-colors flex items-center justify-between ${isSel ? "bg-[#f1f5f9] dark:bg-[#1e253c] text-indigo-700 dark:text-indigo-300 font-bold" : "hover:bg-[#f8f9fa] dark:hover:bg-[#1e253c]/40 text-stone-700 dark:text-stone-300"}`}
+                  className={`w-full px-4 py-2 text-left text-xs font-mono transition-colors flex items-center justify-between ${isSel ? "bg-[var(--bg-app)] text-[var(--accent-app)] font-bold" : "hover:bg-[var(--bg-app)] text-[var(--text-app)]"}`}
                 >
                   <span>{opt}</span>
                   {isSel && <span>✓</span>}

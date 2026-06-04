@@ -235,6 +235,8 @@ input UpdateProfileInput {
   discord: String
   availabilityNote: String
   preferredProjectAreas: [String!]
+  skills: [String!]
+  tags: [String!]
   profileComplete: Boolean
 }
 
@@ -299,23 +301,23 @@ input CreateProjectInput {
 
 input UpdateProjectInput {
   title: String!
-  summary: String!
+  summary: String
   description: String!
   constraints: String
   disciplines: [String!]!
   teamSizeMin: Int!
   teamSizeMax: Int!
   status: ProjectStatus
-  lifecycleState: ProjectLifecycleState = OPEN
-  approvalState: ProjectApprovalState = UNVERIFIED
+  lifecycleState: ProjectLifecycleState
+  approvalState: ProjectApprovalState
   fileUrl: String
   videoUrl: String
-  requiredSkills: [String!] = []
-  niceToHaveSkills: [String!] = []
+  requiredSkills: [String!]
+  niceToHaveSkills: [String!]
   deliverables: String
   timeline: String
   evaluationCriteria: String
-  externalResources: [String!] = []
+  externalResources: [String!]
   ownerContactPreference: String
   applicationQuestions: String
 }
@@ -347,6 +349,8 @@ type Query {
   myInbox: [User!]!
   myNotifications: [Notification!]!
   myTeamInvitations: [TeamInvitation!]!
+  myJoinRequests(status: JoinRequestStatus): [TeamJoinRequest!]!
+  teamJoinRequests(teamId: ID!, status: JoinRequestStatus): [TeamJoinRequest!]!
   universalDeadline: Deadline
   auditLogs(limit: Int = 100): [AuditLog!]!
 }

@@ -294,6 +294,90 @@ func TestProjectWorkflowsRequireCompleteProfile(t *testing.T) {
 	}
 }
 
+func TestUpdateProfilePersistsSkillsAndComputesCompletion(t *testing.T) {
+	ctx, r, cleanup := workflowTestResolver(t)
+	defer cleanup()
+
+	user := createWorkflowUser(t, ctx, r.Queries, "skills_user", false)
+	mutation := &mutationResolver{r}
+	updated, err := mutation.UpdateProfile(auth.WithUser(ctx, user), model.UpdateProfileInput{
+		FullName:        user.FullName,
+		Bio:             textStringPointer("Profile with enough skills."),
+		Discipline:      textStringPointer("SOEN"),
+		University:      textStringPointer("Concordia"),
+		UserIntent:      textStringPointer("STUDENT"),
+		Skills:          []string{"Go", " React ", "go", "Postgres"},
+		ProfileComplete: nil,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !updated.ProfileComplete {
+		t.Fatal("profileComplete = false, want true with required fields and three unique skills")
+	}
+	if tagNames(updated.Tags) != "Go,Postgres,React" {
+		t.Fatalf("tags = %s, want normalized unique skills", tagNames(updated.Tags))
+	}
+
+	updated, err = mutation.UpdateProfile(auth.WithUser(ctx, user), model.UpdateProfileInput{
+		FullName:        user.FullName,
+		Bio:             textStringPointer("Profile with too few skills."),
+		Discipline:      textStringPointer("SOEN"),
+		University:      textStringPointer("Concordia"),
+		UserIntent:      textStringPointer("STUDENT"),
+		Tags:            []string{"Rust"},
+		ProfileComplete: nil,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ProfileComplete {
+		t.Fatal("profileComplete = true, want false with fewer than three skills")
+	}
+	if tagNames(updated.Tags) != "Rust" {
+		t.Fatalf("tags = %s, want replaced Rust tag", tagNames(updated.Tags))
+	}
+}
+
+func TestUpdateProjectAcceptsFrontendEditPayloadAndPreservesOmittedFields(t *testing.T) {
+	ctx, r, cleanup := workflowTestResolver(t)
+	defer cleanup()
+
+	owner := createWorkflowUser(t, ctx, r.Queries, "owner", true)
+	project := createWorkflowProject(t, ctx, r.Queries, owner, "Frontend Edit Project")
+
+	constraints := "Updated material constraints"
+	status := model.ProjectStatusInReview
+	updated, err := (&mutationResolver{r}).UpdateProject(auth.WithUser(ctx, owner), uuidString(project.ID), model.UpdateProjectInput{
+		Title:       workflowPrefix(ctx) + "Frontend Edited Project",
+		Description: "Updated project description",
+		Constraints: &constraints,
+		Disciplines: []string{"SOEN", "COEN"},
+		TeamSizeMin: 2,
+		TeamSizeMax: 5,
+		Status:      &status,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if updated.Summary != "Workflow test project." {
+		t.Fatalf("summary = %q, want preserved original summary", updated.Summary)
+	}
+	if updated.LifecycleState != model.ProjectLifecycleStateReviewing || updated.Status != model.ProjectStatusInReview {
+		t.Fatalf("state = %s/%s, want REVIEWING/IN_REVIEW", updated.LifecycleState, updated.Status)
+	}
+	if updated.ApprovalState != model.ProjectApprovalStateUnverified {
+		t.Fatalf("approval state = %s, want preserved UNVERIFIED", updated.ApprovalState)
+	}
+	if len(updated.RequiredSkills) != 1 || updated.RequiredSkills[0] != "Go" {
+		t.Fatalf("required skills = %v, want preserved [Go]", updated.RequiredSkills)
+	}
+	if updated.ApplicationQuestions != "[]" {
+		t.Fatalf("application questions = %q, want preserved []", updated.ApplicationQuestions)
+	}
+}
+
 func TestCoLeadAllowedActionsExceptLeadOnlyArchive(t *testing.T) {
 	ctx, r, cleanup := workflowTestResolver(t)
 	defer cleanup()
@@ -345,6 +429,189 @@ func TestCoLeadAllowedActionsExceptLeadOnlyArchive(t *testing.T) {
 	}
 	_, err = mutation.ArchiveTeam(auth.WithUser(ctx, coLead), uuidString(team.ID), nil)
 	assertErrorContains(t, err, "team lead access required")
+}
+
+func TestTeamJoinRequestsRequiresLeadAndFilters(t *testing.T) {
+	ctx, r, cleanup := workflowTestResolver(t)
+	defer cleanup()
+
+	lead := createWorkflowUser(t, ctx, r.Queries, "lead", true)
+	coLead := createWorkflowUser(t, ctx, r.Queries, "co_lead", true)
+	member := createWorkflowUser(t, ctx, r.Queries, "member", true)
+	requester1 := createWorkflowUser(t, ctx, r.Queries, "requester1", true)
+	requester2 := createWorkflowUser(t, ctx, r.Queries, "requester2", true)
+	requester3 := createWorkflowUser(t, ctx, r.Queries, "requester3", true)
+	team := createWorkflowTeam(t, ctx, r.Queries, lead, "Join Requests Team")
+	if _, err := r.Queries.AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: team.ID, UserID: coLead.ID, Role: string(model.TeamRoleCoLead)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Queries.AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: team.ID, UserID: member.ID, Role: string(model.TeamRoleMember)}); err != nil {
+		t.Fatal(err)
+	}
+
+	mutation := &mutationResolver{r}
+	pendingRequest, err := mutation.RequestJoin(auth.WithUser(ctx, requester1), uuidString(team.ID), textStringPointer("Interested in joining."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rejectedRequest, err := mutation.RequestJoin(auth.WithUser(ctx, requester2), uuidString(team.ID), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	acceptedRequest, err := mutation.RequestJoin(auth.WithUser(ctx, requester3), uuidString(team.ID), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Pool.Exec(ctx, `UPDATE team_join_requests SET status = 'REJECTED' WHERE id = $1`, rejectedRequest.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Pool.Exec(ctx, `UPDATE team_join_requests SET status = 'ACCEPTED_PENDING_CONFIRMATION' WHERE id = $1`, acceptedRequest.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	query := &queryResolver{r}
+	_, err = query.TeamJoinRequests(auth.WithUser(ctx, member), uuidString(team.ID), nil)
+	assertErrorContains(t, err, "team lead access required")
+
+	status := model.JoinRequestStatusPending
+	pending, err := query.TeamJoinRequests(auth.WithUser(ctx, coLead), uuidString(team.ID), &status)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].ID != pendingRequest.ID {
+		t.Fatalf("pending requests = %v, want only %s", requestIDs(pending), pendingRequest.ID)
+	}
+
+	all, err := query.TeamJoinRequests(auth.WithUser(ctx, lead), uuidString(team.ID), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("all requests count = %d, want 3", len(all))
+	}
+
+	acceptedStatus := model.JoinRequestStatusAcceptedPendingConfirmation
+	selfRequests, err := query.MyJoinRequests(auth.WithUser(ctx, requester3), &acceptedStatus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(selfRequests) != 1 || selfRequests[0].ID != acceptedRequest.ID {
+		t.Fatalf("self accepted requests = %v, want only %s", requestIDs(selfRequests), acceptedRequest.ID)
+	}
+}
+
+func TestPermissionFlagsReflectCurrentUser(t *testing.T) {
+	ctx, r, cleanup := workflowTestResolver(t)
+	defer cleanup()
+
+	lead := createWorkflowUser(t, ctx, r.Queries, "lead", true)
+	coLead := createWorkflowUser(t, ctx, r.Queries, "co_lead", true)
+	member := createWorkflowUser(t, ctx, r.Queries, "member", true)
+	owner := createWorkflowUser(t, ctx, r.Queries, "owner", true)
+	admin := createWorkflowUser(t, ctx, r.Queries, "admin", true)
+	team := createWorkflowTeam(t, ctx, r.Queries, lead, "Permissions Team")
+	if _, err := r.Queries.AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: team.ID, UserID: coLead.ID, Role: string(model.TeamRoleCoLead)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Queries.AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: team.ID, UserID: member.ID, Role: string(model.TeamRoleMember)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Pool.Exec(ctx, `INSERT INTO admin_users (user_id) VALUES ($1)`, admin.ID); err != nil {
+		t.Fatal(err)
+	}
+	project := createWorkflowProject(t, ctx, r.Queries, owner, "Permissions Project")
+
+	leadTeam, err := r.team(auth.WithUser(ctx, lead), team)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !leadTeam.Permissions.CanEdit || !leadTeam.Permissions.CanManageMembers || !leadTeam.Permissions.CanInviteMembers || !leadTeam.Permissions.CanArchive || !leadTeam.Permissions.CanApplyToProjects {
+		t.Fatalf("lead team permissions = %+v, want all true", leadTeam.Permissions)
+	}
+	coLeadTeam, err := r.team(auth.WithUser(ctx, coLead), team)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !coLeadTeam.Permissions.CanEdit || !coLeadTeam.Permissions.CanManageMembers || !coLeadTeam.Permissions.CanInviteMembers || coLeadTeam.Permissions.CanArchive || !coLeadTeam.Permissions.CanApplyToProjects {
+		t.Fatalf("co-lead team permissions = %+v, want lead-like except archive", coLeadTeam.Permissions)
+	}
+	memberTeam, err := r.team(auth.WithUser(ctx, member), team)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if memberTeam.Permissions.CanEdit || memberTeam.Permissions.CanManageMembers || memberTeam.Permissions.CanInviteMembers || memberTeam.Permissions.CanArchive || memberTeam.Permissions.CanApplyToProjects {
+		t.Fatalf("member team permissions = %+v, want all false", memberTeam.Permissions)
+	}
+
+	ownerProject, err := r.project(auth.WithUser(ctx, owner), project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ownerProject.Permissions.CanEdit || !ownerProject.Permissions.CanReviewApplications || !ownerProject.Permissions.CanSubmitForApproval || !ownerProject.Permissions.CanArchive || ownerProject.Permissions.CanApprove {
+		t.Fatalf("owner project permissions = %+v, want owner actions true and approve false", ownerProject.Permissions)
+	}
+	adminProject, err := r.project(auth.WithUser(ctx, admin), project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if adminProject.Permissions.CanEdit || adminProject.Permissions.CanReviewApplications || adminProject.Permissions.CanSubmitForApproval || adminProject.Permissions.CanArchive || !adminProject.Permissions.CanApprove {
+		t.Fatalf("admin project permissions = %+v, want approve only", adminProject.Permissions)
+	}
+}
+
+func TestProjectApplicationHydratesFrontendReviewFields(t *testing.T) {
+	ctx, r, cleanup := workflowTestResolver(t)
+	defer cleanup()
+
+	owner := createWorkflowUser(t, ctx, r.Queries, "owner", true)
+	lead := createWorkflowUser(t, ctx, r.Queries, "lead", true)
+	member := createWorkflowUser(t, ctx, r.Queries, "member", true)
+	team := createWorkflowTeam(t, ctx, r.Queries, lead, "Hydration Team")
+	if _, err := r.Queries.AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: team.ID, UserID: member.ID, Role: string(model.TeamRoleMember)}); err != nil {
+		t.Fatal(err)
+	}
+	project := createWorkflowProject(t, ctx, r.Queries, owner, "Hydration Project")
+	applicationID := createWorkflowApplication(t, ctx, r.Pool, project.ID, team.ID, lead.ID, string(model.ApplicationStatusOfferSent))
+	if _, err := r.Pool.Exec(ctx, `
+UPDATE project_applications
+SET message = 'Application message',
+    answers = '{"ok": true}'::jsonb,
+    review_message = 'Review message',
+    offer_message = 'Offer message',
+    expires_at = now() + interval '1 hour'
+WHERE id = $1`, applicationID); err != nil {
+		t.Fatal(err)
+	}
+
+	mapped, err := r.project(auth.WithUser(ctx, owner), project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mapped.Applications) != 1 {
+		t.Fatalf("application count = %d, want 1", len(mapped.Applications))
+	}
+	application := mapped.Applications[0]
+	if application.Applicant == nil || application.Applicant.ID != uuidString(lead.ID) {
+		t.Fatalf("applicant = %+v, want lead", application.Applicant)
+	}
+	if application.Message == nil || *application.Message != "Application message" {
+		t.Fatalf("message = %v, want Application message", application.Message)
+	}
+	if !strings.Contains(application.Answers, `"ok"`) {
+		t.Fatalf("answers = %q, want ok JSON", application.Answers)
+	}
+	if application.ReviewMessage == nil || *application.ReviewMessage != "Review message" {
+		t.Fatalf("review message = %v, want Review message", application.ReviewMessage)
+	}
+	if application.OfferMessage == nil || *application.OfferMessage != "Offer message" {
+		t.Fatalf("offer message = %v, want Offer message", application.OfferMessage)
+	}
+	if application.ExpiresAt == nil {
+		t.Fatal("expiresAt = nil, want timestamp")
+	}
+	if len(application.Team.Members) != 2 {
+		t.Fatalf("application team member count = %d, want 2", len(application.Team.Members))
+	}
 }
 
 func workflowTestResolver(t *testing.T) (context.Context, *Resolver, func()) {
@@ -533,4 +800,24 @@ func assertErrorContains(t *testing.T, err error, want string) {
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Fatalf("error = %v, want %q", err, want)
 	}
+}
+
+func textStringPointer(value string) *string {
+	return &value
+}
+
+func requestIDs(requests []*model.TeamJoinRequest) []string {
+	out := make([]string, 0, len(requests))
+	for _, request := range requests {
+		out = append(out, request.ID)
+	}
+	return out
+}
+
+func tagNames(tags []*model.Tag) string {
+	names := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		names = append(names, tag.Name)
+	}
+	return strings.Join(names, ",")
 }

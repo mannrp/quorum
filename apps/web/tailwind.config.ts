@@ -6,13 +6,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        primary: "#0B3C5D",
-        accent: "#1F7A8C",
-        surface: "#F5F9FC"
+        primary: "var(--text-app)",
+        accent: "var(--accent-app)",
+        surface: "var(--surface-app)",
+        border: "var(--border-app)"
       },
       fontFamily: {
         sans: ["var(--font-sans)", "sans-serif"],
         serif: ["var(--font-serif)", "sans-serif"],
+        mono: ["var(--font-mono)", "monospace"],
       }
     }
   },

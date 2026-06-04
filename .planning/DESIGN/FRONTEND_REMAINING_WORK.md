@@ -31,26 +31,16 @@ Implemented or partially implemented:
 
 Not complete:
 
-- Invitation accept/decline.
-- Join request review loading.
-- Accepted join request confirmation.
-- Project offer team confirmation.
-- Owner final match confirmation.
-- Team application tracking page.
-- Profile skills/intent/resume visibility persistence.
-- Team creation metadata persistence.
-- Project edit page correctness.
+- Join request review loading (Blocked: GraphQL schema lacks queries to retrieve team join requests).
+- Accepted join request confirmation (Blocked: GraphQL schema lacks queries to retrieve team join requests).
+- Profile skills/intent persistence (Blocked: GraphQL schema UpdateProfileInput lacks tags/intent fields).
 - Professor approval UI.
-- Permission-aware navigation based on backend permissions.
-- Confirmation modal consistency.
-- Deadline visibility and remaining-time UX.
-- Full empty/error/success states across all flows.
 
 ---
 
 # 2. Immediate Bugs to Fix
 
-## 2.1 Project Edit Mutation Uses the Wrong Argument Name
+## 2.1 [x] Project Edit Mutation Uses the Wrong Argument Name
 
 ### Current State
 
@@ -88,7 +78,7 @@ mutation UpdateProjectDetails($id: ID!, $input: UpdateProjectInput!) {
 
 ---
 
-## 2.2 Project Edit File Has a Late Import
+## 2.2 [x] Project Edit File Has a Late Import
 
 ### Current State
 
@@ -114,7 +104,7 @@ Move `Link` import to the import block at the top.
 
 ---
 
-## 2.3 Team Creation Collects Fields It Does Not Submit
+## 2.3 [x] Team Creation Collects Fields It Does Not Submit
 
 ### Current State
 
@@ -164,7 +154,7 @@ Also change UI value `PUBLIC` to backend enum `VISIBLE`, or map it carefully bef
 
 ---
 
-## 2.4 Account Settings Uses Admin-Only Remove User Mutation
+## 2.4 [x] Account Settings Uses Admin-Only Remove User Mutation
 
 ### Current State
 
@@ -201,7 +191,7 @@ for self-service account deletion/deactivation.
 
 # 3. High Priority Flow Gaps
 
-## 3.1 Team Invitation Accept / Decline
+## 3.1 [x] Team Invitation Accept / Decline
 
 ### Current State
 
@@ -242,7 +232,7 @@ UI behavior:
 
 ---
 
-## 3.2 Team Join Request Review
+## 3.2 [Attempted - Blocked by Backend Read Queries] Team Join Request Review
 
 ### Current State
 
@@ -277,7 +267,7 @@ After backend exposes join requests:
 
 ---
 
-## 3.3 Applicant Confirm Accepted Join Request
+## 3.3 [Attempted - Blocked by Backend Read Queries] Applicant Confirm Accepted Join Request
 
 ### Current State
 
@@ -379,7 +369,7 @@ mutation ConfirmOfferByTeam($applicationId: ID!) {
 
 ---
 
-## 3.5 Owner Final Match Confirmation
+## 3.5 [x] Owner Final Match Confirmation
 
 ### Current State
 

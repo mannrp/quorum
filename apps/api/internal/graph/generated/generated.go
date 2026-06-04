@@ -184,12 +184,14 @@ type ComplexityRoot struct {
 		DashboardContext  func(childComplexity int) int
 		Me                func(childComplexity int) int
 		MyInbox           func(childComplexity int) int
+		MyJoinRequests    func(childComplexity int, status *model.JoinRequestStatus) int
 		MyMessages        func(childComplexity int, withUser string) int
 		MyNotifications   func(childComplexity int) int
 		MyTeamInvitations func(childComplexity int) int
 		Project           func(childComplexity int, id string) int
 		Projects          func(childComplexity int, discipline *string, status *model.ProjectLifecycleState, search *string) int
 		Team              func(childComplexity int, id string) int
+		TeamJoinRequests  func(childComplexity int, teamID string, status *model.JoinRequestStatus) int
 		Teams             func(childComplexity int, discipline *string, hasProject *bool, isComplete *bool, search *string) int
 		UniversalDeadline func(childComplexity int) int
 		User              func(childComplexity int, username string) int
@@ -357,6 +359,8 @@ type QueryResolver interface {
 	MyInbox(ctx context.Context) ([]*model.User, error)
 	MyNotifications(ctx context.Context) ([]*model.Notification, error)
 	MyTeamInvitations(ctx context.Context) ([]*model.TeamInvitation, error)
+	MyJoinRequests(ctx context.Context, status *model.JoinRequestStatus) ([]*model.TeamJoinRequest, error)
+	TeamJoinRequests(ctx context.Context, teamID string, status *model.JoinRequestStatus) ([]*model.TeamJoinRequest, error)
 	UniversalDeadline(ctx context.Context) (*model.Deadline, error)
 	AuditLogs(ctx context.Context, limit *int) ([]*model.AuditLog, error)
 }
@@ -1300,6 +1304,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.MyInbox(childComplexity), true
+	case "Query.myJoinRequests":
+		if e.ComplexityRoot.Query.MyJoinRequests == nil {
+			break
+		}
+
+		args, err := ec.field_Query_myJoinRequests_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.MyJoinRequests(childComplexity, args["status"].(*model.JoinRequestStatus)), true
 	case "Query.myMessages":
 		if e.ComplexityRoot.Query.MyMessages == nil {
 			break
@@ -1356,6 +1371,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Team(childComplexity, args["id"].(string)), true
+	case "Query.teamJoinRequests":
+		if e.ComplexityRoot.Query.TeamJoinRequests == nil {
+			break
+		}
+
+		args, err := ec.field_Query_teamJoinRequests_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.TeamJoinRequests(childComplexity, args["teamId"].(string), args["status"].(*model.JoinRequestStatus)), true
 	case "Query.teams":
 		if e.ComplexityRoot.Query.Teams == nil {
 			break
@@ -2213,6 +2239,8 @@ input UpdateProfileInput {
   discord: String
   availabilityNote: String
   preferredProjectAreas: [String!]
+  skills: [String!]
+  tags: [String!]
   profileComplete: Boolean
 }
 
@@ -2277,23 +2305,23 @@ input CreateProjectInput {
 
 input UpdateProjectInput {
   title: String!
-  summary: String!
+  summary: String
   description: String!
   constraints: String
   disciplines: [String!]!
   teamSizeMin: Int!
   teamSizeMax: Int!
   status: ProjectStatus
-  lifecycleState: ProjectLifecycleState = OPEN
-  approvalState: ProjectApprovalState = UNVERIFIED
+  lifecycleState: ProjectLifecycleState
+  approvalState: ProjectApprovalState
   fileUrl: String
   videoUrl: String
-  requiredSkills: [String!] = []
-  niceToHaveSkills: [String!] = []
+  requiredSkills: [String!]
+  niceToHaveSkills: [String!]
   deliverables: String
   timeline: String
   evaluationCriteria: String
-  externalResources: [String!] = []
+  externalResources: [String!]
   ownerContactPreference: String
   applicationQuestions: String
 }
@@ -2325,6 +2353,8 @@ type Query {
   myInbox: [User!]!
   myNotifications: [Notification!]!
   myTeamInvitations: [TeamInvitation!]!
+  myJoinRequests(status: JoinRequestStatus): [TeamJoinRequest!]!
+  teamJoinRequests(teamId: ID!, status: JoinRequestStatus): [TeamJoinRequest!]!
   universalDeadline: Deadline
   auditLogs(limit: Int = 100): [AuditLog!]!
 }
@@ -3671,6 +3701,20 @@ func (ec *executionContext) field_Query_auditLogs_args(ctx context.Context, rawA
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_myJoinRequests_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "status",
+		func(ctx context.Context, v any) (*model.JoinRequestStatus, error) {
+			return ec.unmarshalOJoinRequestStatus2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐJoinRequestStatus(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["status"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_myMessages_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -3726,6 +3770,28 @@ func (ec *executionContext) field_Query_projects_args(ctx context.Context, rawAr
 		return nil, err
 	}
 	args["search"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_teamJoinRequests_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "teamId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["teamId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "status",
+		func(ctx context.Context, v any) (*model.JoinRequestStatus, error) {
+			return ec.unmarshalOJoinRequestStatus2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐJoinRequestStatus(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["status"] = arg1
 	return args, nil
 }
 
@@ -7958,6 +8024,94 @@ func (ec *executionContext) fieldContext_Query_myTeamInvitations(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_myJoinRequests(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_myJoinRequests(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().MyJoinRequests(ctx, fc.Args["status"].(*model.JoinRequestStatus))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.TeamJoinRequest) graphql.Marshaler {
+			return ec.marshalNTeamJoinRequest2ᚕᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐTeamJoinRequestᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_myJoinRequests(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TeamJoinRequest(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_myJoinRequests_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_teamJoinRequests(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_teamJoinRequests(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().TeamJoinRequests(ctx, fc.Args["teamId"].(string), fc.Args["status"].(*model.JoinRequestStatus))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.TeamJoinRequest) graphql.Marshaler {
+			return ec.marshalNTeamJoinRequest2ᚕᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐTeamJoinRequestᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_teamJoinRequests(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TeamJoinRequest(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_teamJoinRequests_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_universalDeadline(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -11605,7 +11759,7 @@ func (ec *executionContext) unmarshalInputUpdateProfileInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"fullName", "bio", "discipline", "university", "linkedinUrl", "githubUrl", "portfolioUrl", "resumeUrl", "avatarUrl", "userIntent", "resumeVisibility", "discord", "availabilityNote", "preferredProjectAreas", "profileComplete"}
+	fieldsInOrder := [...]string{"fullName", "bio", "discipline", "university", "linkedinUrl", "githubUrl", "portfolioUrl", "resumeUrl", "avatarUrl", "userIntent", "resumeVisibility", "discord", "availabilityNote", "preferredProjectAreas", "skills", "tags", "profileComplete"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -11710,6 +11864,20 @@ func (ec *executionContext) unmarshalInputUpdateProfileInput(ctx context.Context
 				return it, err
 			}
 			it.PreferredProjectAreas = data
+		case "skills":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("skills"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Skills = data
+		case "tags":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("tags"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Tags = data
 		case "profileComplete":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("profileComplete"))
 			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
@@ -11733,22 +11901,6 @@ func (ec *executionContext) unmarshalInputUpdateProjectInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	if _, present := asMap["lifecycleState"]; !present {
-		asMap["lifecycleState"] = "OPEN"
-	}
-	if _, present := asMap["approvalState"]; !present {
-		asMap["approvalState"] = "UNVERIFIED"
-	}
-	if _, present := asMap["requiredSkills"]; !present {
-		asMap["requiredSkills"] = []any{}
-	}
-	if _, present := asMap["niceToHaveSkills"]; !present {
-		asMap["niceToHaveSkills"] = []any{}
-	}
-	if _, present := asMap["externalResources"]; !present {
-		asMap["externalResources"] = []any{}
-	}
-
 	fieldsInOrder := [...]string{"title", "summary", "description", "constraints", "disciplines", "teamSizeMin", "teamSizeMax", "status", "lifecycleState", "approvalState", "fileUrl", "videoUrl", "requiredSkills", "niceToHaveSkills", "deliverables", "timeline", "evaluationCriteria", "externalResources", "ownerContactPreference", "applicationQuestions"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
@@ -11765,7 +11917,7 @@ func (ec *executionContext) unmarshalInputUpdateProjectInput(ctx context.Context
 			it.Title = data
 		case "summary":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("summary"))
-			data, err := ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -13182,6 +13334,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_myTeamInvitations(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "myJoinRequests":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_myJoinRequests(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "teamJoinRequests":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_teamJoinRequests(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -14701,6 +14897,22 @@ func (ec *executionContext) marshalNTeamJoinRequest2githubᚗcomᚋlocalᚋquoru
 	return ec._TeamJoinRequest(ctx, sel, &v)
 }
 
+func (ec *executionContext) marshalNTeamJoinRequest2ᚕᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐTeamJoinRequestᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.TeamJoinRequest) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNTeamJoinRequest2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐTeamJoinRequest(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) marshalNTeamJoinRequest2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐTeamJoinRequest(ctx context.Context, sel ast.SelectionSet, v *model.TeamJoinRequest) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -15088,6 +15300,22 @@ func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.Sele
 	_ = ctx
 	res := graphql.MarshalInt(*v)
 	return res
+}
+
+func (ec *executionContext) unmarshalOJoinRequestStatus2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐJoinRequestStatus(ctx context.Context, v any) (*model.JoinRequestStatus, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.JoinRequestStatus)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOJoinRequestStatus2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐJoinRequestStatus(ctx context.Context, sel ast.SelectionSet, v *model.JoinRequestStatus) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) marshalOProject2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐProject(ctx context.Context, sel ast.SelectionSet, v *model.Project) graphql.Marshaler {

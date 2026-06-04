@@ -630,37 +630,27 @@ func (q *Queries) ListInboxUsers(ctx context.Context, senderID pgtype.UUID) ([]U
 }
 
 const listJoinRequestsForTeam = `-- name: ListJoinRequestsForTeam :many
-SELECT tjr.id, tjr.team_id, tjr.user_id, tjr.message, tjr.status, tjr.created_at, tjr.expires_at, tjr.responded_at, tjr.confirmed_at, tjr.withdrawn_at, u.username, u.full_name
-FROM team_join_requests tjr
-JOIN users u ON u.id = tjr.user_id
-WHERE tjr.team_id = $1
-ORDER BY tjr.created_at DESC
+SELECT id, team_id, user_id, message, status, created_at, expires_at, responded_at, confirmed_at, withdrawn_at
+FROM team_join_requests
+WHERE team_id = $1
+  AND ($2::text IS NULL OR status = $2::text)
+ORDER BY created_at DESC
 `
 
-type ListJoinRequestsForTeamRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	TeamID      pgtype.UUID        `json:"team_id"`
-	UserID      pgtype.UUID        `json:"user_id"`
-	Message     pgtype.Text        `json:"message"`
-	Status      string             `json:"status"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
-	RespondedAt pgtype.Timestamptz `json:"responded_at"`
-	ConfirmedAt pgtype.Timestamptz `json:"confirmed_at"`
-	WithdrawnAt pgtype.Timestamptz `json:"withdrawn_at"`
-	Username    string             `json:"username"`
-	FullName    string             `json:"full_name"`
+type ListJoinRequestsForTeamParams struct {
+	TeamID pgtype.UUID `json:"team_id"`
+	Status pgtype.Text `json:"status"`
 }
 
-func (q *Queries) ListJoinRequestsForTeam(ctx context.Context, teamID pgtype.UUID) ([]ListJoinRequestsForTeamRow, error) {
-	rows, err := q.db.Query(ctx, listJoinRequestsForTeam, teamID)
+func (q *Queries) ListJoinRequestsForTeam(ctx context.Context, arg ListJoinRequestsForTeamParams) ([]TeamJoinRequest, error) {
+	rows, err := q.db.Query(ctx, listJoinRequestsForTeam, arg.TeamID, arg.Status)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListJoinRequestsForTeamRow
+	var items []TeamJoinRequest
 	for rows.Next() {
-		var i ListJoinRequestsForTeamRow
+		var i TeamJoinRequest
 		if err := rows.Scan(
 			&i.ID,
 			&i.TeamID,
@@ -672,8 +662,50 @@ func (q *Queries) ListJoinRequestsForTeam(ctx context.Context, teamID pgtype.UUI
 			&i.RespondedAt,
 			&i.ConfirmedAt,
 			&i.WithdrawnAt,
-			&i.Username,
-			&i.FullName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listJoinRequestsForUser = `-- name: ListJoinRequestsForUser :many
+SELECT id, team_id, user_id, message, status, created_at, expires_at, responded_at, confirmed_at, withdrawn_at
+FROM team_join_requests
+WHERE user_id = $1
+  AND ($2::text IS NULL OR status = $2::text)
+ORDER BY created_at DESC
+`
+
+type ListJoinRequestsForUserParams struct {
+	UserID pgtype.UUID `json:"user_id"`
+	Status pgtype.Text `json:"status"`
+}
+
+func (q *Queries) ListJoinRequestsForUser(ctx context.Context, arg ListJoinRequestsForUserParams) ([]TeamJoinRequest, error) {
+	rows, err := q.db.Query(ctx, listJoinRequestsForUser, arg.UserID, arg.Status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TeamJoinRequest
+	for rows.Next() {
+		var i TeamJoinRequest
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.UserID,
+			&i.Message,
+			&i.Status,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.RespondedAt,
+			&i.ConfirmedAt,
+			&i.WithdrawnAt,
 		); err != nil {
 			return nil, err
 		}

@@ -48,6 +48,7 @@ export default function ProfileSettingsPage() {
           setGithubUrl(res.me.githubUrl || "");
           setPortfolioUrl(res.me.portfolioUrl || "");
           setSkills((res.me.tags || []).map((t) => t.name));
+          setResumeVisibility(res.me.resumeVisibility || "PUBLIC");
         }
       } catch (err) {
         setNotice(userFacingError(err));
@@ -89,6 +90,9 @@ export default function ProfileSettingsPage() {
             githubUrl,
             portfolioUrl,
             resumeUrl: resumeUrl || undefined,
+            resumeVisibility,
+            skills,
+            tags: skills,
           },
         },
         token
@@ -109,13 +113,13 @@ export default function ProfileSettingsPage() {
 
   return (
     <div className="max-w-3xl mx-auto py-4 space-y-6">
-      <div className="border-b border-stone-200 dark:border-stone-850 pb-4">
-        <h1 className="text-3xl font-bold font-serif text-[#000b60] dark:text-[#a5b4fc]">Profile Settings</h1>
-        <p className="text-sm text-stone-500">Manage your academic credentials, portfolio links, and file attachments.</p>
+      <div className="border-b border-[var(--border-subtle)] pb-4">
+        <h1 className="text-3xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">Profile Settings</h1>
+        <p className="text-sm text-stone-500 font-sans">Manage your academic credentials, portfolio links, and file attachments.</p>
       </div>
 
       {notice && (
-        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-250 dark:border-emerald-900 rounded text-xs font-semibold text-emerald-800 dark:text-emerald-350">
+        <div className="p-3 bg-[var(--color-success-bg)] border border-[var(--color-success)] rounded-none text-xs font-mono font-semibold text-[var(--color-success)]">
           {notice}
         </div>
       )}
@@ -176,25 +180,25 @@ export default function ProfileSettingsPage() {
             <div className="space-y-1">
               <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">Current Attached File</label>
               {user?.resumeUrl ? (
-                <a href={user.resumeUrl} target="_blank" rel="noreferrer" className="text-xs text-[#283593] hover:underline font-bold">
+                <a href={user.resumeUrl} target="_blank" rel="noreferrer" className="text-xs text-[var(--accent-app)] hover:underline font-bold">
                   View Uploaded Resume File
                 </a>
               ) : (
-                <span className="text-xs text-stone-500 italic">No resume attached yet.</span>
+                <span className="text-xs text-stone-500 italic font-mono">No resume attached yet.</span>
               )}
             </div>
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Upload New Resume (PDF / DOCX)</label>
-              <input type="file" accept=".pdf,.docx" onChange={(e) => setResumeFile(e.target.files?.[0] || null)} className="block text-xs text-stone-500 border border-stone-250 dark:border-stone-850 p-2 rounded-md bg-[#f8f9fa] dark:bg-[#111422] w-full" />
+              <input type="file" accept=".pdf,.docx" onChange={(e) => setResumeFile(e.target.files?.[0] || null)} className="block text-xs text-stone-500 border border-[var(--border-app)] p-2 rounded-none bg-[var(--bg-app)] w-full font-mono" />
             </div>
 
             <div className="space-y-1">
               <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Document Access Level</label>
-              <select value={resumeVisibility} onChange={(e) => setResumeVisibility(e.target.value)} className="input-field py-2 text-xs bg-white dark:bg-[#161a2b]">
+              <select value={resumeVisibility} onChange={(e) => setResumeVisibility(e.target.value)} className="input-field py-2 text-xs bg-[var(--surface-app)]">
                 <option value="PUBLIC">Visible to all Quorum Members</option>
-                <option value="TEAM_LEAD_ONLY">Visible only to Team Leads during applications</option>
-                <option value="PROJECT_OWNER_ONLY">Visible only to project sponsors</option>
+                <option value="TEAM_LEADS">Visible only to Team Leads during applications</option>
+                <option value="PROJECT_OWNERS">Visible only to project sponsors</option>
                 <option value="PRIVATE">Keep Private</option>
               </select>
             </div>
