@@ -19,6 +19,18 @@ type DashboardInvitation = {
 
 type Deadline = { id: string; deadlineAt: string; updatedAt: string };
 
+function getRemainingTimeText(expiresAtStr: string): string {
+  const expiresAt = new Date(expiresAtStr);
+  const diffMs = expiresAt.getTime() - Date.now();
+  if (diffMs <= 0) return "Expired";
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays > 0) return `${diffDays}d remaining`;
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  if (diffHours > 0) return `${diffHours}h remaining`;
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  return `${diffMins}m remaining`;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [me, setMe] = useState<User | null>(null);
@@ -30,53 +42,86 @@ export default function DashboardPage() {
   const [deadline, setDeadline] = useState<Deadline | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      const token = getAuthToken();
-      if (!token) {
+  const fetchDashboardData = async () => {
+    const token = getAuthToken();
+    if (!token) {
+      router.push("/auth/login");
+      return;
+    }
+
+    try {
+      setError(null);
+      // 1. Fetch me info
+      const meResult = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, token);
+      if (!meResult.me) {
         router.push("/auth/login");
         return;
       }
+      setMe(meResult.me);
 
-      try {
-        setError(null);
-        // 1. Fetch me info
-        const meResult = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, token);
-        if (!meResult.me) {
-          router.push("/auth/login");
-          return;
-        }
-        setMe(meResult.me);
+      const dashboardResult = await graphqlRequest<{
+        dashboardContext: {
+          myTeams: Team[];
+          myProjects: Project[];
+          myInvitations: DashboardInvitation[];
+          universalDeadline: Deadline | null;
+        };
+        myNotifications: Notification[];
+      }>(DASHBOARD_CONTEXT_QUERY, {}, token);
 
-        const dashboardResult = await graphqlRequest<{
-          dashboardContext: {
-            myTeams: Team[];
-            myProjects: Project[];
-            myInvitations: DashboardInvitation[];
-            universalDeadline: Deadline | null;
-          };
-          myNotifications: Notification[];
-        }>(DASHBOARD_CONTEXT_QUERY, {}, token);
+      const primaryTeam = dashboardResult.dashboardContext.myTeams[0] || null;
+      const primaryProject = dashboardResult.dashboardContext.myProjects[0] || null;
+      setTeam(primaryTeam);
+      setProject(primaryProject);
+      setApplications(primaryProject?.applications || []);
+      setInvitations(dashboardResult.dashboardContext.myInvitations);
+      setDeadline(dashboardResult.dashboardContext.universalDeadline);
+      setNotifs(dashboardResult.myNotifications.slice(0, 3));
 
-        const primaryTeam = dashboardResult.dashboardContext.myTeams[0] || null;
-        const primaryProject = dashboardResult.dashboardContext.myProjects[0] || null;
-        setTeam(primaryTeam);
-        setProject(primaryProject);
-        setApplications(primaryProject?.applications || []);
-        setInvitations(dashboardResult.dashboardContext.myInvitations);
-        setDeadline(dashboardResult.dashboardContext.universalDeadline);
-        setNotifs(dashboardResult.myNotifications.slice(0, 3));
+    } catch (err) {
+      setError(userFacingError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      } catch (err) {
-        setError(userFacingError(err));
-      } finally {
-        setLoading(false);
-      }
-    };
-
+  useEffect(() => {
     void fetchDashboardData();
   }, [router]);
+
+  const respondToInvitation = async (invitationId: string, accept: boolean) => {
+    const action = accept ? "accept" : "decline";
+    if (!window.confirm(`Are you sure you want to ${action} this team invitation?`)) {
+      return;
+    }
+    
+    setNotice(null);
+    setError(null);
+    try {
+      const token = getAuthToken();
+      await graphqlRequest(
+        `mutation RespondInvitation($invitationId: ID!, $accept: Boolean!) {
+          respondToTeamInvitation(invitationId: $invitationId, accept: $accept) {
+            id
+            status
+          }
+        }`,
+        { invitationId, accept },
+        token
+      );
+      setNotice(`Invitation successfully ${accept ? "accepted" : "declined"}.`);
+      await fetchDashboardData();
+    } catch (err) {
+      const msg = userFacingError(err);
+      if (accept && msg.toLowerCase().includes("already")) {
+        setError(`Failed to accept: You are already on a team. If you wish to join, please leave your current team first.`);
+      } else {
+        setError(msg);
+      }
+    }
+  };
 
   const deadlineDate = deadline ? new Date(deadline.deadlineAt) : null;
 
@@ -90,7 +135,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (error) {
+  if (error && invitations.length === 0 && !me) {
     return (
       <div className="max-w-3xl mx-auto py-12">
         <Section title="Dashboard Unavailable">
@@ -124,6 +169,18 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {notice && (
+        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-250 dark:border-emerald-900 rounded text-xs font-semibold text-emerald-800 dark:text-emerald-350">
+          {notice}
+        </div>
+      )}
+
+      {error && (
+        <div className="p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-250 dark:border-rose-900 rounded text-xs font-semibold text-rose-800 dark:text-rose-350">
+          {error}
+        </div>
+      )}
+
       <div className="grid gap-6 md:grid-cols-3">
         {/* Left Column: Alerts, Invites, and Profile */}
         <div className="space-y-6 md:col-span-1">
@@ -150,14 +207,20 @@ export default function DashboardPage() {
             {invitations.length > 0 ? (
               <div className="space-y-3">
                 {invitations.map((inv) => (
-                  <div key={inv.id} className="p-3 border border-stone-250 dark:border-stone-850 rounded-lg space-y-2.5">
+                  <div key={inv.id} className="p-3 border border-stone-250 dark:border-stone-850 rounded-lg space-y-2.5 bg-white dark:bg-[#161a2b]">
                     <div className="space-y-0.5">
-                      <span className="text-xs font-bold text-stone-800 dark:text-slate-200">{inv.team.name}</span>
-                      <p className="text-[10px] text-stone-500">Invited by {inv.invitedBy.fullName} - expires {new Date(inv.expiresAt).toLocaleDateString()}</p>
+                      <div className="flex justify-between items-start">
+                        <span className="text-xs font-bold text-stone-800 dark:text-slate-200">{inv.team.name}</span>
+                        <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 px-1.5 py-0.5 rounded">
+                          {getRemainingTimeText(inv.expiresAt)}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-stone-500">Invited by {inv.invitedBy.fullName} - &quot;{inv.message || "No message"}&quot;</p>
+                      <p className="text-[9px] text-stone-400">Expires: {new Date(inv.expiresAt).toLocaleDateString()}</p>
                     </div>
                     <div className="flex gap-2">
-                      <button className="btn-primary py-1 px-3 text-[9px] w-full">Accept</button>
-                      <button className="btn-secondary py-1 px-3 text-[9px] w-full text-rose-500 border-rose-200/40 dark:border-rose-950/40">Decline</button>
+                      <button className="btn-primary py-1 px-3 text-[9px] w-full" onClick={() => respondToInvitation(inv.id, true)}>Accept</button>
+                      <button className="btn-secondary py-1 px-3 text-[9px] w-full text-rose-500 border-rose-200/40 dark:border-rose-950/40" onClick={() => respondToInvitation(inv.id, false)}>Decline</button>
                     </div>
                   </div>
                 ))}

@@ -201,7 +201,7 @@ for self-service account deletion/deactivation.
 
 # 3. High Priority Flow Gaps
 
-## 3.1 Team Invitation Accept / Decline
+## 3.1 [x] Team Invitation Accept / Decline
 
 ### Current State
 
