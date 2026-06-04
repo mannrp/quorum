@@ -264,7 +264,7 @@ type UpdateProfileInput struct {
 
 type UpdateProjectInput struct {
 	Title                  string                 `json:"title"`
-	Summary                string                 `json:"summary"`
+	Summary                *string                `json:"summary,omitempty"`
 	Description            string                 `json:"description"`
 	Constraints            *string                `json:"constraints,omitempty"`
 	Disciplines            []string               `json:"disciplines"`

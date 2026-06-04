@@ -632,6 +632,13 @@ func textPointer(value pgtype.Text) *string {
 	return &value.String
 }
 
+func textOrCurrent(value *string, fallback pgtype.Text) pgtype.Text {
+	if value == nil {
+		return fallback
+	}
+	return text(value)
+}
+
 func boolValue(value *bool) pgtype.Bool {
 	if value == nil {
 		return pgtype.Bool{}
@@ -685,11 +692,44 @@ func derefProjectLifecycle(value *model.ProjectLifecycleState, fallback string) 
 	return string(*value)
 }
 
+func lifecycleForProjectUpdate(lifecycle *model.ProjectLifecycleState, status *model.ProjectStatus, fallback string) string {
+	if lifecycle != nil {
+		return string(*lifecycle)
+	}
+	if status == nil {
+		return fallback
+	}
+	switch *status {
+	case model.ProjectStatusInReview:
+		return string(model.ProjectLifecycleStateReviewing)
+	case model.ProjectStatusClaimed:
+		return string(model.ProjectLifecycleStateMatched)
+	case model.ProjectStatusClosed:
+		return string(model.ProjectLifecycleStateClosed)
+	default:
+		return string(model.ProjectLifecycleStateOpen)
+	}
+}
+
 func derefProjectApproval(value *model.ProjectApprovalState, fallback string) string {
 	if value == nil {
 		return fallback
 	}
 	return string(*value)
+}
+
+func stringsOrCurrent(value []string, fallback []string) []string {
+	if value == nil {
+		return fallback
+	}
+	return value
+}
+
+func bytesOrCurrent(value *string, fallback []byte) []byte {
+	if value == nil {
+		return fallback
+	}
+	return []byte(*value)
 }
 
 func profileComplete(input model.UpdateProfileInput) bool {

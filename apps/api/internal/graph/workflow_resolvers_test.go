@@ -294,6 +294,45 @@ func TestProjectWorkflowsRequireCompleteProfile(t *testing.T) {
 	}
 }
 
+func TestUpdateProjectAcceptsFrontendEditPayloadAndPreservesOmittedFields(t *testing.T) {
+	ctx, r, cleanup := workflowTestResolver(t)
+	defer cleanup()
+
+	owner := createWorkflowUser(t, ctx, r.Queries, "owner", true)
+	project := createWorkflowProject(t, ctx, r.Queries, owner, "Frontend Edit Project")
+
+	constraints := "Updated material constraints"
+	status := model.ProjectStatusInReview
+	updated, err := (&mutationResolver{r}).UpdateProject(auth.WithUser(ctx, owner), uuidString(project.ID), model.UpdateProjectInput{
+		Title:       workflowPrefix(ctx) + "Frontend Edited Project",
+		Description: "Updated project description",
+		Constraints: &constraints,
+		Disciplines: []string{"SOEN", "COEN"},
+		TeamSizeMin: 2,
+		TeamSizeMax: 5,
+		Status:      &status,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if updated.Summary != "Workflow test project." {
+		t.Fatalf("summary = %q, want preserved original summary", updated.Summary)
+	}
+	if updated.LifecycleState != model.ProjectLifecycleStateReviewing || updated.Status != model.ProjectStatusInReview {
+		t.Fatalf("state = %s/%s, want REVIEWING/IN_REVIEW", updated.LifecycleState, updated.Status)
+	}
+	if updated.ApprovalState != model.ProjectApprovalStateUnverified {
+		t.Fatalf("approval state = %s, want preserved UNVERIFIED", updated.ApprovalState)
+	}
+	if len(updated.RequiredSkills) != 1 || updated.RequiredSkills[0] != "Go" {
+		t.Fatalf("required skills = %v, want preserved [Go]", updated.RequiredSkills)
+	}
+	if updated.ApplicationQuestions != "[]" {
+		t.Fatalf("application questions = %q, want preserved []", updated.ApplicationQuestions)
+	}
+}
+
 func TestCoLeadAllowedActionsExceptLeadOnlyArchive(t *testing.T) {
 	ctx, r, cleanup := workflowTestResolver(t)
 	defer cleanup()

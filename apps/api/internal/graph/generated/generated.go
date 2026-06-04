@@ -2290,23 +2290,23 @@ input CreateProjectInput {
 
 input UpdateProjectInput {
   title: String!
-  summary: String!
+  summary: String
   description: String!
   constraints: String
   disciplines: [String!]!
   teamSizeMin: Int!
   teamSizeMax: Int!
   status: ProjectStatus
-  lifecycleState: ProjectLifecycleState = OPEN
-  approvalState: ProjectApprovalState = UNVERIFIED
+  lifecycleState: ProjectLifecycleState
+  approvalState: ProjectApprovalState
   fileUrl: String
   videoUrl: String
-  requiredSkills: [String!] = []
-  niceToHaveSkills: [String!] = []
+  requiredSkills: [String!]
+  niceToHaveSkills: [String!]
   deliverables: String
   timeline: String
   evaluationCriteria: String
-  externalResources: [String!] = []
+  externalResources: [String!]
   ownerContactPreference: String
   applicationQuestions: String
 }
@@ -11813,22 +11813,6 @@ func (ec *executionContext) unmarshalInputUpdateProjectInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	if _, present := asMap["lifecycleState"]; !present {
-		asMap["lifecycleState"] = "OPEN"
-	}
-	if _, present := asMap["approvalState"]; !present {
-		asMap["approvalState"] = "UNVERIFIED"
-	}
-	if _, present := asMap["requiredSkills"]; !present {
-		asMap["requiredSkills"] = []any{}
-	}
-	if _, present := asMap["niceToHaveSkills"]; !present {
-		asMap["niceToHaveSkills"] = []any{}
-	}
-	if _, present := asMap["externalResources"]; !present {
-		asMap["externalResources"] = []any{}
-	}
-
 	fieldsInOrder := [...]string{"title", "summary", "description", "constraints", "disciplines", "teamSizeMin", "teamSizeMax", "status", "lifecycleState", "approvalState", "fileUrl", "videoUrl", "requiredSkills", "niceToHaveSkills", "deliverables", "timeline", "evaluationCriteria", "externalResources", "ownerContactPreference", "applicationQuestions"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
@@ -11845,7 +11829,7 @@ func (ec *executionContext) unmarshalInputUpdateProjectInput(ctx context.Context
 			it.Title = data
 		case "summary":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("summary"))
-			data, err := ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}

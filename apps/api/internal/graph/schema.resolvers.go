@@ -732,14 +732,14 @@ func (r *mutationResolver) UpdateProject(ctx context.Context, id string, input m
 	if err := r.withTx(ctx, func(q *db.Queries) error {
 		var err error
 		project, err = q.UpdateProject(ctx, db.UpdateProjectParams{
-			ID: projectID, Title: input.Title, Summary: input.Summary, Description: input.Description, Constraints: text(input.Constraints),
+			ID: projectID, Title: input.Title, Summary: derefString(input.Summary, before.Summary), Description: input.Description, Constraints: textOrCurrent(input.Constraints, before.Constraints),
 			Disciplines: input.Disciplines, TeamSizeMin: int32(input.TeamSizeMin), TeamSizeMax: int32(input.TeamSizeMax),
-			LifecycleState: derefProjectLifecycle(input.LifecycleState, string(model.ProjectLifecycleStateOpen)),
-			FileUrl:        text(input.FileURL), VideoUrl: text(input.VideoURL),
-			ApprovalState:  derefProjectApproval(input.ApprovalState, string(model.ProjectApprovalStateUnverified)),
-			RequiredSkills: input.RequiredSkills, NiceToHaveSkills: input.NiceToHaveSkills, Deliverables: text(input.Deliverables),
-			Timeline: text(input.Timeline), EvaluationCriteria: text(input.EvaluationCriteria), ExternalResources: input.ExternalResources,
-			OwnerContactPreference: text(input.OwnerContactPreference), ApplicationQuestions: []byte(derefString(input.ApplicationQuestions, "[]")),
+			LifecycleState: lifecycleForProjectUpdate(input.LifecycleState, input.Status, before.LifecycleState),
+			FileUrl:        textOrCurrent(input.FileURL, before.FileUrl), VideoUrl: textOrCurrent(input.VideoURL, before.VideoUrl),
+			ApprovalState:  derefProjectApproval(input.ApprovalState, before.ApprovalState),
+			RequiredSkills: stringsOrCurrent(input.RequiredSkills, before.RequiredSkills), NiceToHaveSkills: stringsOrCurrent(input.NiceToHaveSkills, before.NiceToHaveSkills), Deliverables: textOrCurrent(input.Deliverables, before.Deliverables),
+			Timeline: textOrCurrent(input.Timeline, before.Timeline), EvaluationCriteria: textOrCurrent(input.EvaluationCriteria, before.EvaluationCriteria), ExternalResources: stringsOrCurrent(input.ExternalResources, before.ExternalResources),
+			OwnerContactPreference: textOrCurrent(input.OwnerContactPreference, before.OwnerContactPreference), ApplicationQuestions: bytesOrCurrent(input.ApplicationQuestions, before.ApplicationQuestions),
 		})
 		if err != nil {
 			return err
