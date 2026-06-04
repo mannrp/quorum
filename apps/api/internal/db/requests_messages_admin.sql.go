@@ -11,20 +11,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createJoinRequest = `-- name: CreateJoinRequest :one
-INSERT INTO team_join_requests (team_id, user_id, message)
-VALUES ($1, $2, $3)
-RETURNING id, team_id, user_id, message, status, created_at
+const confirmJoinRequest = `-- name: ConfirmJoinRequest :one
+UPDATE team_join_requests
+SET status = 'CONFIRMED',
+    confirmed_at = now()
+WHERE id = $1
+  AND status = 'ACCEPTED_PENDING_CONFIRMATION'
+RETURNING id, team_id, user_id, message, status, created_at, expires_at, responded_at, confirmed_at, withdrawn_at
 `
 
-type CreateJoinRequestParams struct {
-	TeamID  pgtype.UUID `json:"team_id"`
-	UserID  pgtype.UUID `json:"user_id"`
-	Message pgtype.Text `json:"message"`
-}
-
-func (q *Queries) CreateJoinRequest(ctx context.Context, arg CreateJoinRequestParams) (TeamJoinRequest, error) {
-	row := q.db.QueryRow(ctx, createJoinRequest, arg.TeamID, arg.UserID, arg.Message)
+func (q *Queries) ConfirmJoinRequest(ctx context.Context, id pgtype.UUID) (TeamJoinRequest, error) {
+	row := q.db.QueryRow(ctx, confirmJoinRequest, id)
 	var i TeamJoinRequest
 	err := row.Scan(
 		&i.ID,
@@ -33,12 +30,287 @@ func (q *Queries) CreateJoinRequest(ctx context.Context, arg CreateJoinRequestPa
 		&i.Message,
 		&i.Status,
 		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.RespondedAt,
+		&i.ConfirmedAt,
+		&i.WithdrawnAt,
+	)
+	return i, err
+}
+
+const countUnreadMessages = `-- name: CountUnreadMessages :one
+SELECT count(*)::int
+FROM messages
+WHERE receiver_id = $1 AND read = false
+`
+
+func (q *Queries) CountUnreadMessages(ctx context.Context, receiverID pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countUnreadMessages, receiverID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countUnreadNotifications = `-- name: CountUnreadNotifications :one
+SELECT count(*)::int
+FROM notifications
+WHERE user_id = $1 AND read = false
+`
+
+func (q *Queries) CountUnreadNotifications(ctx context.Context, userID pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countUnreadNotifications, userID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const createAuditLog = `-- name: CreateAuditLog :one
+INSERT INTO audit_logs (
+  actor_user_id, action_type, target_entity_type, target_entity_id,
+  previous_value, new_value, reason, metadata
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, actor_user_id, action_type, target_entity_type, target_entity_id, previous_value, new_value, reason, metadata, created_at
+`
+
+type CreateAuditLogParams struct {
+	ActorUserID      pgtype.UUID `json:"actor_user_id"`
+	ActionType       string      `json:"action_type"`
+	TargetEntityType string      `json:"target_entity_type"`
+	TargetEntityID   pgtype.UUID `json:"target_entity_id"`
+	PreviousValue    []byte      `json:"previous_value"`
+	NewValue         []byte      `json:"new_value"`
+	Reason           pgtype.Text `json:"reason"`
+	Metadata         []byte      `json:"metadata"`
+}
+
+func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (AuditLog, error) {
+	row := q.db.QueryRow(ctx, createAuditLog,
+		arg.ActorUserID,
+		arg.ActionType,
+		arg.TargetEntityType,
+		arg.TargetEntityID,
+		arg.PreviousValue,
+		arg.NewValue,
+		arg.Reason,
+		arg.Metadata,
+	)
+	var i AuditLog
+	err := row.Scan(
+		&i.ID,
+		&i.ActorUserID,
+		&i.ActionType,
+		&i.TargetEntityType,
+		&i.TargetEntityID,
+		&i.PreviousValue,
+		&i.NewValue,
+		&i.Reason,
+		&i.Metadata,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createJoinRequest = `-- name: CreateJoinRequest :one
+INSERT INTO team_join_requests (team_id, user_id, message, expires_at)
+VALUES ($1, $2, $3, $4)
+RETURNING id, team_id, user_id, message, status, created_at, expires_at, responded_at, confirmed_at, withdrawn_at
+`
+
+type CreateJoinRequestParams struct {
+	TeamID    pgtype.UUID        `json:"team_id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	Message   pgtype.Text        `json:"message"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+}
+
+func (q *Queries) CreateJoinRequest(ctx context.Context, arg CreateJoinRequestParams) (TeamJoinRequest, error) {
+	row := q.db.QueryRow(ctx, createJoinRequest,
+		arg.TeamID,
+		arg.UserID,
+		arg.Message,
+		arg.ExpiresAt,
+	)
+	var i TeamJoinRequest
+	err := row.Scan(
+		&i.ID,
+		&i.TeamID,
+		&i.UserID,
+		&i.Message,
+		&i.Status,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.RespondedAt,
+		&i.ConfirmedAt,
+		&i.WithdrawnAt,
+	)
+	return i, err
+}
+
+const createNotification = `-- name: CreateNotification :one
+INSERT INTO notifications (user_id, type, payload)
+VALUES ($1, $2, $3)
+RETURNING id, user_id, type, payload, read, created_at
+`
+
+type CreateNotificationParams struct {
+	UserID  pgtype.UUID `json:"user_id"`
+	Type    string      `json:"type"`
+	Payload []byte      `json:"payload"`
+}
+
+func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error) {
+	row := q.db.QueryRow(ctx, createNotification, arg.UserID, arg.Type, arg.Payload)
+	var i Notification
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Type,
+		&i.Payload,
+		&i.Read,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createTeamInvitation = `-- name: CreateTeamInvitation :one
+INSERT INTO team_invitations (team_id, invited_user_id, invited_by, message, expires_at)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, team_id, invited_user_id, invited_by, message, status, expires_at, responded_at, created_at
+`
+
+type CreateTeamInvitationParams struct {
+	TeamID        pgtype.UUID        `json:"team_id"`
+	InvitedUserID pgtype.UUID        `json:"invited_user_id"`
+	InvitedBy     pgtype.UUID        `json:"invited_by"`
+	Message       pgtype.Text        `json:"message"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+}
+
+func (q *Queries) CreateTeamInvitation(ctx context.Context, arg CreateTeamInvitationParams) (TeamInvitation, error) {
+	row := q.db.QueryRow(ctx, createTeamInvitation,
+		arg.TeamID,
+		arg.InvitedUserID,
+		arg.InvitedBy,
+		arg.Message,
+		arg.ExpiresAt,
+	)
+	var i TeamInvitation
+	err := row.Scan(
+		&i.ID,
+		&i.TeamID,
+		&i.InvitedUserID,
+		&i.InvitedBy,
+		&i.Message,
+		&i.Status,
+		&i.ExpiresAt,
+		&i.RespondedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const expireDueJoinRequests = `-- name: ExpireDueJoinRequests :exec
+UPDATE team_join_requests
+SET status = 'EXPIRED',
+    withdrawn_at = now()
+WHERE status = 'ACCEPTED_PENDING_CONFIRMATION'
+  AND expires_at IS NOT NULL
+  AND expires_at <= $1
+`
+
+func (q *Queries) ExpireDueJoinRequests(ctx context.Context, expiresAt pgtype.Timestamptz) error {
+	_, err := q.db.Exec(ctx, expireDueJoinRequests, expiresAt)
+	return err
+}
+
+const expireDueTeamInvitations = `-- name: ExpireDueTeamInvitations :exec
+UPDATE team_invitations
+SET status = 'EXPIRED',
+    responded_at = now()
+WHERE status = 'PENDING'
+  AND expires_at <= $1
+`
+
+func (q *Queries) ExpireDueTeamInvitations(ctx context.Context, expiresAt pgtype.Timestamptz) error {
+	_, err := q.db.Exec(ctx, expireDueTeamInvitations, expiresAt)
+	return err
+}
+
+const expireJoinRequest = `-- name: ExpireJoinRequest :one
+UPDATE team_join_requests
+SET status = 'EXPIRED',
+    withdrawn_at = now()
+WHERE id = $1
+  AND status IN ('PENDING', 'ACCEPTED_PENDING_CONFIRMATION')
+RETURNING id, team_id, user_id, message, status, created_at, expires_at, responded_at, confirmed_at, withdrawn_at
+`
+
+func (q *Queries) ExpireJoinRequest(ctx context.Context, id pgtype.UUID) (TeamJoinRequest, error) {
+	row := q.db.QueryRow(ctx, expireJoinRequest, id)
+	var i TeamJoinRequest
+	err := row.Scan(
+		&i.ID,
+		&i.TeamID,
+		&i.UserID,
+		&i.Message,
+		&i.Status,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.RespondedAt,
+		&i.ConfirmedAt,
+		&i.WithdrawnAt,
+	)
+	return i, err
+}
+
+const expireOtherTeamInvitations = `-- name: ExpireOtherTeamInvitations :exec
+UPDATE team_invitations
+SET status = 'EXPIRED',
+    responded_at = now()
+WHERE invited_user_id = $1
+  AND id <> $2
+  AND status = 'PENDING'
+`
+
+type ExpireOtherTeamInvitationsParams struct {
+	InvitedUserID pgtype.UUID `json:"invited_user_id"`
+	ID            pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) ExpireOtherTeamInvitations(ctx context.Context, arg ExpireOtherTeamInvitationsParams) error {
+	_, err := q.db.Exec(ctx, expireOtherTeamInvitations, arg.InvitedUserID, arg.ID)
+	return err
+}
+
+const expireTeamInvitation = `-- name: ExpireTeamInvitation :one
+UPDATE team_invitations
+SET status = 'EXPIRED',
+    responded_at = now()
+WHERE id = $1
+  AND status = 'PENDING'
+RETURNING id, team_id, invited_user_id, invited_by, message, status, expires_at, responded_at, created_at
+`
+
+func (q *Queries) ExpireTeamInvitation(ctx context.Context, id pgtype.UUID) (TeamInvitation, error) {
+	row := q.db.QueryRow(ctx, expireTeamInvitation, id)
+	var i TeamInvitation
+	err := row.Scan(
+		&i.ID,
+		&i.TeamID,
+		&i.InvitedUserID,
+		&i.InvitedBy,
+		&i.Message,
+		&i.Status,
+		&i.ExpiresAt,
+		&i.RespondedAt,
+		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getJoinRequest = `-- name: GetJoinRequest :one
-SELECT id, team_id, user_id, message, status, created_at
+SELECT id, team_id, user_id, message, status, created_at, expires_at, responded_at, confirmed_at, withdrawn_at
 FROM team_join_requests
 WHERE id = $1
 `
@@ -53,6 +325,42 @@ func (q *Queries) GetJoinRequest(ctx context.Context, id pgtype.UUID) (TeamJoinR
 		&i.Message,
 		&i.Status,
 		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.RespondedAt,
+		&i.ConfirmedAt,
+		&i.WithdrawnAt,
+	)
+	return i, err
+}
+
+const getJoinRequestForUserTeam = `-- name: GetJoinRequestForUserTeam :one
+SELECT id, team_id, user_id, message, status, created_at, expires_at, responded_at, confirmed_at, withdrawn_at
+FROM team_join_requests
+WHERE team_id = $1
+  AND user_id = $2
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type GetJoinRequestForUserTeamParams struct {
+	TeamID pgtype.UUID `json:"team_id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) GetJoinRequestForUserTeam(ctx context.Context, arg GetJoinRequestForUserTeamParams) (TeamJoinRequest, error) {
+	row := q.db.QueryRow(ctx, getJoinRequestForUserTeam, arg.TeamID, arg.UserID)
+	var i TeamJoinRequest
+	err := row.Scan(
+		&i.ID,
+		&i.TeamID,
+		&i.UserID,
+		&i.Message,
+		&i.Status,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.RespondedAt,
+		&i.ConfirmedAt,
+		&i.WithdrawnAt,
 	)
 	return i, err
 }
@@ -97,6 +405,78 @@ func (q *Queries) GetNotification(ctx context.Context, id pgtype.UUID) (Notifica
 	return i, err
 }
 
+const getTeamInvitation = `-- name: GetTeamInvitation :one
+SELECT id, team_id, invited_user_id, invited_by, message, status, expires_at, responded_at, created_at
+FROM team_invitations
+WHERE id = $1
+`
+
+func (q *Queries) GetTeamInvitation(ctx context.Context, id pgtype.UUID) (TeamInvitation, error) {
+	row := q.db.QueryRow(ctx, getTeamInvitation, id)
+	var i TeamInvitation
+	err := row.Scan(
+		&i.ID,
+		&i.TeamID,
+		&i.InvitedUserID,
+		&i.InvitedBy,
+		&i.Message,
+		&i.Status,
+		&i.ExpiresAt,
+		&i.RespondedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getTeamInvitationForUserTeam = `-- name: GetTeamInvitationForUserTeam :one
+SELECT id, team_id, invited_user_id, invited_by, message, status, expires_at, responded_at, created_at
+FROM team_invitations
+WHERE team_id = $1
+  AND invited_user_id = $2
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type GetTeamInvitationForUserTeamParams struct {
+	TeamID        pgtype.UUID `json:"team_id"`
+	InvitedUserID pgtype.UUID `json:"invited_user_id"`
+}
+
+func (q *Queries) GetTeamInvitationForUserTeam(ctx context.Context, arg GetTeamInvitationForUserTeamParams) (TeamInvitation, error) {
+	row := q.db.QueryRow(ctx, getTeamInvitationForUserTeam, arg.TeamID, arg.InvitedUserID)
+	var i TeamInvitation
+	err := row.Scan(
+		&i.ID,
+		&i.TeamID,
+		&i.InvitedUserID,
+		&i.InvitedBy,
+		&i.Message,
+		&i.Status,
+		&i.ExpiresAt,
+		&i.RespondedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getUniversalDeadline = `-- name: GetUniversalDeadline :one
+SELECT id, deadline_at, updated_by, updated_at
+FROM universal_deadlines
+WHERE id = 'capstone_match'
+`
+
+func (q *Queries) GetUniversalDeadline(ctx context.Context) (UniversalDeadline, error) {
+	row := q.db.QueryRow(ctx, getUniversalDeadline)
+	var i UniversalDeadline
+	err := row.Scan(
+		&i.ID,
+		&i.DeadlineAt,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const isAdmin = `-- name: IsAdmin :one
 SELECT EXISTS(SELECT 1 FROM admin_users WHERE user_id = $1)
 `
@@ -109,7 +489,7 @@ func (q *Queries) IsAdmin(ctx context.Context, userID pgtype.UUID) (bool, error)
 }
 
 const listAdminUsers = `-- name: ListAdminUsers :many
-SELECT u.id, u.auth_user_id, u.username, u.email, u.full_name, u.bio, u.discipline, u.university, u.linkedin_url, u.github_url, u.portfolio_url, u.resume_url, u.avatar_url, u.created_at, u.updated_at
+SELECT u.id, u.auth_user_id, u.username, u.email, u.full_name, u.bio, u.discipline, u.university, u.linkedin_url, u.github_url, u.portfolio_url, u.resume_url, u.avatar_url, u.created_at, u.updated_at, u.user_intent, u.resume_visibility, u.discord, u.availability_note, u.preferred_project_areas, u.profile_complete, u.deactivated_at, u.archived_at
 FROM users u
 JOIN admin_users au ON au.user_id = u.id
 ORDER BY au.granted_at DESC
@@ -140,6 +520,52 @@ func (q *Queries) ListAdminUsers(ctx context.Context) ([]User, error) {
 			&i.AvatarUrl,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UserIntent,
+			&i.ResumeVisibility,
+			&i.Discord,
+			&i.AvailabilityNote,
+			&i.PreferredProjectAreas,
+			&i.ProfileComplete,
+			&i.DeactivatedAt,
+			&i.ArchivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAuditLogs = `-- name: ListAuditLogs :many
+SELECT id, actor_user_id, action_type, target_entity_type, target_entity_id, previous_value, new_value, reason, metadata, created_at
+FROM audit_logs
+ORDER BY created_at DESC
+LIMIT $1
+`
+
+func (q *Queries) ListAuditLogs(ctx context.Context, limit int32) ([]AuditLog, error) {
+	rows, err := q.db.Query(ctx, listAuditLogs, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuditLog
+	for rows.Next() {
+		var i AuditLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.ActorUserID,
+			&i.ActionType,
+			&i.TargetEntityType,
+			&i.TargetEntityID,
+			&i.PreviousValue,
+			&i.NewValue,
+			&i.Reason,
+			&i.Metadata,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -152,7 +578,7 @@ func (q *Queries) ListAdminUsers(ctx context.Context) ([]User, error) {
 }
 
 const listInboxUsers = `-- name: ListInboxUsers :many
-SELECT DISTINCT u.id, u.auth_user_id, u.username, u.email, u.full_name, u.bio, u.discipline, u.university, u.linkedin_url, u.github_url, u.portfolio_url, u.resume_url, u.avatar_url, u.created_at, u.updated_at
+SELECT DISTINCT u.id, u.auth_user_id, u.username, u.email, u.full_name, u.bio, u.discipline, u.university, u.linkedin_url, u.github_url, u.portfolio_url, u.resume_url, u.avatar_url, u.created_at, u.updated_at, u.user_intent, u.resume_visibility, u.discord, u.availability_note, u.preferred_project_areas, u.profile_complete, u.deactivated_at, u.archived_at
 FROM users u
 JOIN messages m ON u.id = CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END
 WHERE m.sender_id = $1 OR m.receiver_id = $1
@@ -184,6 +610,14 @@ func (q *Queries) ListInboxUsers(ctx context.Context, senderID pgtype.UUID) ([]U
 			&i.AvatarUrl,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UserIntent,
+			&i.ResumeVisibility,
+			&i.Discord,
+			&i.AvailabilityNote,
+			&i.PreferredProjectAreas,
+			&i.ProfileComplete,
+			&i.DeactivatedAt,
+			&i.ArchivedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -196,7 +630,7 @@ func (q *Queries) ListInboxUsers(ctx context.Context, senderID pgtype.UUID) ([]U
 }
 
 const listJoinRequestsForTeam = `-- name: ListJoinRequestsForTeam :many
-SELECT tjr.id, tjr.team_id, tjr.user_id, tjr.message, tjr.status, tjr.created_at, u.username, u.full_name
+SELECT tjr.id, tjr.team_id, tjr.user_id, tjr.message, tjr.status, tjr.created_at, tjr.expires_at, tjr.responded_at, tjr.confirmed_at, tjr.withdrawn_at, u.username, u.full_name
 FROM team_join_requests tjr
 JOIN users u ON u.id = tjr.user_id
 WHERE tjr.team_id = $1
@@ -204,14 +638,18 @@ ORDER BY tjr.created_at DESC
 `
 
 type ListJoinRequestsForTeamRow struct {
-	ID        pgtype.UUID        `json:"id"`
-	TeamID    pgtype.UUID        `json:"team_id"`
-	UserID    pgtype.UUID        `json:"user_id"`
-	Message   pgtype.Text        `json:"message"`
-	Status    string             `json:"status"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	Username  string             `json:"username"`
-	FullName  string             `json:"full_name"`
+	ID          pgtype.UUID        `json:"id"`
+	TeamID      pgtype.UUID        `json:"team_id"`
+	UserID      pgtype.UUID        `json:"user_id"`
+	Message     pgtype.Text        `json:"message"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	RespondedAt pgtype.Timestamptz `json:"responded_at"`
+	ConfirmedAt pgtype.Timestamptz `json:"confirmed_at"`
+	WithdrawnAt pgtype.Timestamptz `json:"withdrawn_at"`
+	Username    string             `json:"username"`
+	FullName    string             `json:"full_name"`
 }
 
 func (q *Queries) ListJoinRequestsForTeam(ctx context.Context, teamID pgtype.UUID) ([]ListJoinRequestsForTeamRow, error) {
@@ -230,6 +668,10 @@ func (q *Queries) ListJoinRequestsForTeam(ctx context.Context, teamID pgtype.UUI
 			&i.Message,
 			&i.Status,
 			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.RespondedAt,
+			&i.ConfirmedAt,
+			&i.WithdrawnAt,
 			&i.Username,
 			&i.FullName,
 		); err != nil {
@@ -317,15 +759,94 @@ func (q *Queries) ListNotifications(ctx context.Context, userID pgtype.UUID) ([]
 	return items, nil
 }
 
+const listTeamInvitationsForTeam = `-- name: ListTeamInvitationsForTeam :many
+SELECT id, team_id, invited_user_id, invited_by, message, status, expires_at, responded_at, created_at
+FROM team_invitations
+WHERE team_id = $1
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListTeamInvitationsForTeam(ctx context.Context, teamID pgtype.UUID) ([]TeamInvitation, error) {
+	rows, err := q.db.Query(ctx, listTeamInvitationsForTeam, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TeamInvitation
+	for rows.Next() {
+		var i TeamInvitation
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.InvitedUserID,
+			&i.InvitedBy,
+			&i.Message,
+			&i.Status,
+			&i.ExpiresAt,
+			&i.RespondedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTeamInvitationsForUser = `-- name: ListTeamInvitationsForUser :many
+SELECT id, team_id, invited_user_id, invited_by, message, status, expires_at, responded_at, created_at
+FROM team_invitations
+WHERE invited_user_id = $1
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListTeamInvitationsForUser(ctx context.Context, invitedUserID pgtype.UUID) ([]TeamInvitation, error) {
+	rows, err := q.db.Query(ctx, listTeamInvitationsForUser, invitedUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TeamInvitation
+	for rows.Next() {
+		var i TeamInvitation
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.InvitedUserID,
+			&i.InvitedBy,
+			&i.Message,
+			&i.Status,
+			&i.ExpiresAt,
+			&i.RespondedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markMessageRead = `-- name: MarkMessageRead :one
 UPDATE messages
 SET read = true
-WHERE id = $1
+WHERE id = $1 AND receiver_id = $2
 RETURNING id, sender_id, receiver_id, body, read, created_at
 `
 
-func (q *Queries) MarkMessageRead(ctx context.Context, id pgtype.UUID) (Message, error) {
-	row := q.db.QueryRow(ctx, markMessageRead, id)
+type MarkMessageReadParams struct {
+	ID         pgtype.UUID `json:"id"`
+	ReceiverID pgtype.UUID `json:"receiver_id"`
+}
+
+func (q *Queries) MarkMessageRead(ctx context.Context, arg MarkMessageReadParams) (Message, error) {
+	row := q.db.QueryRow(ctx, markMessageRead, arg.ID, arg.ReceiverID)
 	var i Message
 	err := row.Scan(
 		&i.ID,
@@ -341,12 +862,17 @@ func (q *Queries) MarkMessageRead(ctx context.Context, id pgtype.UUID) (Message,
 const markNotificationRead = `-- name: MarkNotificationRead :one
 UPDATE notifications
 SET read = true
-WHERE id = $1
+WHERE id = $1 AND user_id = $2
 RETURNING id, user_id, type, payload, read, created_at
 `
 
-func (q *Queries) MarkNotificationRead(ctx context.Context, id pgtype.UUID) (Notification, error) {
-	row := q.db.QueryRow(ctx, markNotificationRead, id)
+type MarkNotificationReadParams struct {
+	ID     pgtype.UUID `json:"id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) (Notification, error) {
+	row := q.db.QueryRow(ctx, markNotificationRead, arg.ID, arg.UserID)
 	var i Notification
 	err := row.Scan(
 		&i.ID,
@@ -361,18 +887,22 @@ func (q *Queries) MarkNotificationRead(ctx context.Context, id pgtype.UUID) (Not
 
 const respondToJoinRequest = `-- name: RespondToJoinRequest :one
 UPDATE team_join_requests
-SET status = $2
+SET status = $2,
+    responded_at = now(),
+    expires_at = CASE WHEN $2 = 'ACCEPTED_PENDING_CONFIRMATION' THEN $3 ELSE expires_at END
 WHERE id = $1
-RETURNING id, team_id, user_id, message, status, created_at
+  AND status = 'PENDING'
+RETURNING id, team_id, user_id, message, status, created_at, expires_at, responded_at, confirmed_at, withdrawn_at
 `
 
 type RespondToJoinRequestParams struct {
-	ID     pgtype.UUID `json:"id"`
-	Status string      `json:"status"`
+	ID        pgtype.UUID        `json:"id"`
+	Status    string             `json:"status"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
 func (q *Queries) RespondToJoinRequest(ctx context.Context, arg RespondToJoinRequestParams) (TeamJoinRequest, error) {
-	row := q.db.QueryRow(ctx, respondToJoinRequest, arg.ID, arg.Status)
+	row := q.db.QueryRow(ctx, respondToJoinRequest, arg.ID, arg.Status, arg.ExpiresAt)
 	var i TeamJoinRequest
 	err := row.Scan(
 		&i.ID,
@@ -380,6 +910,41 @@ func (q *Queries) RespondToJoinRequest(ctx context.Context, arg RespondToJoinReq
 		&i.UserID,
 		&i.Message,
 		&i.Status,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.RespondedAt,
+		&i.ConfirmedAt,
+		&i.WithdrawnAt,
+	)
+	return i, err
+}
+
+const respondToTeamInvitation = `-- name: RespondToTeamInvitation :one
+UPDATE team_invitations
+SET status = $2,
+    responded_at = now()
+WHERE id = $1
+  AND status = 'PENDING'
+RETURNING id, team_id, invited_user_id, invited_by, message, status, expires_at, responded_at, created_at
+`
+
+type RespondToTeamInvitationParams struct {
+	ID     pgtype.UUID `json:"id"`
+	Status string      `json:"status"`
+}
+
+func (q *Queries) RespondToTeamInvitation(ctx context.Context, arg RespondToTeamInvitationParams) (TeamInvitation, error) {
+	row := q.db.QueryRow(ctx, respondToTeamInvitation, arg.ID, arg.Status)
+	var i TeamInvitation
+	err := row.Scan(
+		&i.ID,
+		&i.TeamID,
+		&i.InvitedUserID,
+		&i.InvitedBy,
+		&i.Message,
+		&i.Status,
+		&i.ExpiresAt,
+		&i.RespondedAt,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -409,4 +974,50 @@ func (q *Queries) SendMessage(ctx context.Context, arg SendMessageParams) (Messa
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const upsertUniversalDeadline = `-- name: UpsertUniversalDeadline :one
+INSERT INTO universal_deadlines (id, deadline_at, updated_by)
+VALUES ('capstone_match', $1, $2)
+ON CONFLICT (id) DO UPDATE
+SET deadline_at = EXCLUDED.deadline_at,
+    updated_by = EXCLUDED.updated_by,
+    updated_at = now()
+RETURNING id, deadline_at, updated_by, updated_at
+`
+
+type UpsertUniversalDeadlineParams struct {
+	DeadlineAt pgtype.Timestamptz `json:"deadline_at"`
+	UpdatedBy  pgtype.UUID        `json:"updated_by"`
+}
+
+func (q *Queries) UpsertUniversalDeadline(ctx context.Context, arg UpsertUniversalDeadlineParams) (UniversalDeadline, error) {
+	row := q.db.QueryRow(ctx, upsertUniversalDeadline, arg.DeadlineAt, arg.UpdatedBy)
+	var i UniversalDeadline
+	err := row.Scan(
+		&i.ID,
+		&i.DeadlineAt,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const withdrawOtherJoinRequests = `-- name: WithdrawOtherJoinRequests :exec
+UPDATE team_join_requests
+SET status = 'WITHDRAWN',
+    withdrawn_at = now()
+WHERE user_id = $1
+  AND id <> $2
+  AND status IN ('PENDING', 'ACCEPTED_PENDING_CONFIRMATION')
+`
+
+type WithdrawOtherJoinRequestsParams struct {
+	UserID pgtype.UUID `json:"user_id"`
+	ID     pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) WithdrawOtherJoinRequests(ctx context.Context, arg WithdrawOtherJoinRequestsParams) error {
+	_, err := q.db.Exec(ctx, withdrawOtherJoinRequests, arg.UserID, arg.ID)
+	return err
 }

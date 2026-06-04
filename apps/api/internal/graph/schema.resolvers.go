@@ -9,8 +9,10 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"time"
 
 	pgx "github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/local/quorum/apps/api/internal/auth"
 	"github.com/local/quorum/apps/api/internal/db"
 	"github.com/local/quorum/apps/api/internal/graph/generated"
@@ -30,10 +32,12 @@ func (r *mutationResolver) BootstrapProfile(ctx context.Context, input model.Boo
 	user, err := r.Queries.CreateUser(ctx, db.CreateUserParams{
 		AuthUserID: subject,
 		Username:   input.Username,
-		Email:      text(input.Email),
+		Email:      textString(input.Email),
 		FullName:   input.FullName,
-		Discipline: text(input.Discipline),
-		University: text(input.University),
+		Discipline: textString(input.Discipline),
+		University: textString(input.University),
+		UserIntent: derefString(input.UserIntent, "STUDENT"),
+		Bio:        text(input.Bio),
 	})
 	if err != nil {
 		return nil, err
@@ -48,16 +52,22 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input model.Update
 		return nil, err
 	}
 	user, err := r.Queries.UpdateProfile(ctx, db.UpdateProfileParams{
-		ID:           current.ID,
-		FullName:     input.FullName,
-		Bio:          text(input.Bio),
-		Discipline:   text(input.Discipline),
-		University:   text(input.University),
-		LinkedinUrl:  text(input.LinkedinURL),
-		GithubUrl:    text(input.GithubURL),
-		PortfolioUrl: text(input.PortfolioURL),
-		ResumeUrl:    text(input.ResumeURL),
-		AvatarUrl:    text(input.AvatarURL),
+		ID:                    current.ID,
+		FullName:              input.FullName,
+		Bio:                   text(input.Bio),
+		Discipline:            text(input.Discipline),
+		University:            text(input.University),
+		LinkedinUrl:           text(input.LinkedinURL),
+		GithubUrl:             text(input.GithubURL),
+		PortfolioUrl:          text(input.PortfolioURL),
+		ResumeUrl:             text(input.ResumeURL),
+		AvatarUrl:             text(input.AvatarURL),
+		UserIntent:            derefString(input.UserIntent, current.UserIntent),
+		ResumeVisibility:      derefResumeVisibility(input.ResumeVisibility, current.ResumeVisibility),
+		Discord:               text(input.Discord),
+		AvailabilityNote:      text(input.AvailabilityNote),
+		PreferredProjectAreas: input.PreferredProjectAreas,
+		ProfileComplete:       derefBool(input.ProfileComplete, profileComplete(input)),
 	})
 	if err != nil {
 		return nil, err
@@ -65,38 +75,64 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input model.Update
 	return r.user(ctx, user)
 }
 
+// DeactivateAccount is the resolver for the deactivateAccount field.
+func (r *mutationResolver) DeactivateAccount(ctx context.Context, reason *string) (bool, error) {
+	current, err := requireActiveUser(ctx)
+	if err != nil {
+		return false, err
+	}
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		if err := q.DeactivateUser(ctx, current.ID); err != nil {
+			return err
+		}
+		return r.auditChange(ctx, q, current.ID, "USER_DEACTIVATED", "USER", current.ID, map[string]any{"deactivated": false}, map[string]any{"deactivated": true}, reason)
+	}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // CreateTeam is the resolver for the createTeam field.
 func (r *mutationResolver) CreateTeam(ctx context.Context, input model.CreateTeamInput) (*model.Team, error) {
-	current, err := requireUser(ctx)
+	current, err := requireCompleteUser(ctx)
 	if err != nil {
 		return nil, err
+	}
+	count, err := r.Queries.CountUserTeams(ctx, current.ID)
+	if err != nil {
+		return nil, err
+	}
+	if count > 0 {
+		return nil, errors.New("you are already on a team")
 	}
 	maxSize := 12
 	if input.MaxSize != nil {
 		maxSize = *input.MaxSize
 	}
-
-	tx, err := r.Pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-	q := r.Queries.WithTx(tx)
-
-	team, err := q.CreateTeam(ctx, db.CreateTeamParams{
-		Name:        input.Name,
-		Description: text(input.Description),
-		Discipline:  text(input.Discipline),
-		MaxSize:     int32(maxSize),
-		CreatedBy:   current.ID,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if _, err := q.AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: team.ID, UserID: current.ID, Role: string(model.TeamRoleLead)}); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
+	var team db.Team
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		team, err = q.CreateTeam(ctx, db.CreateTeamParams{
+			Name:             input.Name,
+			Description:      text(input.Description),
+			Discipline:       text(input.Discipline),
+			MaxSize:          int32(maxSize),
+			CreatedBy:        current.ID,
+			RecruitingState:  derefTeamRecruiting(input.RecruitingState, string(model.TeamRecruitingStateRecruiting)),
+			Visibility:       derefTeamVisibility(input.Visibility, string(model.TeamVisibilityVisible)),
+			DiscordLink:      text(input.DiscordLink),
+			ExistingSkills:   input.ExistingSkills,
+			NeededSkills:     input.NeededSkills,
+			ProjectInterests: input.ProjectInterests,
+		})
+		if err != nil {
+			return err
+		}
+		if _, err := q.AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: team.ID, UserID: current.ID, Role: string(model.TeamRoleLead)}); err != nil {
+			return err
+		}
+		return r.auditChange(ctx, q, current.ID, "TEAM_CREATED", "TEAM", team.ID, map[string]any{}, teamStateSnapshot(team), nil)
+	}); err != nil {
 		return nil, err
 	}
 	return r.team(ctx, team)
@@ -112,17 +148,56 @@ func (r *mutationResolver) UpdateTeam(ctx context.Context, id string, input mode
 		return nil, err
 	}
 	team, err := r.Queries.UpdateTeam(ctx, db.UpdateTeamParams{
-		ID:          teamID,
-		Name:        input.Name,
-		Description: text(input.Description),
-		Discipline:  text(input.Discipline),
-		MaxSize:     int32(input.MaxSize),
-		IsComplete:  input.IsComplete,
+		ID:               teamID,
+		Name:             input.Name,
+		Description:      text(input.Description),
+		Discipline:       text(input.Discipline),
+		MaxSize:          int32(input.MaxSize),
+		IsComplete:       input.IsComplete,
+		RecruitingState:  derefTeamRecruiting(input.RecruitingState, string(model.TeamRecruitingStateRecruiting)),
+		Visibility:       derefTeamVisibility(input.Visibility, string(model.TeamVisibilityVisible)),
+		DiscordLink:      text(input.DiscordLink),
+		ExistingSkills:   input.ExistingSkills,
+		NeededSkills:     input.NeededSkills,
+		ProjectInterests: input.ProjectInterests,
 	})
 	if err != nil {
 		return nil, err
 	}
+	if team.ArchivedAt.Valid {
+		return nil, nil
+	}
 	return r.team(ctx, team)
+}
+
+// ArchiveTeam is the resolver for the archiveTeam field.
+func (r *mutationResolver) ArchiveTeam(ctx context.Context, id string, reason *string) (bool, error) {
+	teamID, err := uuid(id)
+	if err != nil {
+		return false, err
+	}
+	if err := r.requireLeadOnly(ctx, teamID); err != nil {
+		return false, err
+	}
+	current, _ := requireActiveUser(ctx)
+	before, err := r.Queries.GetTeam(ctx, teamID)
+	if err != nil {
+		return false, err
+	}
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		if err := q.ArchiveTeam(ctx, teamID); err != nil {
+			return err
+		}
+		after, err := q.GetTeam(ctx, teamID)
+		if err != nil {
+			return err
+		}
+		r.notifyUser(ctx, q, before.CreatedBy, "TEAM_ARCHIVED", map[string]any{"teamId": uuidString(teamID), "teamName": before.Name})
+		return r.auditChange(ctx, q, current.ID, "TEAM_ARCHIVED", "TEAM", teamID, teamStateSnapshot(before), teamStateSnapshot(after), reason)
+	}); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // DeleteTeam is the resolver for the deleteTeam field.
@@ -131,10 +206,10 @@ func (r *mutationResolver) DeleteTeam(ctx context.Context, id string) (bool, err
 	if err != nil {
 		return false, err
 	}
-	if err := r.requireTeamLead(ctx, teamID); err != nil {
+	if err := r.requireLeadOnly(ctx, teamID); err != nil {
 		return false, err
 	}
-	return true, r.Queries.DeleteTeam(ctx, teamID)
+	return r.ArchiveTeam(ctx, id, nil)
 }
 
 // RemoveMember is the resolver for the removeMember field.
@@ -150,7 +225,40 @@ func (r *mutationResolver) RemoveMember(ctx context.Context, teamID string, user
 	if err := r.requireTeamLead(ctx, tid); err != nil {
 		return false, err
 	}
+	target, err := r.Queries.GetTeamMembership(ctx, db.GetTeamMembershipParams{TeamID: tid, UserID: uid})
+	if err != nil {
+		return false, err
+	}
+	if target.Role == string(model.TeamRoleLead) {
+		return false, errors.New("team lead cannot be removed")
+	}
 	return true, r.Queries.RemoveTeamMember(ctx, db.RemoveTeamMemberParams{TeamID: tid, UserID: uid})
+}
+
+// LeaveTeam is the resolver for the leaveTeam field.
+func (r *mutationResolver) LeaveTeam(ctx context.Context, teamID string) (bool, error) {
+	current, err := requireUser(ctx)
+	if err != nil {
+		return false, err
+	}
+	tid, err := uuid(teamID)
+	if err != nil {
+		return false, err
+	}
+	members, err := r.Queries.ListTeamMembers(ctx, tid)
+	if err != nil {
+		return false, err
+	}
+	for _, member := range members {
+		if sameUUID(member.UserID, current.ID) && member.Role == string(model.TeamRoleLead) {
+			return false, errors.New("transfer leadership or archive the team before leaving")
+		}
+	}
+	if err := r.Queries.RemoveTeamMember(ctx, db.RemoveTeamMemberParams{TeamID: tid, UserID: current.ID}); err != nil {
+		return false, err
+	}
+	_ = r.audit(ctx, current.ID, "TEAM_MEMBER_LEFT", "TEAM", tid, nil)
+	return true, nil
 }
 
 // PromoteMember is the resolver for the promoteMember field.
@@ -163,8 +271,17 @@ func (r *mutationResolver) PromoteMember(ctx context.Context, teamID string, use
 	if err != nil {
 		return nil, err
 	}
-	if err := r.requireTeamLead(ctx, tid); err != nil {
+	if err := r.requireLeadOnly(ctx, tid); err != nil {
 		return nil, err
+	}
+	if role == model.TeamRoleCoLead {
+		count, err := r.Queries.CountTeamCoLeads(ctx, tid)
+		if err != nil {
+			return nil, err
+		}
+		if count >= 3 {
+			return nil, errors.New("teams can have at most three co-leads")
+		}
 	}
 	member, err := r.Queries.PromoteTeamMember(ctx, db.PromoteTeamMemberParams{TeamID: tid, UserID: uid, Role: string(role)})
 	if err != nil {
@@ -175,52 +292,387 @@ func (r *mutationResolver) PromoteMember(ctx context.Context, teamID string, use
 
 // RequestJoin is the resolver for the requestJoin field.
 func (r *mutationResolver) RequestJoin(ctx context.Context, teamID string, message *string) (*model.TeamJoinRequest, error) {
-	current, err := requireUser(ctx)
+	current, err := requireCompleteUser(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err := r.requireDeadlineOpen(ctx); err != nil {
 		return nil, err
 	}
 	tid, err := uuid(teamID)
 	if err != nil {
 		return nil, err
 	}
-	request, err := r.Queries.CreateJoinRequest(ctx, db.CreateJoinRequestParams{TeamID: tid, UserID: current.ID, Message: text(message)})
+	if err := r.expireDueWorkflows(ctx, r.Queries); err != nil {
+		return nil, err
+	}
+	team, err := r.Queries.GetTeam(ctx, tid)
 	if err != nil {
+		return nil, err
+	}
+	if team.ArchivedAt.Valid || team.RecruitingState != string(model.TeamRecruitingStateRecruiting) {
+		return nil, errors.New("team is not accepting join requests")
+	}
+	memberCount, err := r.Queries.CountTeamMembers(ctx, tid)
+	if err != nil {
+		return nil, err
+	}
+	if memberCount >= team.MaxSize {
+		return nil, errors.New("team is full")
+	}
+	userTeams, err := r.Queries.CountUserTeams(ctx, current.ID)
+	if err != nil {
+		return nil, err
+	}
+	if userTeams > 0 {
+		return nil, errors.New("you are already on a team")
+	}
+	existing, err := r.Queries.GetJoinRequestForUserTeam(ctx, db.GetJoinRequestForUserTeamParams{TeamID: tid, UserID: current.ID})
+	if err == nil {
+		if existing.Status == string(model.JoinRequestStatusPending) || existing.Status == string(model.JoinRequestStatusAcceptedPendingConfirmation) {
+			return r.joinRequest(ctx, existing)
+		}
+		return nil, errors.New("you have already requested to join this team")
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	expiresAt, err := r.confirmationExpiresAt(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var request db.TeamJoinRequest
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		request, err = q.CreateJoinRequest(ctx, db.CreateJoinRequestParams{TeamID: tid, UserID: current.ID, Message: text(message), ExpiresAt: expiresAt})
+		if err != nil {
+			return err
+		}
+		members, err := q.ListTeamMembers(ctx, tid)
+		if err != nil {
+			return err
+		}
+		for _, member := range members {
+			if member.Role == string(model.TeamRoleLead) || member.Role == string(model.TeamRoleCoLead) {
+				r.notifyUser(ctx, q, member.UserID, "JOIN_REQUEST_CREATED", map[string]any{"teamId": uuidString(tid), "requestId": uuidString(request.ID), "userId": uuidString(current.ID)})
+			}
+		}
+		return r.auditChange(ctx, q, current.ID, "JOIN_REQUEST_CREATED", "TEAM_JOIN_REQUEST", request.ID, map[string]any{}, statusSnapshot(request.Status), nil)
+	}); err != nil {
 		return nil, err
 	}
 	return r.joinRequest(ctx, request)
 }
 
 // RespondToJoinRequest is the resolver for the respondToJoinRequest field.
-func (r *mutationResolver) RespondToJoinRequest(ctx context.Context, requestID string, accept bool) (bool, error) {
+func (r *mutationResolver) RespondToJoinRequest(ctx context.Context, requestID string, accept bool) (*model.TeamJoinRequest, error) {
 	id, err := uuid(requestID)
 	if err != nil {
-		return false, err
+		return nil, err
+	}
+	if err := r.expireDueWorkflows(ctx, r.Queries); err != nil {
+		return nil, err
 	}
 	request, err := r.Queries.GetJoinRequest(ctx, id)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	if err := r.requireTeamLead(ctx, request.TeamID); err != nil {
-		return false, err
+		return nil, err
 	}
-	status := model.ApplicationStatusRejected
+	if terminalJoinRequestStatuses[request.Status] || request.Status == string(model.JoinRequestStatusAcceptedPendingConfirmation) {
+		return r.joinRequest(ctx, request)
+	}
+	if request.Status != string(model.JoinRequestStatusPending) {
+		return nil, errors.New("join request is not pending")
+	}
+	status := model.JoinRequestStatusRejected
+	expiresAt := pgtype.Timestamptz{}
 	if accept {
-		status = model.ApplicationStatusAccepted
-	}
-	if _, err := r.Queries.RespondToJoinRequest(ctx, db.RespondToJoinRequestParams{ID: id, Status: string(status)}); err != nil {
-		return false, err
-	}
-	if accept {
-		if _, err := r.Queries.AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: request.TeamID, UserID: request.UserID, Role: string(model.TeamRoleMember)}); err != nil {
-			return false, err
+		status = model.JoinRequestStatusAcceptedPendingConfirmation
+		expiresAt, err = r.confirmationExpiresAt(ctx)
+		if err != nil {
+			return nil, err
 		}
 	}
-	return true, nil
+	current, _ := requireActiveUser(ctx)
+	var updated db.TeamJoinRequest
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		updated, err = q.RespondToJoinRequest(ctx, db.RespondToJoinRequestParams{ID: id, Status: string(status), ExpiresAt: expiresAt})
+		if err != nil {
+			return err
+		}
+		r.notifyUser(ctx, q, request.UserID, "JOIN_REQUEST_REVIEWED", map[string]any{"requestId": uuidString(id), "teamId": uuidString(request.TeamID), "status": string(status)})
+		return r.auditChange(ctx, q, current.ID, "JOIN_REQUEST_REVIEWED", "TEAM_JOIN_REQUEST", id, statusSnapshot(request.Status), statusSnapshot(updated.Status), nil)
+	}); err != nil {
+		return nil, err
+	}
+	return r.joinRequest(ctx, updated)
+}
+
+// ConfirmJoinRequest is the resolver for the confirmJoinRequest field.
+func (r *mutationResolver) ConfirmJoinRequest(ctx context.Context, requestID string) (*model.TeamJoinRequest, error) {
+	current, err := requireCompleteUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := uuid(requestID)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.expireDueWorkflows(ctx, r.Queries); err != nil {
+		return nil, err
+	}
+	request, err := r.Queries.GetJoinRequest(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if !sameUUID(request.UserID, current.ID) {
+		return nil, errors.New("not authorized")
+	}
+	if request.Status == string(model.JoinRequestStatusConfirmed) {
+		return r.joinRequest(ctx, request)
+	}
+	expired, err := r.isExpired(ctx, request.ExpiresAt)
+	if err != nil {
+		return nil, err
+	}
+	if expired && request.Status == string(model.JoinRequestStatusAcceptedPendingConfirmation) {
+		expiredRequest, err := r.Queries.ExpireJoinRequest(ctx, id)
+		if err == nil {
+			r.notifyUser(ctx, r.Queries, request.UserID, "JOIN_REQUEST_EXPIRED", map[string]any{"requestId": uuidString(id), "teamId": uuidString(request.TeamID)})
+			return r.joinRequest(ctx, expiredRequest)
+		}
+		return nil, err
+	}
+	if request.Status != string(model.JoinRequestStatusAcceptedPendingConfirmation) {
+		return nil, errors.New("join request is not awaiting confirmation")
+	}
+	userTeams, err := r.Queries.CountUserTeams(ctx, current.ID)
+	if err != nil {
+		return nil, err
+	}
+	if userTeams > 0 {
+		return nil, errors.New("you are already on a team")
+	}
+	var updated db.TeamJoinRequest
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		if _, err := q.AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: request.TeamID, UserID: request.UserID, Role: string(model.TeamRoleMember)}); err != nil {
+			return err
+		}
+		var err error
+		updated, err = q.ConfirmJoinRequest(ctx, id)
+		if err != nil {
+			return err
+		}
+		if err := q.WithdrawOtherJoinRequests(ctx, db.WithdrawOtherJoinRequestsParams{UserID: current.ID, ID: id}); err != nil {
+			return err
+		}
+		if err := q.ExpireOtherTeamInvitations(ctx, db.ExpireOtherTeamInvitationsParams{InvitedUserID: current.ID, ID: pgtype.UUID{}}); err != nil {
+			return err
+		}
+		members, err := q.ListTeamMembers(ctx, request.TeamID)
+		if err != nil {
+			return err
+		}
+		for _, member := range members {
+			if member.Role == string(model.TeamRoleLead) || member.Role == string(model.TeamRoleCoLead) {
+				r.notifyUser(ctx, q, member.UserID, "JOIN_REQUEST_CONFIRMED", map[string]any{"requestId": uuidString(id), "teamId": uuidString(request.TeamID), "userId": uuidString(current.ID)})
+			}
+		}
+		return r.auditChange(ctx, q, current.ID, "JOIN_REQUEST_CONFIRMED", "TEAM_JOIN_REQUEST", id, statusSnapshot(request.Status), statusSnapshot(updated.Status), nil)
+	}); err != nil {
+		return nil, err
+	}
+	return r.joinRequest(ctx, updated)
+}
+
+// InviteTeamMember is the resolver for the inviteTeamMember field.
+func (r *mutationResolver) InviteTeamMember(ctx context.Context, teamID string, userID string, message *string) (*model.TeamInvitation, error) {
+	current, err := requireCompleteUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.requireDeadlineOpen(ctx); err != nil {
+		return nil, err
+	}
+	tid, err := uuid(teamID)
+	if err != nil {
+		return nil, err
+	}
+	uid, err := uuid(userID)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.requireTeamLead(ctx, tid); err != nil {
+		return nil, err
+	}
+	if err := r.expireDueWorkflows(ctx, r.Queries); err != nil {
+		return nil, err
+	}
+	team, err := r.Queries.GetTeam(ctx, tid)
+	if err != nil {
+		return nil, err
+	}
+	if team.ArchivedAt.Valid || team.RecruitingState == string(model.TeamRecruitingStateHidden) {
+		return nil, errors.New("team is not accepting invitations")
+	}
+	memberCount, err := r.Queries.CountTeamMembers(ctx, tid)
+	if err != nil {
+		return nil, err
+	}
+	if memberCount >= team.MaxSize {
+		return nil, errors.New("team is full")
+	}
+	invitee, err := r.Queries.GetUser(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	if invitee.DeactivatedAt.Valid || invitee.ArchivedAt.Valid {
+		return nil, errors.New("invitee account is deactivated")
+	}
+	userTeams, err := r.Queries.CountUserTeams(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	if userTeams > 0 {
+		return nil, errors.New("user is already on a team")
+	}
+	existing, err := r.Queries.GetTeamInvitationForUserTeam(ctx, db.GetTeamInvitationForUserTeamParams{TeamID: tid, InvitedUserID: uid})
+	if err == nil {
+		if existing.Status == string(model.TeamInvitationStatusPending) {
+			return r.teamInvitation(ctx, existing)
+		}
+		return nil, errors.New("user has already been invited to this team")
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	expiresAt, err := r.confirmationExpiresAt(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var invitation db.TeamInvitation
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		invitation, err = q.CreateTeamInvitation(ctx, db.CreateTeamInvitationParams{
+			TeamID: tid, InvitedUserID: uid, InvitedBy: current.ID, Message: text(message), ExpiresAt: expiresAt,
+		})
+		if err != nil {
+			return err
+		}
+		r.notifyUser(ctx, q, uid, "TEAM_INVITATION_CREATED", map[string]any{"teamId": uuidString(tid), "invitationId": uuidString(invitation.ID), "invitedBy": uuidString(current.ID)})
+		return r.auditChange(ctx, q, current.ID, "TEAM_INVITATION_CREATED", "TEAM_INVITATION", invitation.ID, map[string]any{}, statusSnapshot(invitation.Status), nil)
+	}); err != nil {
+		return nil, err
+	}
+	return r.teamInvitation(ctx, invitation)
+}
+
+// RespondToTeamInvitation is the resolver for the respondToTeamInvitation field.
+func (r *mutationResolver) RespondToTeamInvitation(ctx context.Context, invitationID string, accept bool) (*model.TeamInvitation, error) {
+	current, err := requireCompleteUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := uuid(invitationID)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.expireDueWorkflows(ctx, r.Queries); err != nil {
+		return nil, err
+	}
+	invitation, err := r.Queries.GetTeamInvitation(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if !sameUUID(invitation.InvitedUserID, current.ID) {
+		return nil, errors.New("not authorized")
+	}
+	if invitation.Status == string(model.TeamInvitationStatusAccepted) {
+		return r.teamInvitation(ctx, invitation)
+	}
+	expired, err := r.isExpired(ctx, invitation.ExpiresAt)
+	if err != nil {
+		return nil, err
+	}
+	if expired && invitation.Status == string(model.TeamInvitationStatusPending) {
+		expiredInvitation, err := r.Queries.ExpireTeamInvitation(ctx, id)
+		if err == nil {
+			r.notifyUser(ctx, r.Queries, current.ID, "TEAM_INVITATION_EXPIRED", map[string]any{"invitationId": uuidString(id), "teamId": uuidString(invitation.TeamID)})
+			return r.teamInvitation(ctx, expiredInvitation)
+		}
+		return nil, err
+	}
+	if invitation.Status != string(model.TeamInvitationStatusPending) {
+		if terminalInvitationStatuses[invitation.Status] {
+			return r.teamInvitation(ctx, invitation)
+		}
+		return nil, errors.New("team invitation is not pending")
+	}
+	status := model.TeamInvitationStatusDeclined
+	if accept {
+		if err := r.requireDeadlineOpen(ctx); err != nil {
+			return nil, err
+		}
+		userTeams, err := r.Queries.CountUserTeams(ctx, current.ID)
+		if err != nil {
+			return nil, err
+		}
+		if userTeams > 0 {
+			return nil, errors.New("you are already on a team")
+		}
+		team, err := r.Queries.GetTeam(ctx, invitation.TeamID)
+		if err != nil {
+			return nil, err
+		}
+		memberCount, err := r.Queries.CountTeamMembers(ctx, invitation.TeamID)
+		if err != nil {
+			return nil, err
+		}
+		if team.ArchivedAt.Valid || memberCount >= team.MaxSize {
+			return nil, errors.New("team is not accepting members")
+		}
+		status = model.TeamInvitationStatusAccepted
+	}
+	var updated db.TeamInvitation
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		if accept {
+			if _, err := q.AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: invitation.TeamID, UserID: current.ID, Role: string(model.TeamRoleMember)}); err != nil {
+				return err
+			}
+			if err := q.ExpireOtherTeamInvitations(ctx, db.ExpireOtherTeamInvitationsParams{InvitedUserID: current.ID, ID: id}); err != nil {
+				return err
+			}
+			if err := q.WithdrawOtherJoinRequests(ctx, db.WithdrawOtherJoinRequestsParams{UserID: current.ID, ID: pgtype.UUID{}}); err != nil {
+				return err
+			}
+		}
+		var err error
+		updated, err = q.RespondToTeamInvitation(ctx, db.RespondToTeamInvitationParams{ID: id, Status: string(status)})
+		if err != nil {
+			return err
+		}
+		members, err := q.ListTeamMembers(ctx, invitation.TeamID)
+		if err != nil {
+			return err
+		}
+		for _, member := range members {
+			if member.Role == string(model.TeamRoleLead) || member.Role == string(model.TeamRoleCoLead) {
+				r.notifyUser(ctx, q, member.UserID, "TEAM_INVITATION_RESPONDED", map[string]any{"invitationId": uuidString(id), "teamId": uuidString(invitation.TeamID), "status": string(status)})
+			}
+		}
+		return r.auditChange(ctx, q, current.ID, "TEAM_INVITATION_RESPONDED", "TEAM_INVITATION", id, statusSnapshot(invitation.Status), statusSnapshot(updated.Status), nil)
+	}); err != nil {
+		return nil, err
+	}
+	return r.teamInvitation(ctx, updated)
 }
 
 // CreateProject is the resolver for the createProject field.
 func (r *mutationResolver) CreateProject(ctx context.Context, input model.CreateProjectInput) (*model.Project, error) {
-	current, err := requireUser(ctx)
+	current, err := requireCompleteUser(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -232,18 +684,32 @@ func (r *mutationResolver) CreateProject(ctx context.Context, input model.Create
 	if input.TeamSizeMax != nil {
 		maxSize = *input.TeamSizeMax
 	}
-	project, err := r.Queries.CreateProject(ctx, db.CreateProjectParams{
-		Title:       input.Title,
-		Description: input.Description,
-		Constraints: text(input.Constraints),
-		Disciplines: input.Disciplines,
-		TeamSizeMin: int32(minSize),
-		TeamSizeMax: int32(maxSize),
-		OwnerID:     current.ID,
-		FileUrl:     text(input.FileURL),
-		VideoUrl:    text(input.VideoURL),
-	})
+	existing, err := r.Queries.ListProjectsForOwner(ctx, current.ID)
 	if err != nil {
+		return nil, err
+	}
+	if len(existing) > 0 {
+		return nil, errors.New("users may own only one project in v1")
+	}
+	lifecycle := derefProjectLifecycle(input.LifecycleState, string(model.ProjectLifecycleStateDraft))
+	approval := derefProjectApproval(input.ApprovalState, string(model.ProjectApprovalStateUnverified))
+	questions := []byte(derefString(input.ApplicationQuestions, "[]"))
+	var project db.Project
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		project, err = q.CreateProject(ctx, db.CreateProjectParams{
+			Title: input.Title, Summary: derefString(input.Summary, ""), Description: input.Description,
+			Constraints: text(input.Constraints), Disciplines: input.Disciplines, TeamSizeMin: int32(minSize), TeamSizeMax: int32(maxSize),
+			OwnerID: current.ID, FileUrl: text(input.FileURL), VideoUrl: text(input.VideoURL), LifecycleState: lifecycle, ApprovalState: approval,
+			RequiredSkills: input.RequiredSkills, NiceToHaveSkills: input.NiceToHaveSkills, Deliverables: text(input.Deliverables),
+			Timeline: text(input.Timeline), EvaluationCriteria: text(input.EvaluationCriteria), ExternalResources: input.ExternalResources,
+			OwnerContactPreference: text(input.OwnerContactPreference), ApplicationQuestions: questions,
+		})
+		if err != nil {
+			return err
+		}
+		return r.auditChange(ctx, q, current.ID, "PROJECT_CREATED", "PROJECT", project.ID, map[string]any{}, projectStateSnapshot(project), nil)
+	}); err != nil {
 		return nil, err
 	}
 	return r.project(ctx, project)
@@ -258,22 +724,130 @@ func (r *mutationResolver) UpdateProject(ctx context.Context, id string, input m
 	if err := r.requireProjectOwner(ctx, projectID); err != nil {
 		return nil, err
 	}
-	project, err := r.Queries.UpdateProject(ctx, db.UpdateProjectParams{
-		ID:          projectID,
-		Title:       input.Title,
-		Description: input.Description,
-		Constraints: text(input.Constraints),
-		Disciplines: input.Disciplines,
-		TeamSizeMin: int32(input.TeamSizeMin),
-		TeamSizeMax: int32(input.TeamSizeMax),
-		Status:      string(input.Status),
-		FileUrl:     text(input.FileURL),
-		VideoUrl:    text(input.VideoURL),
-	})
+	before, err := r.Queries.GetProject(ctx, projectID)
 	if err != nil {
 		return nil, err
 	}
+	var project db.Project
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		project, err = q.UpdateProject(ctx, db.UpdateProjectParams{
+			ID: projectID, Title: input.Title, Summary: input.Summary, Description: input.Description, Constraints: text(input.Constraints),
+			Disciplines: input.Disciplines, TeamSizeMin: int32(input.TeamSizeMin), TeamSizeMax: int32(input.TeamSizeMax),
+			LifecycleState: derefProjectLifecycle(input.LifecycleState, string(model.ProjectLifecycleStateOpen)),
+			FileUrl:        text(input.FileURL), VideoUrl: text(input.VideoURL),
+			ApprovalState:  derefProjectApproval(input.ApprovalState, string(model.ProjectApprovalStateUnverified)),
+			RequiredSkills: input.RequiredSkills, NiceToHaveSkills: input.NiceToHaveSkills, Deliverables: text(input.Deliverables),
+			Timeline: text(input.Timeline), EvaluationCriteria: text(input.EvaluationCriteria), ExternalResources: input.ExternalResources,
+			OwnerContactPreference: text(input.OwnerContactPreference), ApplicationQuestions: []byte(derefString(input.ApplicationQuestions, "[]")),
+		})
+		if err != nil {
+			return err
+		}
+		applications, err := q.ListProjectApplications(ctx, projectID)
+		if err != nil {
+			return err
+		}
+		for _, app := range applications {
+			r.notifyUser(ctx, q, app.ApplicantID, "PROJECT_EDITED", map[string]any{"projectId": uuidString(projectID), "applicationId": uuidString(app.ID)})
+		}
+		current, _ := requireActiveUser(ctx)
+		return r.auditChange(ctx, q, current.ID, "PROJECT_UPDATED", "PROJECT", projectID, projectStateSnapshot(before), projectStateSnapshot(project), nil)
+	}); err != nil {
+		return nil, err
+	}
 	return r.project(ctx, project)
+}
+
+// SubmitProjectForApproval is the resolver for the submitProjectForApproval field.
+func (r *mutationResolver) SubmitProjectForApproval(ctx context.Context, projectID string) (*model.Project, error) {
+	pid, err := uuid(projectID)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.requireProjectOwner(ctx, pid); err != nil {
+		return nil, err
+	}
+	before, err := r.Queries.GetProject(ctx, pid)
+	if err != nil {
+		return nil, err
+	}
+	var project db.Project
+	current, _ := requireActiveUser(ctx)
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		project, err = q.UpdateProjectApprovalState(ctx, db.UpdateProjectApprovalStateParams{ID: pid, ApprovalState: string(model.ProjectApprovalStateSubmittedForApproval)})
+		if err != nil {
+			return err
+		}
+		admins, _ := q.ListAdminUsers(ctx)
+		for _, admin := range admins {
+			r.notifyUser(ctx, q, admin.ID, "PROJECT_APPROVAL_SUBMITTED", map[string]any{"projectId": uuidString(pid)})
+		}
+		return r.auditChange(ctx, q, current.ID, "PROJECT_APPROVAL_SUBMITTED", "PROJECT", pid, projectStateSnapshot(before), projectStateSnapshot(project), nil)
+	}); err != nil {
+		return nil, err
+	}
+	return r.project(ctx, project)
+}
+
+// ReviewProjectApproval is the resolver for the reviewProjectApproval field.
+func (r *mutationResolver) ReviewProjectApproval(ctx context.Context, projectID string, approvalState model.ProjectApprovalState, reason *string) (*model.Project, error) {
+	current, err := r.requireAdmin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pid, err := uuid(projectID)
+	if err != nil {
+		return nil, err
+	}
+	before, err := r.Queries.GetProject(ctx, pid)
+	if err != nil {
+		return nil, err
+	}
+	var project db.Project
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		project, err = q.UpdateProjectApprovalState(ctx, db.UpdateProjectApprovalStateParams{ID: pid, ApprovalState: string(approvalState)})
+		if err != nil {
+			return err
+		}
+		r.notifyUser(ctx, q, before.OwnerID, "PROJECT_APPROVAL_REVIEWED", map[string]any{"projectId": uuidString(pid), "approvalState": string(approvalState)})
+		return r.auditChange(ctx, q, current.ID, "PROJECT_APPROVAL_REVIEWED", "PROJECT", pid, projectStateSnapshot(before), projectStateSnapshot(project), reason)
+	}); err != nil {
+		return nil, err
+	}
+	return r.project(ctx, project)
+}
+
+// ArchiveProject is the resolver for the archiveProject field.
+func (r *mutationResolver) ArchiveProject(ctx context.Context, id string, reason *string) (bool, error) {
+	projectID, err := uuid(id)
+	if err != nil {
+		return false, err
+	}
+	if err := r.requireProjectOwner(ctx, projectID); err != nil {
+		return false, err
+	}
+	before, err := r.Queries.GetProject(ctx, projectID)
+	if err != nil {
+		return false, err
+	}
+	current, _ := requireActiveUser(ctx)
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		if err := q.ArchiveProject(ctx, projectID); err != nil {
+			return err
+		}
+		after, err := q.GetProject(ctx, projectID)
+		if err != nil {
+			return err
+		}
+		r.notifyUser(ctx, q, before.OwnerID, "PROJECT_ARCHIVED", map[string]any{"projectId": uuidString(projectID)})
+		return r.auditChange(ctx, q, current.ID, "PROJECT_ARCHIVED", "PROJECT", projectID, projectStateSnapshot(before), projectStateSnapshot(after), reason)
+	}); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // DeleteProject is the resolver for the deleteProject field.
@@ -285,27 +859,17 @@ func (r *mutationResolver) DeleteProject(ctx context.Context, id string) (bool, 
 	if err := r.requireProjectOwner(ctx, projectID); err != nil {
 		return false, err
 	}
-	return true, r.Queries.DeleteProject(ctx, projectID)
+	return r.ArchiveProject(ctx, id, nil)
+}
+
+// ApplyToProjectInput is the resolver for the applyToProjectInput field.
+func (r *mutationResolver) ApplyToProjectInput(ctx context.Context, input model.ApplyToProjectInput) (*model.ProjectApplication, error) {
+	return r.applyToProject(ctx, input.ProjectID, input.TeamID, input.Message, []byte(derefString(input.Answers, "[]")))
 }
 
 // ApplyToProject is the resolver for the applyToProject field.
 func (r *mutationResolver) ApplyToProject(ctx context.Context, projectID string, teamID string, message *string) (*model.ProjectApplication, error) {
-	tid, err := uuid(teamID)
-	if err != nil {
-		return nil, err
-	}
-	pid, err := uuid(projectID)
-	if err != nil {
-		return nil, err
-	}
-	if err := r.requireTeamLead(ctx, tid); err != nil {
-		return nil, err
-	}
-	application, err := r.Queries.ApplyToProject(ctx, db.ApplyToProjectParams{ProjectID: pid, TeamID: tid, Message: text(message)})
-	if err != nil {
-		return nil, err
-	}
-	return r.projectApplication(ctx, application)
+	return r.applyToProject(ctx, projectID, teamID, message, []byte("[]"))
 }
 
 // RespondToApplication is the resolver for the respondToApplication field.
@@ -321,19 +885,251 @@ func (r *mutationResolver) RespondToApplication(ctx context.Context, application
 	if err := r.requireProjectOwner(ctx, application.ProjectID); err != nil {
 		return false, err
 	}
-	status := model.ApplicationStatusRejected
 	if accept {
-		status = model.ApplicationStatusAccepted
+		_, err := r.SendProjectOffer(ctx, applicationID, nil)
+		return err == nil, err
 	}
-	if _, err := r.Queries.RespondToApplication(ctx, db.RespondToApplicationParams{ID: id, Status: string(status)}); err != nil {
-		return false, err
+	_, err = r.RejectApplication(ctx, applicationID, nil)
+	return err == nil, err
+}
+
+// RejectApplication is the resolver for the rejectApplication field.
+func (r *mutationResolver) RejectApplication(ctx context.Context, applicationID string, message *string) (*model.ProjectApplication, error) {
+	id, err := uuid(applicationID)
+	if err != nil {
+		return nil, err
 	}
-	if accept {
-		if _, err := r.Queries.ClaimProject(ctx, db.ClaimProjectParams{ID: application.ProjectID, TeamID: application.TeamID}); err != nil {
-			return false, err
+	application, err := r.Queries.GetProjectApplication(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.requireProjectOwner(ctx, application.ProjectID); err != nil {
+		return nil, err
+	}
+	if terminalApplicationStatuses[application.Status] {
+		return r.projectApplication(ctx, application)
+	}
+	var updated db.ProjectApplication
+	current, _ := requireActiveUser(ctx)
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		updated, err = q.RespondToApplication(ctx, db.RespondToApplicationParams{ID: id, Status: string(model.ApplicationStatusRejected), ReviewMessage: text(message)})
+		if err != nil {
+			return err
 		}
+		r.notifyUser(ctx, q, application.ApplicantID, "PROJECT_APPLICATION_REJECTED", map[string]any{"applicationId": uuidString(id), "projectId": uuidString(application.ProjectID), "teamId": uuidString(application.TeamID)})
+		return r.auditChange(ctx, q, current.ID, "PROJECT_APPLICATION_REJECTED", "PROJECT_APPLICATION", id, statusSnapshot(application.Status), statusSnapshot(updated.Status), message)
+	}); err != nil {
+		return nil, err
 	}
-	return true, nil
+	return r.projectApplication(ctx, updated)
+}
+
+// SendProjectOffer is the resolver for the sendProjectOffer field.
+func (r *mutationResolver) SendProjectOffer(ctx context.Context, applicationID string, message *string) (*model.ProjectApplication, error) {
+	id, err := uuid(applicationID)
+	if err != nil {
+		return nil, err
+	}
+	application, err := r.Queries.GetProjectApplication(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.requireProjectOwner(ctx, application.ProjectID); err != nil {
+		return nil, err
+	}
+	if application.Status == string(model.ApplicationStatusOfferSent) {
+		return r.projectApplication(ctx, application)
+	}
+	if application.Status != string(model.ApplicationStatusSubmitted) && application.Status != string(model.ApplicationStatusUnderReview) && application.Status != string(model.ApplicationStatusMessageSent) {
+		return nil, errors.New("application cannot receive an offer in its current state")
+	}
+	if err := r.requireDeadlineOpen(ctx); err != nil {
+		return nil, err
+	}
+	expiresAt, err := r.confirmationExpiresAt(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var updated db.ProjectApplication
+	current, _ := requireActiveUser(ctx)
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		updated, err = q.SendProjectOffer(ctx, db.SendProjectOfferParams{ID: id, OfferMessage: text(message), ExpiresAt: expiresAt})
+		if err != nil {
+			return err
+		}
+		if _, err := q.UpdateProjectLifecycleState(ctx, db.UpdateProjectLifecycleStateParams{ID: application.ProjectID, LifecycleState: string(model.ProjectLifecycleStateOfferSent)}); err != nil {
+			return err
+		}
+		if err := q.UpdateTeamCapstoneState(ctx, db.UpdateTeamCapstoneStateParams{ID: application.TeamID, CapstoneState: string(model.TeamCapstoneStateOfferReceived)}); err != nil {
+			return err
+		}
+		members, err := q.ListTeamMembers(ctx, application.TeamID)
+		if err != nil {
+			return err
+		}
+		for _, member := range members {
+			if member.Role == string(model.TeamRoleLead) || member.Role == string(model.TeamRoleCoLead) {
+				r.notifyUser(ctx, q, member.UserID, "PROJECT_OFFER_SENT", map[string]any{"applicationId": uuidString(id), "projectId": uuidString(application.ProjectID), "teamId": uuidString(application.TeamID), "expiresAt": timeString(expiresAt)})
+			}
+		}
+		return r.auditChange(ctx, q, current.ID, "PROJECT_OFFER_SENT", "PROJECT_APPLICATION", id, statusSnapshot(application.Status), statusSnapshot(updated.Status), message)
+	}); err != nil {
+		return nil, err
+	}
+	return r.projectApplication(ctx, updated)
+}
+
+// ConfirmProjectOfferByTeam is the resolver for the confirmProjectOfferByTeam field.
+func (r *mutationResolver) ConfirmProjectOfferByTeam(ctx context.Context, applicationID string) (*model.ProjectApplication, error) {
+	id, err := uuid(applicationID)
+	if err != nil {
+		return nil, err
+	}
+	application, err := r.Queries.GetProjectApplication(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.requireTeamLead(ctx, application.TeamID); err != nil {
+		return nil, err
+	}
+	if application.Status == string(model.ApplicationStatusTeamConfirmed) || application.Status == string(model.ApplicationStatusMatched) {
+		return r.projectApplication(ctx, application)
+	}
+	expired, err := r.isExpired(ctx, application.ExpiresAt)
+	if err != nil {
+		return nil, err
+	}
+	if expired && application.Status == string(model.ApplicationStatusOfferSent) {
+		expiredApplication, err := r.Queries.ExpireProjectOffer(ctx, id)
+		if err == nil {
+			r.notifyUser(ctx, r.Queries, application.ApplicantID, "PROJECT_OFFER_EXPIRED", map[string]any{"applicationId": uuidString(id), "projectId": uuidString(application.ProjectID)})
+			return r.projectApplication(ctx, expiredApplication)
+		}
+		return nil, err
+	}
+	if application.Status != string(model.ApplicationStatusOfferSent) {
+		return nil, errors.New("project offer is not awaiting team confirmation")
+	}
+	var updated db.ProjectApplication
+	current, _ := requireActiveUser(ctx)
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		updated, err = q.ConfirmProjectOfferByTeam(ctx, id)
+		if err != nil {
+			return err
+		}
+		project, err := q.GetProject(ctx, application.ProjectID)
+		if err != nil {
+			return err
+		}
+		r.notifyUser(ctx, q, project.OwnerID, "PROJECT_OFFER_TEAM_CONFIRMED", map[string]any{"applicationId": uuidString(id), "projectId": uuidString(application.ProjectID), "teamId": uuidString(application.TeamID)})
+		return r.auditChange(ctx, q, current.ID, "PROJECT_OFFER_TEAM_CONFIRMED", "PROJECT_APPLICATION", id, statusSnapshot(application.Status), statusSnapshot(updated.Status), nil)
+	}); err != nil {
+		return nil, err
+	}
+	return r.projectApplication(ctx, updated)
+}
+
+// ConfirmProjectOfferByOwner is the resolver for the confirmProjectOfferByOwner field.
+func (r *mutationResolver) ConfirmProjectOfferByOwner(ctx context.Context, applicationID string) (*model.ProjectApplication, error) {
+	id, err := uuid(applicationID)
+	if err != nil {
+		return nil, err
+	}
+	application, err := r.Queries.GetProjectApplication(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.requireProjectOwner(ctx, application.ProjectID); err != nil {
+		return nil, err
+	}
+	if application.Status == string(model.ApplicationStatusMatched) {
+		return r.projectApplication(ctx, application)
+	}
+	expired, err := r.isExpired(ctx, application.ExpiresAt)
+	if err != nil {
+		return nil, err
+	}
+	if expired && (application.Status == string(model.ApplicationStatusOfferSent) || application.Status == string(model.ApplicationStatusTeamConfirmed)) {
+		expiredApplication, err := r.Queries.ExpireProjectOffer(ctx, id)
+		if err == nil {
+			r.notifyUser(ctx, r.Queries, application.ApplicantID, "PROJECT_OFFER_EXPIRED", map[string]any{"applicationId": uuidString(id), "projectId": uuidString(application.ProjectID)})
+			return r.projectApplication(ctx, expiredApplication)
+		}
+		return nil, err
+	}
+	if application.Status != string(model.ApplicationStatusTeamConfirmed) {
+		return nil, errors.New("project offer is not awaiting owner confirmation")
+	}
+	var updated db.ProjectApplication
+	current, _ := requireActiveUser(ctx)
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		updated, err = q.ConfirmProjectOfferByOwner(ctx, id)
+		if err != nil {
+			return err
+		}
+		if _, err := q.ClaimProject(ctx, db.ClaimProjectParams{ID: application.ProjectID, TeamID: application.TeamID}); err != nil {
+			return err
+		}
+		if err := q.UpdateTeamCapstoneState(ctx, db.UpdateTeamCapstoneStateParams{ID: application.TeamID, CapstoneState: string(model.TeamCapstoneStateMatched)}); err != nil {
+			return err
+		}
+		if err := q.WithdrawCompetingTeamApplications(ctx, db.WithdrawCompetingTeamApplicationsParams{TeamID: application.TeamID, ID: id}); err != nil {
+			return err
+		}
+		if err := q.WithdrawCompetingProjectApplications(ctx, db.WithdrawCompetingProjectApplicationsParams{ProjectID: application.ProjectID, ID: id}); err != nil {
+			return err
+		}
+		members, err := q.ListTeamMembers(ctx, application.TeamID)
+		if err != nil {
+			return err
+		}
+		for _, member := range members {
+			r.notifyUser(ctx, q, member.UserID, "PROJECT_MATCH_FINALIZED", map[string]any{"applicationId": uuidString(id), "projectId": uuidString(application.ProjectID), "teamId": uuidString(application.TeamID)})
+		}
+		return r.auditChange(ctx, q, current.ID, "PROJECT_MATCH_FINALIZED", "PROJECT_APPLICATION", id, statusSnapshot(application.Status), statusSnapshot(updated.Status), nil)
+	}); err != nil {
+		return nil, err
+	}
+	return r.projectApplication(ctx, updated)
+}
+
+// WithdrawApplication is the resolver for the withdrawApplication field.
+func (r *mutationResolver) WithdrawApplication(ctx context.Context, applicationID string) (*model.ProjectApplication, error) {
+	id, err := uuid(applicationID)
+	if err != nil {
+		return nil, err
+	}
+	application, err := r.Queries.GetProjectApplication(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.requireTeamLead(ctx, application.TeamID); err != nil {
+		return nil, err
+	}
+	if terminalApplicationStatuses[application.Status] {
+		return r.projectApplication(ctx, application)
+	}
+	var updated db.ProjectApplication
+	current, _ := requireActiveUser(ctx)
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		updated, err = q.WithdrawApplication(ctx, id)
+		if err != nil {
+			return err
+		}
+		project, err := q.GetProject(ctx, application.ProjectID)
+		if err == nil {
+			r.notifyUser(ctx, q, project.OwnerID, "PROJECT_APPLICATION_WITHDRAWN", map[string]any{"applicationId": uuidString(id), "projectId": uuidString(application.ProjectID), "teamId": uuidString(application.TeamID)})
+		}
+		return r.auditChange(ctx, q, current.ID, "PROJECT_APPLICATION_WITHDRAWN", "PROJECT_APPLICATION", id, statusSnapshot(application.Status), statusSnapshot(updated.Status), nil)
+	}); err != nil {
+		return nil, err
+	}
+	return r.projectApplication(ctx, updated)
 }
 
 // AssociateProject is the resolver for the associateProject field.
@@ -358,7 +1154,7 @@ func (r *mutationResolver) AssociateProject(ctx context.Context, teamID string, 
 
 // SendMessage is the resolver for the sendMessage field.
 func (r *mutationResolver) SendMessage(ctx context.Context, receiverID string, body string) (*model.Message, error) {
-	current, err := requireUser(ctx)
+	current, err := requireActiveUser(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -370,6 +1166,7 @@ func (r *mutationResolver) SendMessage(ctx context.Context, receiverID string, b
 	if err != nil {
 		return nil, err
 	}
+	r.notifyUser(ctx, r.Queries, rid, "MESSAGE_SENT", map[string]any{"messageId": uuidString(message.ID), "senderId": uuidString(current.ID)})
 	return r.message(ctx, message)
 }
 
@@ -390,7 +1187,7 @@ func (r *mutationResolver) MarkRead(ctx context.Context, messageID string) (bool
 	if !sameUUID(message.ReceiverID, current.ID) {
 		return false, errors.New("not authorized")
 	}
-	_, err = r.Queries.MarkMessageRead(ctx, id)
+	_, err = r.Queries.MarkMessageRead(ctx, db.MarkMessageReadParams{ID: id, ReceiverID: current.ID})
 	return err == nil, err
 }
 
@@ -411,13 +1208,47 @@ func (r *mutationResolver) MarkNotificationRead(ctx context.Context, notificatio
 	if !sameUUID(notification.UserID, current.ID) {
 		return false, errors.New("not authorized")
 	}
-	_, err = r.Queries.MarkNotificationRead(ctx, id)
+	_, err = r.Queries.MarkNotificationRead(ctx, db.MarkNotificationReadParams{ID: id, UserID: current.ID})
 	return err == nil, err
+}
+
+// SetUniversalDeadline is the resolver for the setUniversalDeadline field.
+func (r *mutationResolver) SetUniversalDeadline(ctx context.Context, deadlineAt string, reason *string) (*model.Deadline, error) {
+	current, err := r.requireAdmin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	parsed, err := time.Parse(time.RFC3339, deadlineAt)
+	if err != nil {
+		return nil, err
+	}
+	before, _ := r.Queries.GetUniversalDeadline(ctx)
+	var deadline db.UniversalDeadline
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		deadline, err = q.UpsertUniversalDeadline(ctx, db.UpsertUniversalDeadlineParams{DeadlineAt: pgtime(parsed), UpdatedBy: current.ID})
+		if err != nil {
+			return err
+		}
+		if err := r.expireDueWorkflows(ctx, q); err != nil {
+			return err
+		}
+		users, err := q.ListUsers(ctx, db.ListUsersParams{Discipline: pgtype.Text{}, Tag: pgtype.Text{}, Search: pgtype.Text{}})
+		if err == nil {
+			for _, user := range users {
+				r.notifyUser(ctx, q, user.ID, "UNIVERSAL_DEADLINE_CHANGED", map[string]any{"deadlineAt": timeString(deadline.DeadlineAt)})
+			}
+		}
+		return r.auditChange(ctx, q, current.ID, "UNIVERSAL_DEADLINE_CHANGED", "DEADLINE", pgtype.UUID{}, map[string]any{"deadlineAt": timeString(before.DeadlineAt)}, map[string]any{"deadlineAt": timeString(deadline.DeadlineAt)}, reason)
+	}); err != nil {
+		return nil, err
+	}
+	return r.deadline(ctx, deadline)
 }
 
 // SignUpload is the resolver for the signUpload field.
 func (r *mutationResolver) SignUpload(ctx context.Context, input model.SignUploadInput) (*model.UploadSignature, error) {
-	current, err := requireUser(ctx)
+	current, err := requireActiveUser(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -451,63 +1282,92 @@ func (r *mutationResolver) SignUpload(ctx context.Context, input model.SignUploa
 }
 
 // RemoveUser is the resolver for the removeUser field.
-func (r *mutationResolver) RemoveUser(ctx context.Context, userID string) (bool, error) {
-	current, err := requireUser(ctx)
+func (r *mutationResolver) RemoveUser(ctx context.Context, userID string, reason *string) (bool, error) {
+	current, err := r.requireAdmin(ctx)
 	if err != nil {
 		return false, err
-	}
-	isAdmin, err := r.Queries.IsAdmin(ctx, current.ID)
-	if err != nil {
-		return false, err
-	}
-	if !isAdmin {
-		return false, errors.New("admin access required")
 	}
 	id, err := uuid(userID)
 	if err != nil {
 		return false, err
 	}
-	return true, r.Queries.DeleteUser(ctx, id)
+	target, err := r.Queries.GetUser(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		if err := q.DeactivateUser(ctx, id); err != nil {
+			return err
+		}
+		r.notifyUser(ctx, q, id, "USER_DEACTIVATED_BY_ADMIN", map[string]any{"userId": uuidString(id)})
+		return r.auditChange(ctx, q, current.ID, "USER_DEACTIVATED_BY_ADMIN", "USER", id, map[string]any{"deactivatedAt": timeStringPointer(target.DeactivatedAt)}, map[string]any{"deactivated": true}, reason)
+	}); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // RemoveTeam is the resolver for the removeTeam field.
-func (r *mutationResolver) RemoveTeam(ctx context.Context, teamID string) (bool, error) {
-	current, err := requireUser(ctx)
+func (r *mutationResolver) RemoveTeam(ctx context.Context, teamID string, reason *string) (bool, error) {
+	current, err := r.requireAdmin(ctx)
 	if err != nil {
 		return false, err
-	}
-	isAdmin, err := r.Queries.IsAdmin(ctx, current.ID)
-	if err != nil {
-		return false, err
-	}
-	if !isAdmin {
-		return false, errors.New("admin access required")
 	}
 	id, err := uuid(teamID)
 	if err != nil {
 		return false, err
 	}
-	return true, r.Queries.DeleteTeam(ctx, id)
+	before, err := r.Queries.GetTeam(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		if err := q.ArchiveTeam(ctx, id); err != nil {
+			return err
+		}
+		after, err := q.GetTeam(ctx, id)
+		if err != nil {
+			return err
+		}
+		members, _ := q.ListTeamMembers(ctx, id)
+		for _, member := range members {
+			r.notifyUser(ctx, q, member.UserID, "TEAM_ARCHIVED_BY_ADMIN", map[string]any{"teamId": uuidString(id)})
+		}
+		return r.auditChange(ctx, q, current.ID, "TEAM_ARCHIVED_BY_ADMIN", "TEAM", id, teamStateSnapshot(before), teamStateSnapshot(after), reason)
+	}); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // RemoveProject is the resolver for the removeProject field.
-func (r *mutationResolver) RemoveProject(ctx context.Context, projectID string) (bool, error) {
-	current, err := requireUser(ctx)
+func (r *mutationResolver) RemoveProject(ctx context.Context, projectID string, reason *string) (bool, error) {
+	current, err := r.requireAdmin(ctx)
 	if err != nil {
 		return false, err
-	}
-	isAdmin, err := r.Queries.IsAdmin(ctx, current.ID)
-	if err != nil {
-		return false, err
-	}
-	if !isAdmin {
-		return false, errors.New("admin access required")
 	}
 	id, err := uuid(projectID)
 	if err != nil {
 		return false, err
 	}
-	return true, r.Queries.DeleteProject(ctx, id)
+	before, err := r.Queries.GetProject(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		if err := q.ArchiveProject(ctx, id); err != nil {
+			return err
+		}
+		after, err := q.GetProject(ctx, id)
+		if err != nil {
+			return err
+		}
+		r.notifyUser(ctx, q, before.OwnerID, "PROJECT_ARCHIVED_BY_ADMIN", map[string]any{"projectId": uuidString(id)})
+		return r.auditChange(ctx, q, current.ID, "PROJECT_ARCHIVED_BY_ADMIN", "PROJECT", id, projectStateSnapshot(before), projectStateSnapshot(after), reason)
+	}); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // Me is the resolver for the me field.
@@ -517,6 +1377,57 @@ func (r *queryResolver) Me(ctx context.Context) (*model.User, error) {
 		return nil, err
 	}
 	return r.user(ctx, current)
+}
+
+// DashboardContext is the resolver for the dashboardContext field.
+func (r *queryResolver) DashboardContext(ctx context.Context) (*model.DashboardContext, error) {
+	current, err := requireUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	teamRows, err := r.Queries.ListTeamsForUser(ctx, current.ID)
+	if err != nil {
+		return nil, err
+	}
+	teams := make([]*model.Team, 0, len(teamRows))
+	for _, team := range teamRows {
+		mapped, err := r.team(ctx, team)
+		if err != nil {
+			return nil, err
+		}
+		teams = append(teams, mapped)
+	}
+	projectRows, err := r.Queries.ListProjectsForOwner(ctx, current.ID)
+	if err != nil {
+		return nil, err
+	}
+	projects := make([]*model.Project, 0, len(projectRows))
+	for _, project := range projectRows {
+		mapped, err := r.project(ctx, project)
+		if err != nil {
+			return nil, err
+		}
+		projects = append(projects, mapped)
+	}
+	invitations, err := r.MyTeamInvitations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	unreadMessages, err := r.Queries.CountUnreadMessages(ctx, current.ID)
+	if err != nil {
+		return nil, err
+	}
+	unreadNotifications, err := r.Queries.CountUnreadNotifications(ctx, current.ID)
+	if err != nil {
+		return nil, err
+	}
+	deadline, _ := r.UniversalDeadline(ctx)
+	isAdmin, _ := r.Queries.IsAdmin(ctx, current.ID)
+	return &model.DashboardContext{
+		MyTeams: teams, MyProjects: projects, MyInvitations: invitations,
+		UnreadMessages: int(unreadMessages), UnreadNotifications: int(unreadNotifications),
+		UniversalDeadline: deadline, IsAdmin: isAdmin,
+	}, nil
 }
 
 // User is the resolver for the user field.
@@ -599,11 +1510,14 @@ func (r *queryResolver) Project(ctx context.Context, id string) (*model.Project,
 	if err != nil {
 		return nil, err
 	}
+	if project.ArchivedAt.Valid {
+		return nil, nil
+	}
 	return r.project(ctx, project)
 }
 
 // Projects is the resolver for the projects field.
-func (r *queryResolver) Projects(ctx context.Context, discipline *string, status *model.ProjectStatus, search *string) ([]*model.Project, error) {
+func (r *queryResolver) Projects(ctx context.Context, discipline *string, status *model.ProjectLifecycleState, search *string) ([]*model.Project, error) {
 	var statusText *string
 	if status != nil {
 		value := string(*status)
@@ -683,6 +1597,66 @@ func (r *queryResolver) MyNotifications(ctx context.Context) ([]*model.Notificat
 	out := make([]*model.Notification, 0, len(notifications))
 	for _, notification := range notifications {
 		out = append(out, notificationModel(notification))
+	}
+	return out, nil
+}
+
+// MyTeamInvitations is the resolver for the myTeamInvitations field.
+func (r *queryResolver) MyTeamInvitations(ctx context.Context) ([]*model.TeamInvitation, error) {
+	current, err := requireUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.Queries.ListTeamInvitationsForUser(ctx, current.ID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*model.TeamInvitation, 0, len(rows))
+	for _, row := range rows {
+		mapped, err := r.teamInvitation(ctx, row)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, mapped)
+	}
+	return out, nil
+}
+
+// UniversalDeadline is the resolver for the universalDeadline field.
+func (r *queryResolver) UniversalDeadline(ctx context.Context) (*model.Deadline, error) {
+	deadline, err := r.Queries.GetUniversalDeadline(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return r.deadline(ctx, deadline)
+}
+
+// AuditLogs is the resolver for the auditLogs field.
+func (r *queryResolver) AuditLogs(ctx context.Context, limit *int) ([]*model.AuditLog, error) {
+	if _, err := r.requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+	n := int32(100)
+	if limit != nil {
+		n = int32(*limit)
+	}
+	rows, err := r.Queries.ListAuditLogs(ctx, n)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*model.AuditLog, 0, len(rows))
+	for _, row := range rows {
+		var actor *model.User
+		if row.ActorUserID.Valid {
+			user, err := r.Queries.GetUser(ctx, row.ActorUserID)
+			if err == nil {
+				actor, _ = r.shallowUser(ctx, user)
+			}
+		}
+		out = append(out, auditLogModel(row, actor))
 	}
 	return out, nil
 }

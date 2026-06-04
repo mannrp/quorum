@@ -3,9 +3,21 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Section, Status, Badge } from "@/components/ui";
-import { getAuthToken, graphqlRequest } from "@/lib/graphql";
-import { ME_QUERY } from "@/lib/queries";
+import { getAuthToken, graphqlRequest, userFacingError } from "@/lib/graphql";
+import { DASHBOARD_CONTEXT_QUERY, ME_QUERY } from "@/lib/queries";
 import type { User, Team, Project, ProjectApplication, Notification } from "@/types/domain";
+
+type DashboardInvitation = {
+  id: string;
+  status: string;
+  message?: string | null;
+  expiresAt: string;
+  createdAt: string;
+  team: { id: string; name: string; createdBy: { id: string; username: string; fullName: string } };
+  invitedBy: { id: string; username: string; fullName: string };
+};
+
+type Deadline = { id: string; deadlineAt: string; updatedAt: string };
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -14,18 +26,10 @@ export default function DashboardPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [applications, setApplications] = useState<ProjectApplication[]>([]);
   const [notifs, setNotifs] = useState<Notification[]>([]);
+  const [invitations, setInvitations] = useState<DashboardInvitation[]>([]);
+  const [deadline, setDeadline] = useState<Deadline | null>(null);
   const [loading, setLoading] = useState(true);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  // Mock items for premium visual demo
-  const mockDeadlines = [
-    { title: "Team Formation Deadline", date: "June 15, 2026", remaining: "13 days left", urgent: true },
-    { title: "Professor Project Claim Review", date: "June 20, 2026", remaining: "18 days left", urgent: false },
-  ];
-
-  const mockInvites = [
-    { id: "inv-1", teamName: "Distributed Robotics", leadName: "Marcus Vance", expires: "48 hours left" }
-  ];
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -36,6 +40,7 @@ export default function DashboardPage() {
       }
 
       try {
+        setError(null);
         // 1. Fetch me info
         const meResult = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, token);
         if (!meResult.me) {
@@ -44,61 +49,27 @@ export default function DashboardPage() {
         }
         setMe(meResult.me);
 
-        // 2. Fetch notifications
-        const notifResult = await graphqlRequest<{ myNotifications: Notification[] }>(
-          `query myDashboardNotifs { myNotifications { id type payload read createdAt } }`,
-          {},
-          token
-        ).catch(() => ({ myNotifications: [] }));
-        setNotifs(notifResult.myNotifications.slice(0, 3));
+        const dashboardResult = await graphqlRequest<{
+          dashboardContext: {
+            myTeams: Team[];
+            myProjects: Project[];
+            myInvitations: DashboardInvitation[];
+            universalDeadline: Deadline | null;
+          };
+          myNotifications: Notification[];
+        }>(DASHBOARD_CONTEXT_QUERY, {}, token);
 
-        // 3. Fetch team association
-        const teamResult = await graphqlRequest<{ teams: Team[] }>(
-          `query myTeamsQuery { teams { id name description isComplete maxSize members { id role user { id fullName username } } project { id title status } } }`,
-          {},
-          token
-        ).catch(() => ({ teams: [] }));
-        
-        const myAssociatedTeam = teamResult.teams.find((t) =>
-          t.members.some((m) => m.user.id === meResult.me?.id)
-        );
-        if (myAssociatedTeam) setTeam(myAssociatedTeam);
-
-        // 4. Fetch project owner details if applicable
-        const projectResult = await graphqlRequest<{ projects: Project[] }>(
-          `query myProjectsQuery { projects { id title status description minSize: teamSizeMin maxSize: teamSizeMax owner { id } applications { id status message team { id name } } } }`,
-          {},
-          token
-        ).catch(() => ({ projects: [] }));
-        
-        const myOwnedProject = projectResult.projects.find((p) => p.owner.id === meResult.me?.id);
-        if (myOwnedProject) {
-          setProject(myOwnedProject);
-          setApplications(myOwnedProject.applications || []);
-        }
+        const primaryTeam = dashboardResult.dashboardContext.myTeams[0] || null;
+        const primaryProject = dashboardResult.dashboardContext.myProjects[0] || null;
+        setTeam(primaryTeam);
+        setProject(primaryProject);
+        setApplications(primaryProject?.applications || []);
+        setInvitations(dashboardResult.dashboardContext.myInvitations);
+        setDeadline(dashboardResult.dashboardContext.universalDeadline);
+        setNotifs(dashboardResult.myNotifications.slice(0, 3));
 
       } catch (err) {
-        console.warn("GraphQL Dashboard fetch partially completed, running mocks for safety", err);
-        // Fallback mocks
-        const fallbackMe: User = {
-          id: "mock-student-id",
-          username: "janedoe",
-          fullName: "Jane Doe",
-          discipline: "SOEN",
-          university: "Concordia",
-          tags: [{ id: "tag-1", name: "TypeScript", isPredefined: true }, { id: "tag-2", name: "React", isPredefined: true }, { id: "tag-3", name: "Next.js", isPredefined: true }],
-        };
-        setMe(fallbackMe);
-
-        setTeam({
-          id: "mock-team-id",
-          name: "Aegis Security Sandbox",
-          description: "Evaluating automated container scanning frameworks for Capstone v1.",
-          isComplete: false,
-          maxSize: 4,
-          createdBy: fallbackMe,
-          members: [{ id: "mem-1", role: "LEAD", user: fallbackMe, joinedAt: "2026-06-01" }],
-        });
+        setError(userFacingError(err));
       } finally {
         setLoading(false);
       }
@@ -107,11 +78,27 @@ export default function DashboardPage() {
     void fetchDashboardData();
   }, [router]);
 
+  const deadlineDate = deadline ? new Date(deadline.deadlineAt) : null;
+
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto py-12">
         <Section title="Dashboard Portal Loading">
           <p className="text-xs text-stone-500 animate-pulse uppercase tracking-wider">Syncing workspace databases...</p>
+        </Section>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-3xl mx-auto py-12">
+        <Section title="Dashboard Unavailable">
+          <p className="text-xs text-rose-500 font-bold">{error}</p>
+          <div className="pt-4 flex gap-2">
+            <Link href="/auth/login" className="btn-primary py-2 px-4 text-xs">Sign In Again</Link>
+            <button onClick={() => window.location.reload()} className="btn-secondary py-2 px-4 text-xs">Retry</button>
+          </div>
         </Section>
       </div>
     );
@@ -142,31 +129,31 @@ export default function DashboardPage() {
         <div className="space-y-6 md:col-span-1">
           {/* Deadlines */}
           <Section title="Academic Deadlines" variant="tall">
-            <div className="space-y-3">
-              {mockDeadlines.map((dl) => (
-                <div key={dl.title} className="p-3 border border-stone-250 dark:border-stone-850 rounded-lg space-y-1 bg-[#f8f9fa] dark:bg-[#111422]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-stone-800 dark:text-slate-200">{dl.title}</span>
-                    {dl.urgent && <span className="h-2 w-2 rounded-full bg-rose-500" />}
-                  </div>
-                  <div className="flex items-center justify-between text-[10px] text-stone-500">
-                    <span>{dl.date}</span>
-                    <span className={dl.urgent ? "text-rose-600 font-bold" : "text-stone-400"}>{dl.remaining}</span>
-                  </div>
+            {deadlineDate ? (
+              <div className="p-3 border border-stone-250 dark:border-stone-850 rounded-lg space-y-1 bg-[#f8f9fa] dark:bg-[#111422]">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-stone-800 dark:text-slate-200">Universal Match Deadline</span>
+                  {deadlineDate.getTime() - Date.now() < 1000 * 60 * 60 * 24 * 7 && <span className="h-2 w-2 rounded-full bg-rose-500" />}
                 </div>
-              ))}
-            </div>
+                <div className="flex items-center justify-between text-[10px] text-stone-500">
+                  <span>{deadlineDate.toLocaleDateString()}</span>
+                  <span className="text-stone-400">Updated {new Date(deadline!.updatedAt).toLocaleDateString()}</span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-stone-500 italic">No universal deadline configured.</p>
+            )}
           </Section>
 
           {/* Pending Invitations */}
           <Section title="Team Invitations" variant="tall">
-            {mockInvites.length > 0 ? (
+            {invitations.length > 0 ? (
               <div className="space-y-3">
-                {mockInvites.map((inv) => (
+                {invitations.map((inv) => (
                   <div key={inv.id} className="p-3 border border-stone-250 dark:border-stone-850 rounded-lg space-y-2.5">
                     <div className="space-y-0.5">
-                      <span className="text-xs font-bold text-stone-800 dark:text-slate-200">{inv.teamName}</span>
-                      <p className="text-[10px] text-stone-500">Invited by {inv.leadName} • {inv.expires}</p>
+                      <span className="text-xs font-bold text-stone-800 dark:text-slate-200">{inv.team.name}</span>
+                      <p className="text-[10px] text-stone-500">Invited by {inv.invitedBy.fullName} - expires {new Date(inv.expiresAt).toLocaleDateString()}</p>
                     </div>
                     <div className="flex gap-2">
                       <button className="btn-primary py-1 px-3 text-[9px] w-full">Accept</button>
@@ -284,3 +271,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

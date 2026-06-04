@@ -12,19 +12,27 @@ import (
 )
 
 const applyToProject = `-- name: ApplyToProject :one
-INSERT INTO project_applications (project_id, team_id, message)
-VALUES ($1, $2, $3)
-RETURNING id, project_id, team_id, message, status, created_at
+INSERT INTO project_applications (project_id, team_id, applicant_id, message, answers, status)
+VALUES ($1, $2, $3, $4, $5, 'SUBMITTED')
+RETURNING id, project_id, team_id, message, status, created_at, applicant_id, answers, review_message, offer_message, team_confirmed_at, owner_confirmed_at, expires_at, withdrawn_at
 `
 
 type ApplyToProjectParams struct {
-	ProjectID pgtype.UUID `json:"project_id"`
-	TeamID    pgtype.UUID `json:"team_id"`
-	Message   pgtype.Text `json:"message"`
+	ProjectID   pgtype.UUID `json:"project_id"`
+	TeamID      pgtype.UUID `json:"team_id"`
+	ApplicantID pgtype.UUID `json:"applicant_id"`
+	Message     pgtype.Text `json:"message"`
+	Answers     []byte      `json:"answers"`
 }
 
 func (q *Queries) ApplyToProject(ctx context.Context, arg ApplyToProjectParams) (ProjectApplication, error) {
-	row := q.db.QueryRow(ctx, applyToProject, arg.ProjectID, arg.TeamID, arg.Message)
+	row := q.db.QueryRow(ctx, applyToProject,
+		arg.ProjectID,
+		arg.TeamID,
+		arg.ApplicantID,
+		arg.Message,
+		arg.Answers,
+	)
 	var i ProjectApplication
 	err := row.Scan(
 		&i.ID,
@@ -33,8 +41,29 @@ func (q *Queries) ApplyToProject(ctx context.Context, arg ApplyToProjectParams) 
 		&i.Message,
 		&i.Status,
 		&i.CreatedAt,
+		&i.ApplicantID,
+		&i.Answers,
+		&i.ReviewMessage,
+		&i.OfferMessage,
+		&i.TeamConfirmedAt,
+		&i.OwnerConfirmedAt,
+		&i.ExpiresAt,
+		&i.WithdrawnAt,
 	)
 	return i, err
+}
+
+const archiveProject = `-- name: ArchiveProject :exec
+UPDATE projects
+SET archived_at = now(),
+    lifecycle_state = 'ARCHIVED',
+    updated_at = now()
+WHERE id = $1
+`
+
+func (q *Queries) ArchiveProject(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, archiveProject, id)
+	return err
 }
 
 const associateProject = `-- name: AssociateProject :one
@@ -42,7 +71,7 @@ UPDATE teams
 SET project_id = $2,
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, description, is_complete, max_size, discipline, created_by, project_id, created_at, updated_at
+RETURNING id, name, description, is_complete, max_size, discipline, created_by, project_id, created_at, updated_at, recruiting_state, capstone_state, visibility, discord_link, existing_skills, needed_skills, project_interests, archived_at
 `
 
 type AssociateProjectParams struct {
@@ -64,6 +93,14 @@ func (q *Queries) AssociateProject(ctx context.Context, arg AssociateProjectPara
 		&i.ProjectID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RecruitingState,
+		&i.CapstoneState,
+		&i.Visibility,
+		&i.DiscordLink,
+		&i.ExistingSkills,
+		&i.NeededSkills,
+		&i.ProjectInterests,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
@@ -72,9 +109,10 @@ const claimProject = `-- name: ClaimProject :one
 UPDATE projects
 SET team_id = $2,
     status = 'CLAIMED',
+    lifecycle_state = 'MATCHED',
     updated_at = now()
 WHERE id = $1
-RETURNING id, title, description, constraints, disciplines, team_size_min, team_size_max, status, owner_id, team_id, file_url, video_url, created_at, updated_at
+RETURNING id, title, description, constraints, disciplines, team_size_min, team_size_max, status, owner_id, team_id, file_url, video_url, created_at, updated_at, summary, lifecycle_state, approval_state, required_skills, nice_to_have_skills, deliverables, timeline, evaluation_criteria, external_resources, owner_contact_preference, application_questions, archived_at
 `
 
 type ClaimProjectParams struct {
@@ -100,31 +138,122 @@ func (q *Queries) ClaimProject(ctx context.Context, arg ClaimProjectParams) (Pro
 		&i.VideoUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Summary,
+		&i.LifecycleState,
+		&i.ApprovalState,
+		&i.RequiredSkills,
+		&i.NiceToHaveSkills,
+		&i.Deliverables,
+		&i.Timeline,
+		&i.EvaluationCriteria,
+		&i.ExternalResources,
+		&i.OwnerContactPreference,
+		&i.ApplicationQuestions,
+		&i.ArchivedAt,
+	)
+	return i, err
+}
+
+const confirmProjectOfferByOwner = `-- name: ConfirmProjectOfferByOwner :one
+UPDATE project_applications
+SET status = 'MATCHED',
+    owner_confirmed_at = now()
+WHERE id = $1
+  AND status = 'TEAM_CONFIRMED'
+RETURNING id, project_id, team_id, message, status, created_at, applicant_id, answers, review_message, offer_message, team_confirmed_at, owner_confirmed_at, expires_at, withdrawn_at
+`
+
+func (q *Queries) ConfirmProjectOfferByOwner(ctx context.Context, id pgtype.UUID) (ProjectApplication, error) {
+	row := q.db.QueryRow(ctx, confirmProjectOfferByOwner, id)
+	var i ProjectApplication
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.TeamID,
+		&i.Message,
+		&i.Status,
+		&i.CreatedAt,
+		&i.ApplicantID,
+		&i.Answers,
+		&i.ReviewMessage,
+		&i.OfferMessage,
+		&i.TeamConfirmedAt,
+		&i.OwnerConfirmedAt,
+		&i.ExpiresAt,
+		&i.WithdrawnAt,
+	)
+	return i, err
+}
+
+const confirmProjectOfferByTeam = `-- name: ConfirmProjectOfferByTeam :one
+UPDATE project_applications
+SET status = 'TEAM_CONFIRMED',
+    team_confirmed_at = now()
+WHERE id = $1
+  AND status = 'OFFER_SENT'
+RETURNING id, project_id, team_id, message, status, created_at, applicant_id, answers, review_message, offer_message, team_confirmed_at, owner_confirmed_at, expires_at, withdrawn_at
+`
+
+func (q *Queries) ConfirmProjectOfferByTeam(ctx context.Context, id pgtype.UUID) (ProjectApplication, error) {
+	row := q.db.QueryRow(ctx, confirmProjectOfferByTeam, id)
+	var i ProjectApplication
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.TeamID,
+		&i.Message,
+		&i.Status,
+		&i.CreatedAt,
+		&i.ApplicantID,
+		&i.Answers,
+		&i.ReviewMessage,
+		&i.OfferMessage,
+		&i.TeamConfirmedAt,
+		&i.OwnerConfirmedAt,
+		&i.ExpiresAt,
+		&i.WithdrawnAt,
 	)
 	return i, err
 }
 
 const createProject = `-- name: CreateProject :one
-INSERT INTO projects (title, description, constraints, disciplines, team_size_min, team_size_max, owner_id, file_url, video_url)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, title, description, constraints, disciplines, team_size_min, team_size_max, status, owner_id, team_id, file_url, video_url, created_at, updated_at
+INSERT INTO projects (
+  title, summary, description, constraints, disciplines, team_size_min, team_size_max,
+  owner_id, file_url, video_url, lifecycle_state, approval_state, required_skills,
+  nice_to_have_skills, deliverables, timeline, evaluation_criteria, external_resources,
+  owner_contact_preference, application_questions
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+RETURNING id, title, description, constraints, disciplines, team_size_min, team_size_max, status, owner_id, team_id, file_url, video_url, created_at, updated_at, summary, lifecycle_state, approval_state, required_skills, nice_to_have_skills, deliverables, timeline, evaluation_criteria, external_resources, owner_contact_preference, application_questions, archived_at
 `
 
 type CreateProjectParams struct {
-	Title       string      `json:"title"`
-	Description string      `json:"description"`
-	Constraints pgtype.Text `json:"constraints"`
-	Disciplines []string    `json:"disciplines"`
-	TeamSizeMin int32       `json:"team_size_min"`
-	TeamSizeMax int32       `json:"team_size_max"`
-	OwnerID     pgtype.UUID `json:"owner_id"`
-	FileUrl     pgtype.Text `json:"file_url"`
-	VideoUrl    pgtype.Text `json:"video_url"`
+	Title                  string      `json:"title"`
+	Summary                string      `json:"summary"`
+	Description            string      `json:"description"`
+	Constraints            pgtype.Text `json:"constraints"`
+	Disciplines            []string    `json:"disciplines"`
+	TeamSizeMin            int32       `json:"team_size_min"`
+	TeamSizeMax            int32       `json:"team_size_max"`
+	OwnerID                pgtype.UUID `json:"owner_id"`
+	FileUrl                pgtype.Text `json:"file_url"`
+	VideoUrl               pgtype.Text `json:"video_url"`
+	LifecycleState         string      `json:"lifecycle_state"`
+	ApprovalState          string      `json:"approval_state"`
+	RequiredSkills         []string    `json:"required_skills"`
+	NiceToHaveSkills       []string    `json:"nice_to_have_skills"`
+	Deliverables           pgtype.Text `json:"deliverables"`
+	Timeline               pgtype.Text `json:"timeline"`
+	EvaluationCriteria     pgtype.Text `json:"evaluation_criteria"`
+	ExternalResources      []string    `json:"external_resources"`
+	OwnerContactPreference pgtype.Text `json:"owner_contact_preference"`
+	ApplicationQuestions   []byte      `json:"application_questions"`
 }
 
 func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error) {
 	row := q.db.QueryRow(ctx, createProject,
 		arg.Title,
+		arg.Summary,
 		arg.Description,
 		arg.Constraints,
 		arg.Disciplines,
@@ -133,6 +262,16 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		arg.OwnerID,
 		arg.FileUrl,
 		arg.VideoUrl,
+		arg.LifecycleState,
+		arg.ApprovalState,
+		arg.RequiredSkills,
+		arg.NiceToHaveSkills,
+		arg.Deliverables,
+		arg.Timeline,
+		arg.EvaluationCriteria,
+		arg.ExternalResources,
+		arg.OwnerContactPreference,
+		arg.ApplicationQuestions,
 	)
 	var i Project
 	err := row.Scan(
@@ -150,21 +289,69 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		&i.VideoUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Summary,
+		&i.LifecycleState,
+		&i.ApprovalState,
+		&i.RequiredSkills,
+		&i.NiceToHaveSkills,
+		&i.Deliverables,
+		&i.Timeline,
+		&i.EvaluationCriteria,
+		&i.ExternalResources,
+		&i.OwnerContactPreference,
+		&i.ApplicationQuestions,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
 
-const deleteProject = `-- name: DeleteProject :exec
-DELETE FROM projects WHERE id = $1
+const expireDueProjectOffers = `-- name: ExpireDueProjectOffers :exec
+UPDATE project_applications
+SET status = 'EXPIRED',
+    withdrawn_at = now()
+WHERE status IN ('OFFER_SENT', 'TEAM_CONFIRMED')
+  AND expires_at IS NOT NULL
+  AND expires_at <= $1
 `
 
-func (q *Queries) DeleteProject(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteProject, id)
+func (q *Queries) ExpireDueProjectOffers(ctx context.Context, expiresAt pgtype.Timestamptz) error {
+	_, err := q.db.Exec(ctx, expireDueProjectOffers, expiresAt)
 	return err
 }
 
+const expireProjectOffer = `-- name: ExpireProjectOffer :one
+UPDATE project_applications
+SET status = 'EXPIRED',
+    withdrawn_at = now()
+WHERE id = $1
+  AND status IN ('OFFER_SENT', 'TEAM_CONFIRMED')
+RETURNING id, project_id, team_id, message, status, created_at, applicant_id, answers, review_message, offer_message, team_confirmed_at, owner_confirmed_at, expires_at, withdrawn_at
+`
+
+func (q *Queries) ExpireProjectOffer(ctx context.Context, id pgtype.UUID) (ProjectApplication, error) {
+	row := q.db.QueryRow(ctx, expireProjectOffer, id)
+	var i ProjectApplication
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.TeamID,
+		&i.Message,
+		&i.Status,
+		&i.CreatedAt,
+		&i.ApplicantID,
+		&i.Answers,
+		&i.ReviewMessage,
+		&i.OfferMessage,
+		&i.TeamConfirmedAt,
+		&i.OwnerConfirmedAt,
+		&i.ExpiresAt,
+		&i.WithdrawnAt,
+	)
+	return i, err
+}
+
 const getProject = `-- name: GetProject :one
-SELECT id, title, description, constraints, disciplines, team_size_min, team_size_max, status, owner_id, team_id, file_url, video_url, created_at, updated_at FROM projects WHERE id = $1
+SELECT id, title, description, constraints, disciplines, team_size_min, team_size_max, status, owner_id, team_id, file_url, video_url, created_at, updated_at, summary, lifecycle_state, approval_state, required_skills, nice_to_have_skills, deliverables, timeline, evaluation_criteria, external_resources, owner_contact_preference, application_questions, archived_at FROM projects WHERE id = $1
 `
 
 func (q *Queries) GetProject(ctx context.Context, id pgtype.UUID) (Project, error) {
@@ -185,12 +372,24 @@ func (q *Queries) GetProject(ctx context.Context, id pgtype.UUID) (Project, erro
 		&i.VideoUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Summary,
+		&i.LifecycleState,
+		&i.ApprovalState,
+		&i.RequiredSkills,
+		&i.NiceToHaveSkills,
+		&i.Deliverables,
+		&i.Timeline,
+		&i.EvaluationCriteria,
+		&i.ExternalResources,
+		&i.OwnerContactPreference,
+		&i.ApplicationQuestions,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
 
 const getProjectApplication = `-- name: GetProjectApplication :one
-SELECT id, project_id, team_id, message, status, created_at
+SELECT id, project_id, team_id, message, status, created_at, applicant_id, answers, review_message, offer_message, team_confirmed_at, owner_confirmed_at, expires_at, withdrawn_at
 FROM project_applications
 WHERE id = $1
 `
@@ -205,12 +404,56 @@ func (q *Queries) GetProjectApplication(ctx context.Context, id pgtype.UUID) (Pr
 		&i.Message,
 		&i.Status,
 		&i.CreatedAt,
+		&i.ApplicantID,
+		&i.Answers,
+		&i.ReviewMessage,
+		&i.OfferMessage,
+		&i.TeamConfirmedAt,
+		&i.OwnerConfirmedAt,
+		&i.ExpiresAt,
+		&i.WithdrawnAt,
+	)
+	return i, err
+}
+
+const getProjectApplicationForTeamProject = `-- name: GetProjectApplicationForTeamProject :one
+SELECT id, project_id, team_id, message, status, created_at, applicant_id, answers, review_message, offer_message, team_confirmed_at, owner_confirmed_at, expires_at, withdrawn_at
+FROM project_applications
+WHERE project_id = $1
+  AND team_id = $2
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type GetProjectApplicationForTeamProjectParams struct {
+	ProjectID pgtype.UUID `json:"project_id"`
+	TeamID    pgtype.UUID `json:"team_id"`
+}
+
+func (q *Queries) GetProjectApplicationForTeamProject(ctx context.Context, arg GetProjectApplicationForTeamProjectParams) (ProjectApplication, error) {
+	row := q.db.QueryRow(ctx, getProjectApplicationForTeamProject, arg.ProjectID, arg.TeamID)
+	var i ProjectApplication
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.TeamID,
+		&i.Message,
+		&i.Status,
+		&i.CreatedAt,
+		&i.ApplicantID,
+		&i.Answers,
+		&i.ReviewMessage,
+		&i.OfferMessage,
+		&i.TeamConfirmedAt,
+		&i.OwnerConfirmedAt,
+		&i.ExpiresAt,
+		&i.WithdrawnAt,
 	)
 	return i, err
 }
 
 const listProjectApplications = `-- name: ListProjectApplications :many
-SELECT pa.id, pa.project_id, pa.team_id, pa.message, pa.status, pa.created_at, t.name AS team_name
+SELECT pa.id, pa.project_id, pa.team_id, pa.message, pa.status, pa.created_at, pa.applicant_id, pa.answers, pa.review_message, pa.offer_message, pa.team_confirmed_at, pa.owner_confirmed_at, pa.expires_at, pa.withdrawn_at, t.name AS team_name
 FROM project_applications pa
 JOIN teams t ON t.id = pa.team_id
 WHERE pa.project_id = $1
@@ -218,13 +461,21 @@ ORDER BY pa.created_at DESC
 `
 
 type ListProjectApplicationsRow struct {
-	ID        pgtype.UUID        `json:"id"`
-	ProjectID pgtype.UUID        `json:"project_id"`
-	TeamID    pgtype.UUID        `json:"team_id"`
-	Message   pgtype.Text        `json:"message"`
-	Status    string             `json:"status"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	TeamName  string             `json:"team_name"`
+	ID               pgtype.UUID        `json:"id"`
+	ProjectID        pgtype.UUID        `json:"project_id"`
+	TeamID           pgtype.UUID        `json:"team_id"`
+	Message          pgtype.Text        `json:"message"`
+	Status           string             `json:"status"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	ApplicantID      pgtype.UUID        `json:"applicant_id"`
+	Answers          []byte             `json:"answers"`
+	ReviewMessage    pgtype.Text        `json:"review_message"`
+	OfferMessage     pgtype.Text        `json:"offer_message"`
+	TeamConfirmedAt  pgtype.Timestamptz `json:"team_confirmed_at"`
+	OwnerConfirmedAt pgtype.Timestamptz `json:"owner_confirmed_at"`
+	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
+	WithdrawnAt      pgtype.Timestamptz `json:"withdrawn_at"`
+	TeamName         string             `json:"team_name"`
 }
 
 func (q *Queries) ListProjectApplications(ctx context.Context, projectID pgtype.UUID) ([]ListProjectApplicationsRow, error) {
@@ -243,6 +494,14 @@ func (q *Queries) ListProjectApplications(ctx context.Context, projectID pgtype.
 			&i.Message,
 			&i.Status,
 			&i.CreatedAt,
+			&i.ApplicantID,
+			&i.Answers,
+			&i.ReviewMessage,
+			&i.OfferMessage,
+			&i.TeamConfirmedAt,
+			&i.OwnerConfirmedAt,
+			&i.ExpiresAt,
+			&i.WithdrawnAt,
 			&i.TeamName,
 		); err != nil {
 			return nil, err
@@ -256,10 +515,11 @@ func (q *Queries) ListProjectApplications(ctx context.Context, projectID pgtype.
 }
 
 const listProjects = `-- name: ListProjects :many
-SELECT id, title, description, constraints, disciplines, team_size_min, team_size_max, status, owner_id, team_id, file_url, video_url, created_at, updated_at
+SELECT id, title, description, constraints, disciplines, team_size_min, team_size_max, status, owner_id, team_id, file_url, video_url, created_at, updated_at, summary, lifecycle_state, approval_state, required_skills, nice_to_have_skills, deliverables, timeline, evaluation_criteria, external_resources, owner_contact_preference, application_questions, archived_at
 FROM projects
 WHERE ($1::text IS NULL OR $1::text = ANY(disciplines))
-  AND ($2::text IS NULL OR status = $2::text)
+  AND archived_at IS NULL
+  AND ($2::text IS NULL OR lifecycle_state = $2::text OR status = $2::text)
   AND ($3::text IS NULL OR title ILIKE '%' || $3::text || '%')
 ORDER BY created_at DESC
 `
@@ -294,6 +554,73 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]P
 			&i.VideoUrl,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Summary,
+			&i.LifecycleState,
+			&i.ApprovalState,
+			&i.RequiredSkills,
+			&i.NiceToHaveSkills,
+			&i.Deliverables,
+			&i.Timeline,
+			&i.EvaluationCriteria,
+			&i.ExternalResources,
+			&i.OwnerContactPreference,
+			&i.ApplicationQuestions,
+			&i.ArchivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProjectsForOwner = `-- name: ListProjectsForOwner :many
+SELECT id, title, description, constraints, disciplines, team_size_min, team_size_max, status, owner_id, team_id, file_url, video_url, created_at, updated_at, summary, lifecycle_state, approval_state, required_skills, nice_to_have_skills, deliverables, timeline, evaluation_criteria, external_resources, owner_contact_preference, application_questions, archived_at
+FROM projects
+WHERE owner_id = $1
+  AND archived_at IS NULL
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListProjectsForOwner(ctx context.Context, ownerID pgtype.UUID) ([]Project, error) {
+	rows, err := q.db.Query(ctx, listProjectsForOwner, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Project
+	for rows.Next() {
+		var i Project
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Constraints,
+			&i.Disciplines,
+			&i.TeamSizeMin,
+			&i.TeamSizeMax,
+			&i.Status,
+			&i.OwnerID,
+			&i.TeamID,
+			&i.FileUrl,
+			&i.VideoUrl,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Summary,
+			&i.LifecycleState,
+			&i.ApprovalState,
+			&i.RequiredSkills,
+			&i.NiceToHaveSkills,
+			&i.Deliverables,
+			&i.Timeline,
+			&i.EvaluationCriteria,
+			&i.ExternalResources,
+			&i.OwnerContactPreference,
+			&i.ApplicationQuestions,
+			&i.ArchivedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -307,18 +634,21 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]P
 
 const respondToApplication = `-- name: RespondToApplication :one
 UPDATE project_applications
-SET status = $2
+SET status = $2,
+    review_message = $3
 WHERE id = $1
-RETURNING id, project_id, team_id, message, status, created_at
+  AND status IN ('SUBMITTED', 'UNDER_REVIEW', 'MESSAGE_SENT', 'OFFER_SENT', 'TEAM_CONFIRMED')
+RETURNING id, project_id, team_id, message, status, created_at, applicant_id, answers, review_message, offer_message, team_confirmed_at, owner_confirmed_at, expires_at, withdrawn_at
 `
 
 type RespondToApplicationParams struct {
-	ID     pgtype.UUID `json:"id"`
-	Status string      `json:"status"`
+	ID            pgtype.UUID `json:"id"`
+	Status        string      `json:"status"`
+	ReviewMessage pgtype.Text `json:"review_message"`
 }
 
 func (q *Queries) RespondToApplication(ctx context.Context, arg RespondToApplicationParams) (ProjectApplication, error) {
-	row := q.db.QueryRow(ctx, respondToApplication, arg.ID, arg.Status)
+	row := q.db.QueryRow(ctx, respondToApplication, arg.ID, arg.Status, arg.ReviewMessage)
 	var i ProjectApplication
 	err := row.Scan(
 		&i.ID,
@@ -327,6 +657,52 @@ func (q *Queries) RespondToApplication(ctx context.Context, arg RespondToApplica
 		&i.Message,
 		&i.Status,
 		&i.CreatedAt,
+		&i.ApplicantID,
+		&i.Answers,
+		&i.ReviewMessage,
+		&i.OfferMessage,
+		&i.TeamConfirmedAt,
+		&i.OwnerConfirmedAt,
+		&i.ExpiresAt,
+		&i.WithdrawnAt,
+	)
+	return i, err
+}
+
+const sendProjectOffer = `-- name: SendProjectOffer :one
+UPDATE project_applications
+SET status = 'OFFER_SENT',
+    offer_message = $2,
+    expires_at = $3
+WHERE id = $1
+  AND status IN ('SUBMITTED', 'UNDER_REVIEW', 'MESSAGE_SENT')
+RETURNING id, project_id, team_id, message, status, created_at, applicant_id, answers, review_message, offer_message, team_confirmed_at, owner_confirmed_at, expires_at, withdrawn_at
+`
+
+type SendProjectOfferParams struct {
+	ID           pgtype.UUID        `json:"id"`
+	OfferMessage pgtype.Text        `json:"offer_message"`
+	ExpiresAt    pgtype.Timestamptz `json:"expires_at"`
+}
+
+func (q *Queries) SendProjectOffer(ctx context.Context, arg SendProjectOfferParams) (ProjectApplication, error) {
+	row := q.db.QueryRow(ctx, sendProjectOffer, arg.ID, arg.OfferMessage, arg.ExpiresAt)
+	var i ProjectApplication
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.TeamID,
+		&i.Message,
+		&i.Status,
+		&i.CreatedAt,
+		&i.ApplicantID,
+		&i.Answers,
+		&i.ReviewMessage,
+		&i.OfferMessage,
+		&i.TeamConfirmedAt,
+		&i.OwnerConfirmedAt,
+		&i.ExpiresAt,
+		&i.WithdrawnAt,
 	)
 	return i, err
 }
@@ -334,44 +710,80 @@ func (q *Queries) RespondToApplication(ctx context.Context, arg RespondToApplica
 const updateProject = `-- name: UpdateProject :one
 UPDATE projects
 SET title = $2,
-    description = $3,
-    constraints = $4,
-    disciplines = $5,
-    team_size_min = $6,
-    team_size_max = $7,
-    status = $8,
-    file_url = $9,
-    video_url = $10,
+    summary = $3,
+    description = $4,
+    constraints = $5,
+    disciplines = $6,
+    team_size_min = $7,
+    team_size_max = $8,
+    lifecycle_state = $9,
+    status = CASE $9
+      WHEN 'REVIEWING' THEN 'IN_REVIEW'
+      WHEN 'MATCHED' THEN 'CLAIMED'
+      WHEN 'CLOSED' THEN 'CLOSED'
+      ELSE 'OPEN'
+    END,
+    file_url = $10,
+    video_url = $11,
+    approval_state = $12,
+    required_skills = $13,
+    nice_to_have_skills = $14,
+    deliverables = $15,
+    timeline = $16,
+    evaluation_criteria = $17,
+    external_resources = $18,
+    owner_contact_preference = $19,
+    application_questions = $20,
     updated_at = now()
 WHERE id = $1
-RETURNING id, title, description, constraints, disciplines, team_size_min, team_size_max, status, owner_id, team_id, file_url, video_url, created_at, updated_at
+RETURNING id, title, description, constraints, disciplines, team_size_min, team_size_max, status, owner_id, team_id, file_url, video_url, created_at, updated_at, summary, lifecycle_state, approval_state, required_skills, nice_to_have_skills, deliverables, timeline, evaluation_criteria, external_resources, owner_contact_preference, application_questions, archived_at
 `
 
 type UpdateProjectParams struct {
-	ID          pgtype.UUID `json:"id"`
-	Title       string      `json:"title"`
-	Description string      `json:"description"`
-	Constraints pgtype.Text `json:"constraints"`
-	Disciplines []string    `json:"disciplines"`
-	TeamSizeMin int32       `json:"team_size_min"`
-	TeamSizeMax int32       `json:"team_size_max"`
-	Status      string      `json:"status"`
-	FileUrl     pgtype.Text `json:"file_url"`
-	VideoUrl    pgtype.Text `json:"video_url"`
+	ID                     pgtype.UUID `json:"id"`
+	Title                  string      `json:"title"`
+	Summary                string      `json:"summary"`
+	Description            string      `json:"description"`
+	Constraints            pgtype.Text `json:"constraints"`
+	Disciplines            []string    `json:"disciplines"`
+	TeamSizeMin            int32       `json:"team_size_min"`
+	TeamSizeMax            int32       `json:"team_size_max"`
+	LifecycleState         string      `json:"lifecycle_state"`
+	FileUrl                pgtype.Text `json:"file_url"`
+	VideoUrl               pgtype.Text `json:"video_url"`
+	ApprovalState          string      `json:"approval_state"`
+	RequiredSkills         []string    `json:"required_skills"`
+	NiceToHaveSkills       []string    `json:"nice_to_have_skills"`
+	Deliverables           pgtype.Text `json:"deliverables"`
+	Timeline               pgtype.Text `json:"timeline"`
+	EvaluationCriteria     pgtype.Text `json:"evaluation_criteria"`
+	ExternalResources      []string    `json:"external_resources"`
+	OwnerContactPreference pgtype.Text `json:"owner_contact_preference"`
+	ApplicationQuestions   []byte      `json:"application_questions"`
 }
 
 func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error) {
 	row := q.db.QueryRow(ctx, updateProject,
 		arg.ID,
 		arg.Title,
+		arg.Summary,
 		arg.Description,
 		arg.Constraints,
 		arg.Disciplines,
 		arg.TeamSizeMin,
 		arg.TeamSizeMax,
-		arg.Status,
+		arg.LifecycleState,
 		arg.FileUrl,
 		arg.VideoUrl,
+		arg.ApprovalState,
+		arg.RequiredSkills,
+		arg.NiceToHaveSkills,
+		arg.Deliverables,
+		arg.Timeline,
+		arg.EvaluationCriteria,
+		arg.ExternalResources,
+		arg.OwnerContactPreference,
+		arg.ApplicationQuestions,
 	)
 	var i Project
 	err := row.Scan(
@@ -389,6 +801,204 @@ func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (P
 		&i.VideoUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Summary,
+		&i.LifecycleState,
+		&i.ApprovalState,
+		&i.RequiredSkills,
+		&i.NiceToHaveSkills,
+		&i.Deliverables,
+		&i.Timeline,
+		&i.EvaluationCriteria,
+		&i.ExternalResources,
+		&i.OwnerContactPreference,
+		&i.ApplicationQuestions,
+		&i.ArchivedAt,
 	)
 	return i, err
+}
+
+const updateProjectApprovalState = `-- name: UpdateProjectApprovalState :one
+UPDATE projects
+SET approval_state = $2,
+    updated_at = now()
+WHERE id = $1
+RETURNING id, title, description, constraints, disciplines, team_size_min, team_size_max, status, owner_id, team_id, file_url, video_url, created_at, updated_at, summary, lifecycle_state, approval_state, required_skills, nice_to_have_skills, deliverables, timeline, evaluation_criteria, external_resources, owner_contact_preference, application_questions, archived_at
+`
+
+type UpdateProjectApprovalStateParams struct {
+	ID            pgtype.UUID `json:"id"`
+	ApprovalState string      `json:"approval_state"`
+}
+
+func (q *Queries) UpdateProjectApprovalState(ctx context.Context, arg UpdateProjectApprovalStateParams) (Project, error) {
+	row := q.db.QueryRow(ctx, updateProjectApprovalState, arg.ID, arg.ApprovalState)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.Constraints,
+		&i.Disciplines,
+		&i.TeamSizeMin,
+		&i.TeamSizeMax,
+		&i.Status,
+		&i.OwnerID,
+		&i.TeamID,
+		&i.FileUrl,
+		&i.VideoUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Summary,
+		&i.LifecycleState,
+		&i.ApprovalState,
+		&i.RequiredSkills,
+		&i.NiceToHaveSkills,
+		&i.Deliverables,
+		&i.Timeline,
+		&i.EvaluationCriteria,
+		&i.ExternalResources,
+		&i.OwnerContactPreference,
+		&i.ApplicationQuestions,
+		&i.ArchivedAt,
+	)
+	return i, err
+}
+
+const updateProjectLifecycleState = `-- name: UpdateProjectLifecycleState :one
+UPDATE projects
+SET lifecycle_state = $2,
+    status = CASE $2
+      WHEN 'REVIEWING' THEN 'IN_REVIEW'
+      WHEN 'MATCHED' THEN 'CLAIMED'
+      WHEN 'CLOSED' THEN 'CLOSED'
+      ELSE 'OPEN'
+    END,
+    updated_at = now()
+WHERE id = $1
+RETURNING id, title, description, constraints, disciplines, team_size_min, team_size_max, status, owner_id, team_id, file_url, video_url, created_at, updated_at, summary, lifecycle_state, approval_state, required_skills, nice_to_have_skills, deliverables, timeline, evaluation_criteria, external_resources, owner_contact_preference, application_questions, archived_at
+`
+
+type UpdateProjectLifecycleStateParams struct {
+	ID             pgtype.UUID `json:"id"`
+	LifecycleState string      `json:"lifecycle_state"`
+}
+
+func (q *Queries) UpdateProjectLifecycleState(ctx context.Context, arg UpdateProjectLifecycleStateParams) (Project, error) {
+	row := q.db.QueryRow(ctx, updateProjectLifecycleState, arg.ID, arg.LifecycleState)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.Constraints,
+		&i.Disciplines,
+		&i.TeamSizeMin,
+		&i.TeamSizeMax,
+		&i.Status,
+		&i.OwnerID,
+		&i.TeamID,
+		&i.FileUrl,
+		&i.VideoUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Summary,
+		&i.LifecycleState,
+		&i.ApprovalState,
+		&i.RequiredSkills,
+		&i.NiceToHaveSkills,
+		&i.Deliverables,
+		&i.Timeline,
+		&i.EvaluationCriteria,
+		&i.ExternalResources,
+		&i.OwnerContactPreference,
+		&i.ApplicationQuestions,
+		&i.ArchivedAt,
+	)
+	return i, err
+}
+
+const updateTeamCapstoneState = `-- name: UpdateTeamCapstoneState :exec
+UPDATE teams
+SET capstone_state = $2,
+    updated_at = now()
+WHERE id = $1
+`
+
+type UpdateTeamCapstoneStateParams struct {
+	ID            pgtype.UUID `json:"id"`
+	CapstoneState string      `json:"capstone_state"`
+}
+
+func (q *Queries) UpdateTeamCapstoneState(ctx context.Context, arg UpdateTeamCapstoneStateParams) error {
+	_, err := q.db.Exec(ctx, updateTeamCapstoneState, arg.ID, arg.CapstoneState)
+	return err
+}
+
+const withdrawApplication = `-- name: WithdrawApplication :one
+UPDATE project_applications
+SET status = 'WITHDRAWN',
+    withdrawn_at = now()
+WHERE id = $1
+  AND status IN ('SUBMITTED', 'UNDER_REVIEW', 'MESSAGE_SENT', 'OFFER_SENT', 'TEAM_CONFIRMED')
+RETURNING id, project_id, team_id, message, status, created_at, applicant_id, answers, review_message, offer_message, team_confirmed_at, owner_confirmed_at, expires_at, withdrawn_at
+`
+
+func (q *Queries) WithdrawApplication(ctx context.Context, id pgtype.UUID) (ProjectApplication, error) {
+	row := q.db.QueryRow(ctx, withdrawApplication, id)
+	var i ProjectApplication
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.TeamID,
+		&i.Message,
+		&i.Status,
+		&i.CreatedAt,
+		&i.ApplicantID,
+		&i.Answers,
+		&i.ReviewMessage,
+		&i.OfferMessage,
+		&i.TeamConfirmedAt,
+		&i.OwnerConfirmedAt,
+		&i.ExpiresAt,
+		&i.WithdrawnAt,
+	)
+	return i, err
+}
+
+const withdrawCompetingProjectApplications = `-- name: WithdrawCompetingProjectApplications :exec
+UPDATE project_applications
+SET status = 'WITHDRAWN',
+    withdrawn_at = now()
+WHERE project_id = $1
+  AND id <> $2
+  AND status IN ('SUBMITTED', 'UNDER_REVIEW', 'MESSAGE_SENT', 'OFFER_SENT', 'TEAM_CONFIRMED')
+`
+
+type WithdrawCompetingProjectApplicationsParams struct {
+	ProjectID pgtype.UUID `json:"project_id"`
+	ID        pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) WithdrawCompetingProjectApplications(ctx context.Context, arg WithdrawCompetingProjectApplicationsParams) error {
+	_, err := q.db.Exec(ctx, withdrawCompetingProjectApplications, arg.ProjectID, arg.ID)
+	return err
+}
+
+const withdrawCompetingTeamApplications = `-- name: WithdrawCompetingTeamApplications :exec
+UPDATE project_applications
+SET status = 'WITHDRAWN',
+    withdrawn_at = now()
+WHERE team_id = $1
+  AND id <> $2
+  AND status IN ('SUBMITTED', 'UNDER_REVIEW', 'MESSAGE_SENT', 'OFFER_SENT', 'TEAM_CONFIRMED')
+`
+
+type WithdrawCompetingTeamApplicationsParams struct {
+	TeamID pgtype.UUID `json:"team_id"`
+	ID     pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) WithdrawCompetingTeamApplications(ctx context.Context, arg WithdrawCompetingTeamApplicationsParams) error {
+	_, err := q.db.Exec(ctx, withdrawCompetingTeamApplications, arg.TeamID, arg.ID)
+	return err
 }

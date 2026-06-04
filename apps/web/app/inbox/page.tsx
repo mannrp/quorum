@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Section } from "@/components/ui";
-import { getAuthToken, graphqlRequest, useGraphQL } from "@/lib/graphql";
+import { getAuthToken, graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { INBOX_QUERY, MESSAGES_QUERY } from "@/lib/queries";
 import type { Message, User } from "@/types/domain";
 
@@ -45,7 +45,7 @@ function InboxInner() {
               `query inboxTargetQuery { users { id username fullName discipline } }`,
               {},
               token
-            ).catch(() => ({ users: [] }));
+            );
             
             const target = res.users.find((u) => u.id === queryUserId);
             if (target) {
@@ -53,7 +53,7 @@ function InboxInner() {
               setActiveUser(target.id);
             }
           } catch (err) {
-            console.warn(err);
+            setNotice(userFacingError(err));
           }
         };
         void fetchTarget();
@@ -69,20 +69,7 @@ function InboxInner() {
     const token = getAuthToken();
     graphqlRequest<{ myMessages: Message[] }>(MESSAGES_QUERY, { withUser: activeUser }, token)
       .then((result) => setMessages(result.myMessages))
-      .catch((err) => {
-        console.warn("Unable to fetch messages list, setting mock thread", err);
-        // Fallback mockup messages
-        setMessages([
-          {
-            id: "msg-mock-1",
-            sender: activeUserData || { id: "other", username: "user", fullName: "User" },
-            receiver: me || { id: "me", username: "me", fullName: "Me" },
-            body: "Hi! Are you still looking for a software engineering co-lead? I saw your project scope.",
-            read: false,
-            createdAt: "2026-06-02 14:10"
-          }
-        ]);
-      });
+      .catch((err) => setNotice(userFacingError(err)));
   }, [activeUser, activeUserData, me]);
 
   const handleSend = async (event: React.FormEvent) => {
@@ -98,17 +85,7 @@ function InboxInner() {
       setMessages((prev) => [...prev, result.sendMessage]);
       setText("");
     } catch (err) {
-      console.warn("SendMessage failed, appending locally for testing", err);
-      const mockSent: Message = {
-        id: "msg-sent-" + Date.now(),
-        sender: me || { id: "me", username: "me", fullName: "Me" },
-        receiver: activeUserData || { id: "other", username: "user", fullName: "User" },
-        body: text.trim(),
-        read: true,
-        createdAt: "Just now"
-      };
-      setMessages((prev) => [...prev, mockSent]);
-      setText("");
+      setNotice(userFacingError(err));
     }
   };
 
@@ -128,7 +105,7 @@ function InboxInner() {
         }))
       );
     } catch (err) {
-      console.warn(err);
+      setNotice(userFacingError(err));
     }
   };
 
@@ -183,6 +160,11 @@ function InboxInner() {
         </div>
 
         <div className="flex-1 p-6 overflow-y-auto space-y-4 bg-white dark:bg-[#0c0e17]/20">
+          {notice && (
+            <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-300">
+              {notice}
+            </div>
+          )}
           {messages.map((message) => {
             const isSelf = message.sender.id === me?.id;
             return (

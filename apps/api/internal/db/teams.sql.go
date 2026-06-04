@@ -36,18 +36,83 @@ func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (T
 	return i, err
 }
 
+const archiveTeam = `-- name: ArchiveTeam :exec
+UPDATE teams
+SET archived_at = now(),
+    capstone_state = 'CLOSED',
+    recruiting_state = 'HIDDEN',
+    visibility = 'HIDDEN',
+    updated_at = now()
+WHERE id = $1
+`
+
+func (q *Queries) ArchiveTeam(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, archiveTeam, id)
+	return err
+}
+
+const countTeamCoLeads = `-- name: CountTeamCoLeads :one
+SELECT count(*)::int
+FROM team_memberships
+WHERE team_id = $1 AND role = 'CO_LEAD'
+`
+
+func (q *Queries) CountTeamCoLeads(ctx context.Context, teamID pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countTeamCoLeads, teamID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countTeamMembers = `-- name: CountTeamMembers :one
+SELECT count(*)::int
+FROM team_memberships
+WHERE team_id = $1
+`
+
+func (q *Queries) CountTeamMembers(ctx context.Context, teamID pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countTeamMembers, teamID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countUserTeams = `-- name: CountUserTeams :one
+SELECT count(*)::int
+FROM team_memberships tm
+JOIN teams t ON t.id = tm.team_id
+WHERE tm.user_id = $1
+  AND t.archived_at IS NULL
+`
+
+func (q *Queries) CountUserTeams(ctx context.Context, userID pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countUserTeams, userID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createTeam = `-- name: CreateTeam :one
-INSERT INTO teams (name, description, discipline, max_size, created_by)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, description, is_complete, max_size, discipline, created_by, project_id, created_at, updated_at
+INSERT INTO teams (
+  name, description, discipline, max_size, created_by, recruiting_state,
+  capstone_state, visibility, discord_link, existing_skills, needed_skills, project_interests
+)
+VALUES ($1, $2, $3, $4, $5, $6, 'FORMING', $7, $8, $9, $10, $11)
+RETURNING id, name, description, is_complete, max_size, discipline, created_by, project_id, created_at, updated_at, recruiting_state, capstone_state, visibility, discord_link, existing_skills, needed_skills, project_interests, archived_at
 `
 
 type CreateTeamParams struct {
-	Name        string      `json:"name"`
-	Description pgtype.Text `json:"description"`
-	Discipline  pgtype.Text `json:"discipline"`
-	MaxSize     int32       `json:"max_size"`
-	CreatedBy   pgtype.UUID `json:"created_by"`
+	Name             string      `json:"name"`
+	Description      pgtype.Text `json:"description"`
+	Discipline       pgtype.Text `json:"discipline"`
+	MaxSize          int32       `json:"max_size"`
+	CreatedBy        pgtype.UUID `json:"created_by"`
+	RecruitingState  string      `json:"recruiting_state"`
+	Visibility       string      `json:"visibility"`
+	DiscordLink      pgtype.Text `json:"discord_link"`
+	ExistingSkills   []string    `json:"existing_skills"`
+	NeededSkills     []string    `json:"needed_skills"`
+	ProjectInterests []string    `json:"project_interests"`
 }
 
 func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error) {
@@ -57,6 +122,12 @@ func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, e
 		arg.Discipline,
 		arg.MaxSize,
 		arg.CreatedBy,
+		arg.RecruitingState,
+		arg.Visibility,
+		arg.DiscordLink,
+		arg.ExistingSkills,
+		arg.NeededSkills,
+		arg.ProjectInterests,
 	)
 	var i Team
 	err := row.Scan(
@@ -70,21 +141,20 @@ func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, e
 		&i.ProjectID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RecruitingState,
+		&i.CapstoneState,
+		&i.Visibility,
+		&i.DiscordLink,
+		&i.ExistingSkills,
+		&i.NeededSkills,
+		&i.ProjectInterests,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
 
-const deleteTeam = `-- name: DeleteTeam :exec
-DELETE FROM teams WHERE id = $1
-`
-
-func (q *Queries) DeleteTeam(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteTeam, id)
-	return err
-}
-
 const getTeam = `-- name: GetTeam :one
-SELECT id, name, description, is_complete, max_size, discipline, created_by, project_id, created_at, updated_at FROM teams WHERE id = $1
+SELECT id, name, description, is_complete, max_size, discipline, created_by, project_id, created_at, updated_at, recruiting_state, capstone_state, visibility, discord_link, existing_skills, needed_skills, project_interests, archived_at FROM teams WHERE id = $1
 `
 
 func (q *Queries) GetTeam(ctx context.Context, id pgtype.UUID) (Team, error) {
@@ -101,6 +171,39 @@ func (q *Queries) GetTeam(ctx context.Context, id pgtype.UUID) (Team, error) {
 		&i.ProjectID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RecruitingState,
+		&i.CapstoneState,
+		&i.Visibility,
+		&i.DiscordLink,
+		&i.ExistingSkills,
+		&i.NeededSkills,
+		&i.ProjectInterests,
+		&i.ArchivedAt,
+	)
+	return i, err
+}
+
+const getTeamMembership = `-- name: GetTeamMembership :one
+SELECT id, team_id, user_id, role, joined_at
+FROM team_memberships
+WHERE team_id = $1
+  AND user_id = $2
+`
+
+type GetTeamMembershipParams struct {
+	TeamID pgtype.UUID `json:"team_id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) GetTeamMembership(ctx context.Context, arg GetTeamMembershipParams) (TeamMembership, error) {
+	row := q.db.QueryRow(ctx, getTeamMembership, arg.TeamID, arg.UserID)
+	var i TeamMembership
+	err := row.Scan(
+		&i.ID,
+		&i.TeamID,
+		&i.UserID,
+		&i.Role,
+		&i.JoinedAt,
 	)
 	return i, err
 }
@@ -156,9 +259,11 @@ func (q *Queries) ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]Li
 }
 
 const listTeams = `-- name: ListTeams :many
-SELECT id, name, description, is_complete, max_size, discipline, created_by, project_id, created_at, updated_at
+SELECT id, name, description, is_complete, max_size, discipline, created_by, project_id, created_at, updated_at, recruiting_state, capstone_state, visibility, discord_link, existing_skills, needed_skills, project_interests, archived_at
 FROM teams
 WHERE ($1::text IS NULL OR discipline = $1::text)
+  AND archived_at IS NULL
+  AND visibility = 'VISIBLE'
   AND ($2::boolean IS NULL OR (project_id IS NOT NULL) = $2::boolean)
   AND ($3::boolean IS NULL OR is_complete = $3::boolean)
   AND ($4::text IS NULL OR name ILIKE '%' || $4::text || '%')
@@ -197,6 +302,62 @@ func (q *Queries) ListTeams(ctx context.Context, arg ListTeamsParams) ([]Team, e
 			&i.ProjectID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RecruitingState,
+			&i.CapstoneState,
+			&i.Visibility,
+			&i.DiscordLink,
+			&i.ExistingSkills,
+			&i.NeededSkills,
+			&i.ProjectInterests,
+			&i.ArchivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTeamsForUser = `-- name: ListTeamsForUser :many
+SELECT DISTINCT t.id, t.name, t.description, t.is_complete, t.max_size, t.discipline, t.created_by, t.project_id, t.created_at, t.updated_at, t.recruiting_state, t.capstone_state, t.visibility, t.discord_link, t.existing_skills, t.needed_skills, t.project_interests, t.archived_at
+FROM teams t
+JOIN team_memberships tm ON tm.team_id = t.id
+WHERE tm.user_id = $1
+  AND t.archived_at IS NULL
+ORDER BY t.created_at DESC
+`
+
+func (q *Queries) ListTeamsForUser(ctx context.Context, userID pgtype.UUID) ([]Team, error) {
+	rows, err := q.db.Query(ctx, listTeamsForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Team
+	for rows.Next() {
+		var i Team
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.IsComplete,
+			&i.MaxSize,
+			&i.Discipline,
+			&i.CreatedBy,
+			&i.ProjectID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.RecruitingState,
+			&i.CapstoneState,
+			&i.Visibility,
+			&i.DiscordLink,
+			&i.ExistingSkills,
+			&i.NeededSkills,
+			&i.ProjectInterests,
+			&i.ArchivedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -255,18 +416,30 @@ SET name = $2,
     discipline = $4,
     max_size = $5,
     is_complete = $6,
+    recruiting_state = $7,
+    visibility = $8,
+    discord_link = $9,
+    existing_skills = $10,
+    needed_skills = $11,
+    project_interests = $12,
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, description, is_complete, max_size, discipline, created_by, project_id, created_at, updated_at
+RETURNING id, name, description, is_complete, max_size, discipline, created_by, project_id, created_at, updated_at, recruiting_state, capstone_state, visibility, discord_link, existing_skills, needed_skills, project_interests, archived_at
 `
 
 type UpdateTeamParams struct {
-	ID          pgtype.UUID `json:"id"`
-	Name        string      `json:"name"`
-	Description pgtype.Text `json:"description"`
-	Discipline  pgtype.Text `json:"discipline"`
-	MaxSize     int32       `json:"max_size"`
-	IsComplete  bool        `json:"is_complete"`
+	ID               pgtype.UUID `json:"id"`
+	Name             string      `json:"name"`
+	Description      pgtype.Text `json:"description"`
+	Discipline       pgtype.Text `json:"discipline"`
+	MaxSize          int32       `json:"max_size"`
+	IsComplete       bool        `json:"is_complete"`
+	RecruitingState  string      `json:"recruiting_state"`
+	Visibility       string      `json:"visibility"`
+	DiscordLink      pgtype.Text `json:"discord_link"`
+	ExistingSkills   []string    `json:"existing_skills"`
+	NeededSkills     []string    `json:"needed_skills"`
+	ProjectInterests []string    `json:"project_interests"`
 }
 
 func (q *Queries) UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error) {
@@ -277,6 +450,12 @@ func (q *Queries) UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, e
 		arg.Discipline,
 		arg.MaxSize,
 		arg.IsComplete,
+		arg.RecruitingState,
+		arg.Visibility,
+		arg.DiscordLink,
+		arg.ExistingSkills,
+		arg.NeededSkills,
+		arg.ProjectInterests,
 	)
 	var i Team
 	err := row.Scan(
@@ -290,6 +469,14 @@ func (q *Queries) UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, e
 		&i.ProjectID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RecruitingState,
+		&i.CapstoneState,
+		&i.Visibility,
+		&i.DiscordLink,
+		&i.ExistingSkills,
+		&i.NeededSkills,
+		&i.ProjectInterests,
+		&i.ArchivedAt,
 	)
 	return i, err
 }

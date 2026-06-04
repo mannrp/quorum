@@ -9,30 +9,86 @@ import (
 	"strconv"
 )
 
+type ApplyToProjectInput struct {
+	ProjectID string  `json:"projectId"`
+	TeamID    string  `json:"teamId"`
+	Message   *string `json:"message,omitempty"`
+	Answers   *string `json:"answers,omitempty"`
+}
+
+type AuditLog struct {
+	ID               string  `json:"id"`
+	Actor            *User   `json:"actor,omitempty"`
+	ActionType       string  `json:"actionType"`
+	TargetEntityType string  `json:"targetEntityType"`
+	TargetEntityID   *string `json:"targetEntityId,omitempty"`
+	PreviousValue    *string `json:"previousValue,omitempty"`
+	NewValue         *string `json:"newValue,omitempty"`
+	Reason           *string `json:"reason,omitempty"`
+	Metadata         string  `json:"metadata"`
+	CreatedAt        string  `json:"createdAt"`
+}
+
 type BootstrapProfileInput struct {
 	Username   string  `json:"username"`
-	Email      *string `json:"email,omitempty"`
+	Email      string  `json:"email"`
 	FullName   string  `json:"fullName"`
-	Discipline *string `json:"discipline,omitempty"`
-	University *string `json:"university,omitempty"`
+	Discipline string  `json:"discipline"`
+	University string  `json:"university"`
+	UserIntent *string `json:"userIntent,omitempty"`
+	Bio        *string `json:"bio,omitempty"`
 }
 
 type CreateProjectInput struct {
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Constraints *string  `json:"constraints,omitempty"`
-	Disciplines []string `json:"disciplines"`
-	TeamSizeMin *int     `json:"teamSizeMin,omitempty"`
-	TeamSizeMax *int     `json:"teamSizeMax,omitempty"`
-	FileURL     *string  `json:"fileUrl,omitempty"`
-	VideoURL    *string  `json:"videoUrl,omitempty"`
+	Title                  string                 `json:"title"`
+	Summary                *string                `json:"summary,omitempty"`
+	Description            string                 `json:"description"`
+	Constraints            *string                `json:"constraints,omitempty"`
+	Disciplines            []string               `json:"disciplines"`
+	TeamSizeMin            *int                   `json:"teamSizeMin,omitempty"`
+	TeamSizeMax            *int                   `json:"teamSizeMax,omitempty"`
+	FileURL                *string                `json:"fileUrl,omitempty"`
+	VideoURL               *string                `json:"videoUrl,omitempty"`
+	LifecycleState         *ProjectLifecycleState `json:"lifecycleState,omitempty"`
+	ApprovalState          *ProjectApprovalState  `json:"approvalState,omitempty"`
+	RequiredSkills         []string               `json:"requiredSkills,omitempty"`
+	NiceToHaveSkills       []string               `json:"niceToHaveSkills,omitempty"`
+	Deliverables           *string                `json:"deliverables,omitempty"`
+	Timeline               *string                `json:"timeline,omitempty"`
+	EvaluationCriteria     *string                `json:"evaluationCriteria,omitempty"`
+	ExternalResources      []string               `json:"externalResources,omitempty"`
+	OwnerContactPreference *string                `json:"ownerContactPreference,omitempty"`
+	ApplicationQuestions   *string                `json:"applicationQuestions,omitempty"`
 }
 
 type CreateTeamInput struct {
-	Name        string  `json:"name"`
-	Description *string `json:"description,omitempty"`
-	Discipline  *string `json:"discipline,omitempty"`
-	MaxSize     *int    `json:"maxSize,omitempty"`
+	Name             string               `json:"name"`
+	Description      *string              `json:"description,omitempty"`
+	Discipline       *string              `json:"discipline,omitempty"`
+	MaxSize          *int                 `json:"maxSize,omitempty"`
+	RecruitingState  *TeamRecruitingState `json:"recruitingState,omitempty"`
+	Visibility       *TeamVisibility      `json:"visibility,omitempty"`
+	DiscordLink      *string              `json:"discordLink,omitempty"`
+	ExistingSkills   []string             `json:"existingSkills,omitempty"`
+	NeededSkills     []string             `json:"neededSkills,omitempty"`
+	ProjectInterests []string             `json:"projectInterests,omitempty"`
+}
+
+type DashboardContext struct {
+	MyTeams             []*Team           `json:"myTeams"`
+	MyProjects          []*Project        `json:"myProjects"`
+	MyInvitations       []*TeamInvitation `json:"myInvitations"`
+	UnreadMessages      int               `json:"unreadMessages"`
+	UnreadNotifications int               `json:"unreadNotifications"`
+	UniversalDeadline   *Deadline         `json:"universalDeadline,omitempty"`
+	IsAdmin             bool              `json:"isAdmin"`
+}
+
+type Deadline struct {
+	ID         string `json:"id"`
+	DeadlineAt string `json:"deadlineAt"`
+	UpdatedBy  *User  `json:"updatedBy,omitempty"`
+	UpdatedAt  string `json:"updatedAt"`
 }
 
 type Message struct {
@@ -56,29 +112,58 @@ type Notification struct {
 }
 
 type Project struct {
-	ID           string                `json:"id"`
-	Title        string                `json:"title"`
-	Description  string                `json:"description"`
-	Constraints  *string               `json:"constraints,omitempty"`
-	Disciplines  []string              `json:"disciplines"`
-	TeamSizeMin  int                   `json:"teamSizeMin"`
-	TeamSizeMax  int                   `json:"teamSizeMax"`
-	Status       ProjectStatus         `json:"status"`
-	Owner        *User                 `json:"owner"`
-	Team         *Team                 `json:"team,omitempty"`
-	FileURL      *string               `json:"fileUrl,omitempty"`
-	VideoURL     *string               `json:"videoUrl,omitempty"`
-	Applications []*ProjectApplication `json:"applications"`
-	CreatedAt    string                `json:"createdAt"`
+	ID                     string                `json:"id"`
+	Title                  string                `json:"title"`
+	Summary                string                `json:"summary"`
+	Description            string                `json:"description"`
+	Constraints            *string               `json:"constraints,omitempty"`
+	Disciplines            []string              `json:"disciplines"`
+	TeamSizeMin            int                   `json:"teamSizeMin"`
+	TeamSizeMax            int                   `json:"teamSizeMax"`
+	Status                 ProjectStatus         `json:"status"`
+	LifecycleState         ProjectLifecycleState `json:"lifecycleState"`
+	ApprovalState          ProjectApprovalState  `json:"approvalState"`
+	RequiredSkills         []string              `json:"requiredSkills"`
+	NiceToHaveSkills       []string              `json:"niceToHaveSkills"`
+	Deliverables           *string               `json:"deliverables,omitempty"`
+	Timeline               *string               `json:"timeline,omitempty"`
+	EvaluationCriteria     *string               `json:"evaluationCriteria,omitempty"`
+	ExternalResources      []string              `json:"externalResources"`
+	OwnerContactPreference *string               `json:"ownerContactPreference,omitempty"`
+	ApplicationQuestions   string                `json:"applicationQuestions"`
+	ArchivedAt             *string               `json:"archivedAt,omitempty"`
+	Permissions            *ProjectPermissions   `json:"permissions"`
+	Owner                  *User                 `json:"owner"`
+	Team                   *Team                 `json:"team,omitempty"`
+	FileURL                *string               `json:"fileUrl,omitempty"`
+	VideoURL               *string               `json:"videoUrl,omitempty"`
+	Applications           []*ProjectApplication `json:"applications"`
+	CreatedAt              string                `json:"createdAt"`
 }
 
 type ProjectApplication struct {
-	ID        string            `json:"id"`
-	Project   *Project          `json:"project"`
-	Team      *Team             `json:"team"`
-	Message   *string           `json:"message,omitempty"`
-	Status    ApplicationStatus `json:"status"`
-	CreatedAt string            `json:"createdAt"`
+	ID               string            `json:"id"`
+	Project          *Project          `json:"project"`
+	Team             *Team             `json:"team"`
+	Applicant        *User             `json:"applicant,omitempty"`
+	Message          *string           `json:"message,omitempty"`
+	Answers          string            `json:"answers"`
+	Status           ApplicationStatus `json:"status"`
+	ReviewMessage    *string           `json:"reviewMessage,omitempty"`
+	OfferMessage     *string           `json:"offerMessage,omitempty"`
+	TeamConfirmedAt  *string           `json:"teamConfirmedAt,omitempty"`
+	OwnerConfirmedAt *string           `json:"ownerConfirmedAt,omitempty"`
+	ExpiresAt        *string           `json:"expiresAt,omitempty"`
+	WithdrawnAt      *string           `json:"withdrawnAt,omitempty"`
+	CreatedAt        string            `json:"createdAt"`
+}
+
+type ProjectPermissions struct {
+	CanEdit               bool `json:"canEdit"`
+	CanReviewApplications bool `json:"canReviewApplications"`
+	CanSubmitForApproval  bool `json:"canSubmitForApproval"`
+	CanApprove            bool `json:"canApprove"`
+	CanArchive            bool `json:"canArchive"`
 }
 
 type Query struct {
@@ -98,25 +183,49 @@ type Tag struct {
 }
 
 type Team struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Description *string           `json:"description,omitempty"`
-	IsComplete  bool              `json:"isComplete"`
-	MaxSize     int               `json:"maxSize"`
-	Discipline  *string           `json:"discipline,omitempty"`
-	Members     []*TeamMembership `json:"members"`
-	Project     *Project          `json:"project,omitempty"`
-	CreatedBy   *User             `json:"createdBy"`
-	CreatedAt   string            `json:"createdAt"`
+	ID               string              `json:"id"`
+	Name             string              `json:"name"`
+	Description      *string             `json:"description,omitempty"`
+	IsComplete       bool                `json:"isComplete"`
+	MaxSize          int                 `json:"maxSize"`
+	Discipline       *string             `json:"discipline,omitempty"`
+	RecruitingState  TeamRecruitingState `json:"recruitingState"`
+	CapstoneState    TeamCapstoneState   `json:"capstoneState"`
+	Visibility       TeamVisibility      `json:"visibility"`
+	DiscordLink      *string             `json:"discordLink,omitempty"`
+	ExistingSkills   []string            `json:"existingSkills"`
+	NeededSkills     []string            `json:"neededSkills"`
+	ProjectInterests []string            `json:"projectInterests"`
+	ArchivedAt       *string             `json:"archivedAt,omitempty"`
+	Permissions      *TeamPermissions    `json:"permissions"`
+	Members          []*TeamMembership   `json:"members"`
+	Project          *Project            `json:"project,omitempty"`
+	CreatedBy        *User               `json:"createdBy"`
+	CreatedAt        string              `json:"createdAt"`
+}
+
+type TeamInvitation struct {
+	ID          string               `json:"id"`
+	Team        *Team                `json:"team"`
+	InvitedUser *User                `json:"invitedUser"`
+	InvitedBy   *User                `json:"invitedBy"`
+	Message     *string              `json:"message,omitempty"`
+	Status      TeamInvitationStatus `json:"status"`
+	ExpiresAt   string               `json:"expiresAt"`
+	RespondedAt *string              `json:"respondedAt,omitempty"`
+	CreatedAt   string               `json:"createdAt"`
 }
 
 type TeamJoinRequest struct {
-	ID        string            `json:"id"`
-	Team      *Team             `json:"team"`
-	User      *User             `json:"user"`
-	Message   *string           `json:"message,omitempty"`
-	Status    ApplicationStatus `json:"status"`
-	CreatedAt string            `json:"createdAt"`
+	ID          string            `json:"id"`
+	Team        *Team             `json:"team"`
+	User        *User             `json:"user"`
+	Message     *string           `json:"message,omitempty"`
+	Status      JoinRequestStatus `json:"status"`
+	ExpiresAt   *string           `json:"expiresAt,omitempty"`
+	RespondedAt *string           `json:"respondedAt,omitempty"`
+	ConfirmedAt *string           `json:"confirmedAt,omitempty"`
+	CreatedAt   string            `json:"createdAt"`
 }
 
 type TeamMembership struct {
@@ -127,36 +236,67 @@ type TeamMembership struct {
 	JoinedAt string   `json:"joinedAt"`
 }
 
+type TeamPermissions struct {
+	CanEdit            bool `json:"canEdit"`
+	CanManageMembers   bool `json:"canManageMembers"`
+	CanInviteMembers   bool `json:"canInviteMembers"`
+	CanArchive         bool `json:"canArchive"`
+	CanApplyToProjects bool `json:"canApplyToProjects"`
+}
+
 type UpdateProfileInput struct {
-	FullName     string  `json:"fullName"`
-	Bio          *string `json:"bio,omitempty"`
-	Discipline   *string `json:"discipline,omitempty"`
-	University   *string `json:"university,omitempty"`
-	LinkedinURL  *string `json:"linkedinUrl,omitempty"`
-	GithubURL    *string `json:"githubUrl,omitempty"`
-	PortfolioURL *string `json:"portfolioUrl,omitempty"`
-	ResumeURL    *string `json:"resumeUrl,omitempty"`
-	AvatarURL    *string `json:"avatarUrl,omitempty"`
+	FullName              string            `json:"fullName"`
+	Bio                   *string           `json:"bio,omitempty"`
+	Discipline            *string           `json:"discipline,omitempty"`
+	University            *string           `json:"university,omitempty"`
+	LinkedinURL           *string           `json:"linkedinUrl,omitempty"`
+	GithubURL             *string           `json:"githubUrl,omitempty"`
+	PortfolioURL          *string           `json:"portfolioUrl,omitempty"`
+	ResumeURL             *string           `json:"resumeUrl,omitempty"`
+	AvatarURL             *string           `json:"avatarUrl,omitempty"`
+	UserIntent            *string           `json:"userIntent,omitempty"`
+	ResumeVisibility      *ResumeVisibility `json:"resumeVisibility,omitempty"`
+	Discord               *string           `json:"discord,omitempty"`
+	AvailabilityNote      *string           `json:"availabilityNote,omitempty"`
+	PreferredProjectAreas []string          `json:"preferredProjectAreas,omitempty"`
+	ProfileComplete       *bool             `json:"profileComplete,omitempty"`
 }
 
 type UpdateProjectInput struct {
-	Title       string        `json:"title"`
-	Description string        `json:"description"`
-	Constraints *string       `json:"constraints,omitempty"`
-	Disciplines []string      `json:"disciplines"`
-	TeamSizeMin int           `json:"teamSizeMin"`
-	TeamSizeMax int           `json:"teamSizeMax"`
-	Status      ProjectStatus `json:"status"`
-	FileURL     *string       `json:"fileUrl,omitempty"`
-	VideoURL    *string       `json:"videoUrl,omitempty"`
+	Title                  string                 `json:"title"`
+	Summary                string                 `json:"summary"`
+	Description            string                 `json:"description"`
+	Constraints            *string                `json:"constraints,omitempty"`
+	Disciplines            []string               `json:"disciplines"`
+	TeamSizeMin            int                    `json:"teamSizeMin"`
+	TeamSizeMax            int                    `json:"teamSizeMax"`
+	Status                 *ProjectStatus         `json:"status,omitempty"`
+	LifecycleState         *ProjectLifecycleState `json:"lifecycleState,omitempty"`
+	ApprovalState          *ProjectApprovalState  `json:"approvalState,omitempty"`
+	FileURL                *string                `json:"fileUrl,omitempty"`
+	VideoURL               *string                `json:"videoUrl,omitempty"`
+	RequiredSkills         []string               `json:"requiredSkills,omitempty"`
+	NiceToHaveSkills       []string               `json:"niceToHaveSkills,omitempty"`
+	Deliverables           *string                `json:"deliverables,omitempty"`
+	Timeline               *string                `json:"timeline,omitempty"`
+	EvaluationCriteria     *string                `json:"evaluationCriteria,omitempty"`
+	ExternalResources      []string               `json:"externalResources,omitempty"`
+	OwnerContactPreference *string                `json:"ownerContactPreference,omitempty"`
+	ApplicationQuestions   *string                `json:"applicationQuestions,omitempty"`
 }
 
 type UpdateTeamInput struct {
-	Name        string  `json:"name"`
-	Description *string `json:"description,omitempty"`
-	Discipline  *string `json:"discipline,omitempty"`
-	MaxSize     int     `json:"maxSize"`
-	IsComplete  bool    `json:"isComplete"`
+	Name             string               `json:"name"`
+	Description      *string              `json:"description,omitempty"`
+	Discipline       *string              `json:"discipline,omitempty"`
+	MaxSize          int                  `json:"maxSize"`
+	IsComplete       bool                 `json:"isComplete"`
+	RecruitingState  *TeamRecruitingState `json:"recruitingState,omitempty"`
+	Visibility       *TeamVisibility      `json:"visibility,omitempty"`
+	DiscordLink      *string              `json:"discordLink,omitempty"`
+	ExistingSkills   []string             `json:"existingSkills,omitempty"`
+	NeededSkills     []string             `json:"neededSkills,omitempty"`
+	ProjectInterests []string             `json:"projectInterests,omitempty"`
 }
 
 type UploadField struct {
@@ -173,40 +313,68 @@ type UploadSignature struct {
 }
 
 type User struct {
-	ID           string  `json:"id"`
-	AuthUserID   string  `json:"authUserId"`
-	Username     string  `json:"username"`
-	Email        *string `json:"email,omitempty"`
-	FullName     string  `json:"fullName"`
-	Bio          *string `json:"bio,omitempty"`
-	Discipline   *string `json:"discipline,omitempty"`
-	University   *string `json:"university,omitempty"`
-	LinkedinURL  *string `json:"linkedinUrl,omitempty"`
-	GithubURL    *string `json:"githubUrl,omitempty"`
-	PortfolioURL *string `json:"portfolioUrl,omitempty"`
-	ResumeURL    *string `json:"resumeUrl,omitempty"`
-	AvatarURL    *string `json:"avatarUrl,omitempty"`
-	Tags         []*Tag  `json:"tags"`
-	CreatedAt    string  `json:"createdAt"`
+	ID                    string           `json:"id"`
+	AuthUserID            string           `json:"authUserId"`
+	Username              string           `json:"username"`
+	Email                 *string          `json:"email,omitempty"`
+	FullName              string           `json:"fullName"`
+	Bio                   *string          `json:"bio,omitempty"`
+	Discipline            *string          `json:"discipline,omitempty"`
+	University            *string          `json:"university,omitempty"`
+	LinkedinURL           *string          `json:"linkedinUrl,omitempty"`
+	GithubURL             *string          `json:"githubUrl,omitempty"`
+	PortfolioURL          *string          `json:"portfolioUrl,omitempty"`
+	ResumeURL             *string          `json:"resumeUrl,omitempty"`
+	AvatarURL             *string          `json:"avatarUrl,omitempty"`
+	UserIntent            string           `json:"userIntent"`
+	ResumeVisibility      ResumeVisibility `json:"resumeVisibility"`
+	Discord               *string          `json:"discord,omitempty"`
+	AvailabilityNote      *string          `json:"availabilityNote,omitempty"`
+	PreferredProjectAreas []string         `json:"preferredProjectAreas"`
+	ProfileComplete       bool             `json:"profileComplete"`
+	DeactivatedAt         *string          `json:"deactivatedAt,omitempty"`
+	ArchivedAt            *string          `json:"archivedAt,omitempty"`
+	Tags                  []*Tag           `json:"tags"`
+	CreatedAt             string           `json:"createdAt"`
 }
 
 type ApplicationStatus string
 
 const (
-	ApplicationStatusPending  ApplicationStatus = "PENDING"
-	ApplicationStatusAccepted ApplicationStatus = "ACCEPTED"
-	ApplicationStatusRejected ApplicationStatus = "REJECTED"
+	ApplicationStatusPending        ApplicationStatus = "PENDING"
+	ApplicationStatusAccepted       ApplicationStatus = "ACCEPTED"
+	ApplicationStatusRejected       ApplicationStatus = "REJECTED"
+	ApplicationStatusDraft          ApplicationStatus = "DRAFT"
+	ApplicationStatusSubmitted      ApplicationStatus = "SUBMITTED"
+	ApplicationStatusUnderReview    ApplicationStatus = "UNDER_REVIEW"
+	ApplicationStatusMessageSent    ApplicationStatus = "MESSAGE_SENT"
+	ApplicationStatusOfferSent      ApplicationStatus = "OFFER_SENT"
+	ApplicationStatusTeamConfirmed  ApplicationStatus = "TEAM_CONFIRMED"
+	ApplicationStatusOwnerConfirmed ApplicationStatus = "OWNER_CONFIRMED"
+	ApplicationStatusMatched        ApplicationStatus = "MATCHED"
+	ApplicationStatusWithdrawn      ApplicationStatus = "WITHDRAWN"
+	ApplicationStatusExpired        ApplicationStatus = "EXPIRED"
 )
 
 var AllApplicationStatus = []ApplicationStatus{
 	ApplicationStatusPending,
 	ApplicationStatusAccepted,
 	ApplicationStatusRejected,
+	ApplicationStatusDraft,
+	ApplicationStatusSubmitted,
+	ApplicationStatusUnderReview,
+	ApplicationStatusMessageSent,
+	ApplicationStatusOfferSent,
+	ApplicationStatusTeamConfirmed,
+	ApplicationStatusOwnerConfirmed,
+	ApplicationStatusMatched,
+	ApplicationStatusWithdrawn,
+	ApplicationStatusExpired,
 }
 
 func (e ApplicationStatus) IsValid() bool {
 	switch e {
-	case ApplicationStatusPending, ApplicationStatusAccepted, ApplicationStatusRejected:
+	case ApplicationStatusPending, ApplicationStatusAccepted, ApplicationStatusRejected, ApplicationStatusDraft, ApplicationStatusSubmitted, ApplicationStatusUnderReview, ApplicationStatusMessageSent, ApplicationStatusOfferSent, ApplicationStatusTeamConfirmed, ApplicationStatusOwnerConfirmed, ApplicationStatusMatched, ApplicationStatusWithdrawn, ApplicationStatusExpired:
 		return true
 	}
 	return false
@@ -242,6 +410,195 @@ func (e *ApplicationStatus) UnmarshalJSON(b []byte) error {
 }
 
 func (e ApplicationStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type JoinRequestStatus string
+
+const (
+	JoinRequestStatusPending                     JoinRequestStatus = "PENDING"
+	JoinRequestStatusAccepted                    JoinRequestStatus = "ACCEPTED"
+	JoinRequestStatusAcceptedPendingConfirmation JoinRequestStatus = "ACCEPTED_PENDING_CONFIRMATION"
+	JoinRequestStatusConfirmed                   JoinRequestStatus = "CONFIRMED"
+	JoinRequestStatusRejected                    JoinRequestStatus = "REJECTED"
+	JoinRequestStatusWithdrawn                   JoinRequestStatus = "WITHDRAWN"
+	JoinRequestStatusExpired                     JoinRequestStatus = "EXPIRED"
+)
+
+var AllJoinRequestStatus = []JoinRequestStatus{
+	JoinRequestStatusPending,
+	JoinRequestStatusAccepted,
+	JoinRequestStatusAcceptedPendingConfirmation,
+	JoinRequestStatusConfirmed,
+	JoinRequestStatusRejected,
+	JoinRequestStatusWithdrawn,
+	JoinRequestStatusExpired,
+}
+
+func (e JoinRequestStatus) IsValid() bool {
+	switch e {
+	case JoinRequestStatusPending, JoinRequestStatusAccepted, JoinRequestStatusAcceptedPendingConfirmation, JoinRequestStatusConfirmed, JoinRequestStatusRejected, JoinRequestStatusWithdrawn, JoinRequestStatusExpired:
+		return true
+	}
+	return false
+}
+
+func (e JoinRequestStatus) String() string {
+	return string(e)
+}
+
+func (e *JoinRequestStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = JoinRequestStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid JoinRequestStatus", str)
+	}
+	return nil
+}
+
+func (e JoinRequestStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *JoinRequestStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e JoinRequestStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type ProjectApprovalState string
+
+const (
+	ProjectApprovalStateUnverified           ProjectApprovalState = "UNVERIFIED"
+	ProjectApprovalStateSubmittedForApproval ProjectApprovalState = "SUBMITTED_FOR_APPROVAL"
+	ProjectApprovalStateProfessorApproved    ProjectApprovalState = "PROFESSOR_APPROVED"
+	ProjectApprovalStateChangesRequested     ProjectApprovalState = "CHANGES_REQUESTED"
+)
+
+var AllProjectApprovalState = []ProjectApprovalState{
+	ProjectApprovalStateUnverified,
+	ProjectApprovalStateSubmittedForApproval,
+	ProjectApprovalStateProfessorApproved,
+	ProjectApprovalStateChangesRequested,
+}
+
+func (e ProjectApprovalState) IsValid() bool {
+	switch e {
+	case ProjectApprovalStateUnverified, ProjectApprovalStateSubmittedForApproval, ProjectApprovalStateProfessorApproved, ProjectApprovalStateChangesRequested:
+		return true
+	}
+	return false
+}
+
+func (e ProjectApprovalState) String() string {
+	return string(e)
+}
+
+func (e *ProjectApprovalState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ProjectApprovalState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ProjectApprovalState", str)
+	}
+	return nil
+}
+
+func (e ProjectApprovalState) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ProjectApprovalState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ProjectApprovalState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type ProjectLifecycleState string
+
+const (
+	ProjectLifecycleStateDraft     ProjectLifecycleState = "DRAFT"
+	ProjectLifecycleStateOpen      ProjectLifecycleState = "OPEN"
+	ProjectLifecycleStateReviewing ProjectLifecycleState = "REVIEWING"
+	ProjectLifecycleStateOfferSent ProjectLifecycleState = "OFFER_SENT"
+	ProjectLifecycleStateMatched   ProjectLifecycleState = "MATCHED"
+	ProjectLifecycleStateClosed    ProjectLifecycleState = "CLOSED"
+	ProjectLifecycleStateArchived  ProjectLifecycleState = "ARCHIVED"
+)
+
+var AllProjectLifecycleState = []ProjectLifecycleState{
+	ProjectLifecycleStateDraft,
+	ProjectLifecycleStateOpen,
+	ProjectLifecycleStateReviewing,
+	ProjectLifecycleStateOfferSent,
+	ProjectLifecycleStateMatched,
+	ProjectLifecycleStateClosed,
+	ProjectLifecycleStateArchived,
+}
+
+func (e ProjectLifecycleState) IsValid() bool {
+	switch e {
+	case ProjectLifecycleStateDraft, ProjectLifecycleStateOpen, ProjectLifecycleStateReviewing, ProjectLifecycleStateOfferSent, ProjectLifecycleStateMatched, ProjectLifecycleStateClosed, ProjectLifecycleStateArchived:
+		return true
+	}
+	return false
+}
+
+func (e ProjectLifecycleState) String() string {
+	return string(e)
+}
+
+func (e *ProjectLifecycleState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ProjectLifecycleState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ProjectLifecycleState", str)
+	}
+	return nil
+}
+
+func (e ProjectLifecycleState) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ProjectLifecycleState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ProjectLifecycleState) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil
@@ -306,6 +663,248 @@ func (e ProjectStatus) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+type ResumeVisibility string
+
+const (
+	ResumeVisibilityPrivate                    ResumeVisibility = "PRIVATE"
+	ResumeVisibilityTeamLeads                  ResumeVisibility = "TEAM_LEADS"
+	ResumeVisibilityProjectOwners              ResumeVisibility = "PROJECT_OWNERS"
+	ResumeVisibilityProjectOwnersAndProfessors ResumeVisibility = "PROJECT_OWNERS_AND_PROFESSORS"
+	ResumeVisibilityPublic                     ResumeVisibility = "PUBLIC"
+)
+
+var AllResumeVisibility = []ResumeVisibility{
+	ResumeVisibilityPrivate,
+	ResumeVisibilityTeamLeads,
+	ResumeVisibilityProjectOwners,
+	ResumeVisibilityProjectOwnersAndProfessors,
+	ResumeVisibilityPublic,
+}
+
+func (e ResumeVisibility) IsValid() bool {
+	switch e {
+	case ResumeVisibilityPrivate, ResumeVisibilityTeamLeads, ResumeVisibilityProjectOwners, ResumeVisibilityProjectOwnersAndProfessors, ResumeVisibilityPublic:
+		return true
+	}
+	return false
+}
+
+func (e ResumeVisibility) String() string {
+	return string(e)
+}
+
+func (e *ResumeVisibility) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ResumeVisibility(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ResumeVisibility", str)
+	}
+	return nil
+}
+
+func (e ResumeVisibility) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ResumeVisibility) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ResumeVisibility) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type TeamCapstoneState string
+
+const (
+	TeamCapstoneStateForming       TeamCapstoneState = "FORMING"
+	TeamCapstoneStateApplying      TeamCapstoneState = "APPLYING"
+	TeamCapstoneStateOfferReceived TeamCapstoneState = "OFFER_RECEIVED"
+	TeamCapstoneStateMatched       TeamCapstoneState = "MATCHED"
+	TeamCapstoneStateClosed        TeamCapstoneState = "CLOSED"
+)
+
+var AllTeamCapstoneState = []TeamCapstoneState{
+	TeamCapstoneStateForming,
+	TeamCapstoneStateApplying,
+	TeamCapstoneStateOfferReceived,
+	TeamCapstoneStateMatched,
+	TeamCapstoneStateClosed,
+}
+
+func (e TeamCapstoneState) IsValid() bool {
+	switch e {
+	case TeamCapstoneStateForming, TeamCapstoneStateApplying, TeamCapstoneStateOfferReceived, TeamCapstoneStateMatched, TeamCapstoneStateClosed:
+		return true
+	}
+	return false
+}
+
+func (e TeamCapstoneState) String() string {
+	return string(e)
+}
+
+func (e *TeamCapstoneState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = TeamCapstoneState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid TeamCapstoneState", str)
+	}
+	return nil
+}
+
+func (e TeamCapstoneState) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *TeamCapstoneState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e TeamCapstoneState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type TeamInvitationStatus string
+
+const (
+	TeamInvitationStatusPending   TeamInvitationStatus = "PENDING"
+	TeamInvitationStatusAccepted  TeamInvitationStatus = "ACCEPTED"
+	TeamInvitationStatusDeclined  TeamInvitationStatus = "DECLINED"
+	TeamInvitationStatusWithdrawn TeamInvitationStatus = "WITHDRAWN"
+	TeamInvitationStatusExpired   TeamInvitationStatus = "EXPIRED"
+)
+
+var AllTeamInvitationStatus = []TeamInvitationStatus{
+	TeamInvitationStatusPending,
+	TeamInvitationStatusAccepted,
+	TeamInvitationStatusDeclined,
+	TeamInvitationStatusWithdrawn,
+	TeamInvitationStatusExpired,
+}
+
+func (e TeamInvitationStatus) IsValid() bool {
+	switch e {
+	case TeamInvitationStatusPending, TeamInvitationStatusAccepted, TeamInvitationStatusDeclined, TeamInvitationStatusWithdrawn, TeamInvitationStatusExpired:
+		return true
+	}
+	return false
+}
+
+func (e TeamInvitationStatus) String() string {
+	return string(e)
+}
+
+func (e *TeamInvitationStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = TeamInvitationStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid TeamInvitationStatus", str)
+	}
+	return nil
+}
+
+func (e TeamInvitationStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *TeamInvitationStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e TeamInvitationStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type TeamRecruitingState string
+
+const (
+	TeamRecruitingStateRecruiting TeamRecruitingState = "RECRUITING"
+	TeamRecruitingStatePaused     TeamRecruitingState = "PAUSED"
+	TeamRecruitingStateFull       TeamRecruitingState = "FULL"
+	TeamRecruitingStateHidden     TeamRecruitingState = "HIDDEN"
+)
+
+var AllTeamRecruitingState = []TeamRecruitingState{
+	TeamRecruitingStateRecruiting,
+	TeamRecruitingStatePaused,
+	TeamRecruitingStateFull,
+	TeamRecruitingStateHidden,
+}
+
+func (e TeamRecruitingState) IsValid() bool {
+	switch e {
+	case TeamRecruitingStateRecruiting, TeamRecruitingStatePaused, TeamRecruitingStateFull, TeamRecruitingStateHidden:
+		return true
+	}
+	return false
+}
+
+func (e TeamRecruitingState) String() string {
+	return string(e)
+}
+
+func (e *TeamRecruitingState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = TeamRecruitingState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid TeamRecruitingState", str)
+	}
+	return nil
+}
+
+func (e TeamRecruitingState) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *TeamRecruitingState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e TeamRecruitingState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 type TeamRole string
 
 const (
@@ -358,6 +957,61 @@ func (e *TeamRole) UnmarshalJSON(b []byte) error {
 }
 
 func (e TeamRole) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type TeamVisibility string
+
+const (
+	TeamVisibilityVisible TeamVisibility = "VISIBLE"
+	TeamVisibilityHidden  TeamVisibility = "HIDDEN"
+)
+
+var AllTeamVisibility = []TeamVisibility{
+	TeamVisibilityVisible,
+	TeamVisibilityHidden,
+}
+
+func (e TeamVisibility) IsValid() bool {
+	switch e {
+	case TeamVisibilityVisible, TeamVisibilityHidden:
+		return true
+	}
+	return false
+}
+
+func (e TeamVisibility) String() string {
+	return string(e)
+}
+
+func (e *TeamVisibility) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = TeamVisibility(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid TeamVisibility", str)
+	}
+	return nil
+}
+
+func (e TeamVisibility) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *TeamVisibility) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e TeamVisibility) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

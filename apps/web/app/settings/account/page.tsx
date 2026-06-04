@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Modal } from "@/components/ui";
-import { AUTH_TOKEN_KEY, getAuthToken, graphqlRequest } from "@/lib/graphql";
+import { AUTH_TOKEN_KEY, getAuthToken, graphqlRequest, userFacingError } from "@/lib/graphql";
 import { ME_QUERY } from "@/lib/queries";
 import type { User } from "@/types/domain";
 
@@ -13,6 +13,7 @@ export default function AccountSettingsPage() {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const checkUser = async () => {
@@ -26,7 +27,7 @@ export default function AccountSettingsPage() {
         const res = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, activeToken);
         setMe(res.me);
       } catch (err) {
-        console.warn("Unable to fetch me query for account settings", err);
+        setNotice(userFacingError(err));
       } finally {
         setLoading(false);
       }
@@ -36,6 +37,7 @@ export default function AccountSettingsPage() {
 
   const handleDeleteAccount = async () => {
     setDeleting(true);
+    setNotice(null);
     try {
       const activeToken = getAuthToken();
       if (me?.id) {
@@ -45,13 +47,13 @@ export default function AccountSettingsPage() {
           activeToken
         );
       }
-    } catch (err) {
-      console.warn("Account delete mutation failed or simulated", err);
-    } finally {
       localStorage.removeItem(AUTH_TOKEN_KEY);
+      router.push("/");
+    } catch (err) {
+      setNotice(userFacingError(err));
+    } finally {
       setDeleting(false);
       setIsDeleteOpen(false);
-      router.push("/");
     }
   };
 
@@ -67,6 +69,11 @@ export default function AccountSettingsPage() {
       </div>
 
       <Section title="Active Neon Auth Session">
+        {notice && (
+          <div className="mb-3 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-300">
+            {notice}
+          </div>
+        )}
         <div className="space-y-3">
           <p className="text-xs text-stone-500 leading-relaxed">
             Your active browser session utilizes the Neon Auth bearer JWT listed below to validate operations with the GraphQL service.

@@ -2,7 +2,7 @@
 import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Combobox } from "@/components/ui";
-import { useGraphQL, getAuthToken, graphqlRequest } from "@/lib/graphql";
+import { useGraphQL, getAuthToken, graphqlRequest, userFacingError } from "@/lib/graphql";
 import { PROJECT_QUERY } from "@/lib/queries";
 import type { Project } from "@/types/domain";
 
@@ -63,8 +63,7 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
       );
       setNotice("Project updated successfully. Applicants notified of material changes.");
     } catch (err) {
-      console.warn("UpdateProject failed, updating mock state", err);
-      setNotice("Project updated (dev simulation active).");
+      setNotice(userFacingError(err));
     } finally {
       setSaving(false);
     }

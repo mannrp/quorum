@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -194,12 +195,53 @@ func (r *Resolver) joinRequest(ctx context.Context, request db.TeamJoinRequest) 
 		return nil, err
 	}
 	return &model.TeamJoinRequest{
-		ID:        uuidString(request.ID),
-		Team:      mappedTeam,
-		User:      mappedUser,
-		Message:   textPointer(request.Message),
-		Status:    model.ApplicationStatus(request.Status),
-		CreatedAt: timeString(request.CreatedAt),
+		ID:          uuidString(request.ID),
+		Team:        mappedTeam,
+		User:        mappedUser,
+		Message:     textPointer(request.Message),
+		Status:      model.JoinRequestStatus(request.Status),
+		ExpiresAt:   timeStringPointer(request.ExpiresAt),
+		RespondedAt: timeStringPointer(request.RespondedAt),
+		ConfirmedAt: timeStringPointer(request.ConfirmedAt),
+		CreatedAt:   timeString(request.CreatedAt),
+	}, nil
+}
+
+func (r *Resolver) teamInvitation(ctx context.Context, invitation db.TeamInvitation) (*model.TeamInvitation, error) {
+	team, err := r.Queries.GetTeam(ctx, invitation.TeamID)
+	if err != nil {
+		return nil, err
+	}
+	invitedUser, err := r.Queries.GetUser(ctx, invitation.InvitedUserID)
+	if err != nil {
+		return nil, err
+	}
+	invitedBy, err := r.Queries.GetUser(ctx, invitation.InvitedBy)
+	if err != nil {
+		return nil, err
+	}
+	mappedTeam, err := r.shallowTeam(ctx, team)
+	if err != nil {
+		return nil, err
+	}
+	mappedUser, err := r.user(ctx, invitedUser)
+	if err != nil {
+		return nil, err
+	}
+	mappedBy, err := r.user(ctx, invitedBy)
+	if err != nil {
+		return nil, err
+	}
+	return &model.TeamInvitation{
+		ID:          uuidString(invitation.ID),
+		Team:        mappedTeam,
+		InvitedUser: mappedUser,
+		InvitedBy:   mappedBy,
+		Message:     textPointer(invitation.Message),
+		Status:      model.TeamInvitationStatus(invitation.Status),
+		ExpiresAt:   timeString(invitation.ExpiresAt),
+		RespondedAt: timeStringPointer(invitation.RespondedAt),
+		CreatedAt:   timeString(invitation.CreatedAt),
 	}, nil
 }
 
@@ -258,36 +300,114 @@ func (r *Resolver) message(ctx context.Context, message db.Message) (*model.Mess
 	}, nil
 }
 
-func (r *Resolver) requireTeamLead(ctx context.Context, teamID pgtype.UUID) error {
-	current, err := requireUser(ctx)
-	if err != nil {
-		return err
-	}
-	members, err := r.Queries.ListTeamMembers(ctx, teamID)
-	if err != nil {
-		return err
-	}
-	for _, member := range members {
-		if sameUUID(member.UserID, current.ID) && (member.Role == string(model.TeamRoleLead) || member.Role == string(model.TeamRoleCoLead)) {
-			return nil
+func (r *Resolver) deadline(ctx context.Context, deadline db.UniversalDeadline) (*model.Deadline, error) {
+	var updatedBy *model.User
+	if deadline.UpdatedBy.Valid {
+		user, err := r.Queries.GetUser(ctx, deadline.UpdatedBy)
+		if err == nil {
+			updatedBy, _ = r.shallowUser(ctx, user)
 		}
 	}
-	return errors.New("team lead access required")
+	return deadlineModel(deadline, updatedBy), nil
 }
 
-func (r *Resolver) requireProjectOwner(ctx context.Context, projectID pgtype.UUID) error {
-	current, err := requireUser(ctx)
+func (r *Resolver) requireAdmin(ctx context.Context) (db.User, error) {
+	current, err := requireActiveUser(ctx)
 	if err != nil {
-		return err
+		return db.User{}, err
 	}
-	project, err := r.Queries.GetProject(ctx, projectID)
+	isAdmin, err := r.Queries.IsAdmin(ctx, current.ID)
 	if err != nil {
-		return err
+		return db.User{}, err
 	}
-	if !sameUUID(project.OwnerID, current.ID) {
-		return errors.New("project owner access required")
+	if !isAdmin {
+		return db.User{}, errors.New("admin access required")
 	}
-	return nil
+	return current, nil
+}
+
+func (r *Resolver) audit(ctx context.Context, actorID pgtype.UUID, actionType string, targetType string, targetID pgtype.UUID, reason *string) error {
+	_, err := r.Queries.CreateAuditLog(ctx, db.CreateAuditLogParams{
+		ActorUserID:      actorID,
+		ActionType:       actionType,
+		TargetEntityType: targetType,
+		TargetEntityID:   targetID,
+		PreviousValue:    []byte("{}"),
+		NewValue:         []byte("{}"),
+		Reason:           text(reason),
+		Metadata:         []byte("{}"),
+	})
+	return err
+}
+
+func (r *mutationResolver) applyToProject(ctx context.Context, projectID string, teamID string, message *string, answers []byte) (*model.ProjectApplication, error) {
+	current, err := requireCompleteUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.requireDeadlineOpen(ctx); err != nil {
+		return nil, err
+	}
+	tid, err := uuid(teamID)
+	if err != nil {
+		return nil, err
+	}
+	pid, err := uuid(projectID)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.requireTeamLead(ctx, tid); err != nil {
+		return nil, err
+	}
+	if err := r.expireDueWorkflows(ctx, r.Queries); err != nil {
+		return nil, err
+	}
+	team, err := r.Queries.GetTeam(ctx, tid)
+	if err != nil {
+		return nil, err
+	}
+	if team.ArchivedAt.Valid || team.CapstoneState == string(model.TeamCapstoneStateClosed) || team.CapstoneState == string(model.TeamCapstoneStateMatched) {
+		return nil, errors.New("team is not eligible to apply")
+	}
+	project, err := r.Queries.GetProject(ctx, pid)
+	if err != nil {
+		return nil, err
+	}
+	if project.ArchivedAt.Valid || project.LifecycleState == string(model.ProjectLifecycleStateClosed) || project.LifecycleState == string(model.ProjectLifecycleStateArchived) || project.LifecycleState == string(model.ProjectLifecycleStateMatched) {
+		return nil, errors.New("project is not accepting applications")
+	}
+	if sameUUID(project.OwnerID, current.ID) {
+		return nil, errors.New("project owners cannot apply to their own project")
+	}
+	existing, err := r.Queries.GetProjectApplicationForTeamProject(ctx, db.GetProjectApplicationForTeamProjectParams{ProjectID: pid, TeamID: tid})
+	if err == nil {
+		if !terminalApplicationStatuses[existing.Status] {
+			return r.projectApplication(ctx, existing)
+		}
+		return nil, errors.New("team has already applied to this project")
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	var application db.ProjectApplication
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		application, err = q.ApplyToProject(ctx, db.ApplyToProjectParams{ProjectID: pid, TeamID: tid, ApplicantID: current.ID, Message: text(message), Answers: answers})
+		if err != nil {
+			return err
+		}
+		if err := q.UpdateTeamCapstoneState(ctx, db.UpdateTeamCapstoneStateParams{ID: tid, CapstoneState: string(model.TeamCapstoneStateApplying)}); err != nil {
+			return err
+		}
+		if _, err := q.UpdateProjectLifecycleState(ctx, db.UpdateProjectLifecycleStateParams{ID: pid, LifecycleState: string(model.ProjectLifecycleStateReviewing)}); err != nil {
+			return err
+		}
+		r.notifyUser(ctx, q, project.OwnerID, "PROJECT_APPLICATION_SUBMITTED", map[string]any{"applicationId": uuidString(application.ID), "projectId": uuidString(pid), "teamId": uuidString(tid)})
+		return r.auditChange(ctx, q, current.ID, "PROJECT_APPLICATION_SUBMITTED", "PROJECT_APPLICATION", application.ID, map[string]any{}, statusSnapshot(application.Status), nil)
+	}); err != nil {
+		return nil, err
+	}
+	return r.projectApplication(ctx, application)
 }
 
 func requireUser(ctx context.Context) (db.User, error) {
@@ -300,21 +420,29 @@ func requireUser(ctx context.Context) (db.User, error) {
 
 func userModel(user db.User, tags []*model.Tag) *model.User {
 	return &model.User{
-		ID:           uuidString(user.ID),
-		AuthUserID:   user.AuthUserID,
-		Username:     user.Username,
-		Email:        textPointer(user.Email),
-		FullName:     user.FullName,
-		Bio:          textPointer(user.Bio),
-		Discipline:   textPointer(user.Discipline),
-		University:   textPointer(user.University),
-		LinkedinURL:  textPointer(user.LinkedinUrl),
-		GithubURL:    textPointer(user.GithubUrl),
-		PortfolioURL: textPointer(user.PortfolioUrl),
-		ResumeURL:    textPointer(user.ResumeUrl),
-		AvatarURL:    textPointer(user.AvatarUrl),
-		Tags:         tags,
-		CreatedAt:    timeString(user.CreatedAt),
+		ID:                    uuidString(user.ID),
+		AuthUserID:            user.AuthUserID,
+		Username:              user.Username,
+		Email:                 textPointer(user.Email),
+		FullName:              user.FullName,
+		Bio:                   textPointer(user.Bio),
+		Discipline:            textPointer(user.Discipline),
+		University:            textPointer(user.University),
+		LinkedinURL:           textPointer(user.LinkedinUrl),
+		GithubURL:             textPointer(user.GithubUrl),
+		PortfolioURL:          textPointer(user.PortfolioUrl),
+		ResumeURL:             textPointer(user.ResumeUrl),
+		AvatarURL:             textPointer(user.AvatarUrl),
+		UserIntent:            user.UserIntent,
+		ResumeVisibility:      model.ResumeVisibility(user.ResumeVisibility),
+		Discord:               textPointer(user.Discord),
+		AvailabilityNote:      textPointer(user.AvailabilityNote),
+		PreferredProjectAreas: user.PreferredProjectAreas,
+		ProfileComplete:       user.ProfileComplete,
+		DeactivatedAt:         timeStringPointer(user.DeactivatedAt),
+		ArchivedAt:            timeStringPointer(user.ArchivedAt),
+		Tags:                  tags,
+		CreatedAt:             timeString(user.CreatedAt),
 	}
 }
 
@@ -324,46 +452,100 @@ func tagModel(tag db.Tag) *model.Tag {
 
 func teamModel(team db.Team, createdBy *model.User, members []*model.TeamMembership, project *model.Project) *model.Team {
 	return &model.Team{
-		ID:          uuidString(team.ID),
-		Name:        team.Name,
-		Description: textPointer(team.Description),
-		IsComplete:  team.IsComplete,
-		MaxSize:     int(team.MaxSize),
-		Discipline:  textPointer(team.Discipline),
-		Members:     members,
-		Project:     project,
-		CreatedBy:   createdBy,
-		CreatedAt:   timeString(team.CreatedAt),
+		ID:               uuidString(team.ID),
+		Name:             team.Name,
+		Description:      textPointer(team.Description),
+		IsComplete:       team.IsComplete,
+		MaxSize:          int(team.MaxSize),
+		Discipline:       textPointer(team.Discipline),
+		RecruitingState:  model.TeamRecruitingState(team.RecruitingState),
+		CapstoneState:    model.TeamCapstoneState(team.CapstoneState),
+		Visibility:       model.TeamVisibility(team.Visibility),
+		DiscordLink:      textPointer(team.DiscordLink),
+		ExistingSkills:   team.ExistingSkills,
+		NeededSkills:     team.NeededSkills,
+		ProjectInterests: team.ProjectInterests,
+		ArchivedAt:       timeStringPointer(team.ArchivedAt),
+		Permissions:      &model.TeamPermissions{},
+		Members:          members,
+		Project:          project,
+		CreatedBy:        createdBy,
+		CreatedAt:        timeString(team.CreatedAt),
 	}
 }
 
 func projectModel(project db.Project, owner *model.User, team *model.Team, applications []*model.ProjectApplication) *model.Project {
 	return &model.Project{
-		ID:           uuidString(project.ID),
-		Title:        project.Title,
-		Description:  project.Description,
-		Constraints:  textPointer(project.Constraints),
-		Disciplines:  project.Disciplines,
-		TeamSizeMin:  int(project.TeamSizeMin),
-		TeamSizeMax:  int(project.TeamSizeMax),
-		Status:       model.ProjectStatus(project.Status),
-		Owner:        owner,
-		Team:         team,
-		FileURL:      textPointer(project.FileUrl),
-		VideoURL:     textPointer(project.VideoUrl),
-		Applications: applications,
-		CreatedAt:    timeString(project.CreatedAt),
+		ID:                     uuidString(project.ID),
+		Title:                  project.Title,
+		Summary:                project.Summary,
+		Description:            project.Description,
+		Constraints:            textPointer(project.Constraints),
+		Disciplines:            project.Disciplines,
+		TeamSizeMin:            int(project.TeamSizeMin),
+		TeamSizeMax:            int(project.TeamSizeMax),
+		Status:                 model.ProjectStatus(project.Status),
+		LifecycleState:         model.ProjectLifecycleState(project.LifecycleState),
+		ApprovalState:          model.ProjectApprovalState(project.ApprovalState),
+		RequiredSkills:         project.RequiredSkills,
+		NiceToHaveSkills:       project.NiceToHaveSkills,
+		Deliverables:           textPointer(project.Deliverables),
+		Timeline:               textPointer(project.Timeline),
+		EvaluationCriteria:     textPointer(project.EvaluationCriteria),
+		ExternalResources:      project.ExternalResources,
+		OwnerContactPreference: textPointer(project.OwnerContactPreference),
+		ApplicationQuestions:   string(project.ApplicationQuestions),
+		ArchivedAt:             timeStringPointer(project.ArchivedAt),
+		Permissions:            &model.ProjectPermissions{},
+		Owner:                  owner,
+		Team:                   team,
+		FileURL:                textPointer(project.FileUrl),
+		VideoURL:               textPointer(project.VideoUrl),
+		Applications:           applications,
+		CreatedAt:              timeString(project.CreatedAt),
 	}
 }
 
 func projectApplicationModel(application db.ProjectApplication, project *model.Project, team *model.Team) *model.ProjectApplication {
 	return &model.ProjectApplication{
-		ID:        uuidString(application.ID),
-		Project:   project,
-		Team:      team,
-		Message:   textPointer(application.Message),
-		Status:    model.ApplicationStatus(application.Status),
-		CreatedAt: timeString(application.CreatedAt),
+		ID:               uuidString(application.ID),
+		Project:          project,
+		Team:             team,
+		Message:          textPointer(application.Message),
+		Answers:          string(application.Answers),
+		Status:           model.ApplicationStatus(application.Status),
+		ReviewMessage:    textPointer(application.ReviewMessage),
+		OfferMessage:     textPointer(application.OfferMessage),
+		TeamConfirmedAt:  timeStringPointer(application.TeamConfirmedAt),
+		OwnerConfirmedAt: timeStringPointer(application.OwnerConfirmedAt),
+		ExpiresAt:        timeStringPointer(application.ExpiresAt),
+		WithdrawnAt:      timeStringPointer(application.WithdrawnAt),
+		CreatedAt:        timeString(application.CreatedAt),
+	}
+}
+
+func deadlineModel(deadline db.UniversalDeadline, updatedBy *model.User) *model.Deadline {
+	return &model.Deadline{
+		ID:         deadline.ID,
+		DeadlineAt: timeString(deadline.DeadlineAt),
+		UpdatedBy:  updatedBy,
+		UpdatedAt:  timeString(deadline.UpdatedAt),
+	}
+}
+
+func auditLogModel(log db.AuditLog, actor *model.User) *model.AuditLog {
+	targetID := uuidStringPointer(log.TargetEntityID)
+	return &model.AuditLog{
+		ID:               uuidString(log.ID),
+		Actor:            actor,
+		ActionType:       log.ActionType,
+		TargetEntityType: log.TargetEntityType,
+		TargetEntityID:   targetID,
+		PreviousValue:    bytesPointer(log.PreviousValue),
+		NewValue:         bytesPointer(log.NewValue),
+		Reason:           textPointer(log.Reason),
+		Metadata:         string(log.Metadata),
+		CreatedAt:        timeString(log.CreatedAt),
 	}
 }
 
@@ -384,6 +566,10 @@ func text(value *string) pgtype.Text {
 	return pgtype.Text{String: *value, Valid: true}
 }
 
+func textString(value string) pgtype.Text {
+	return pgtype.Text{String: value, Valid: true}
+}
+
 func textPointer(value pgtype.Text) *string {
 	if !value.Valid {
 		return nil
@@ -398,11 +584,95 @@ func boolValue(value *bool) pgtype.Bool {
 	return pgtype.Bool{Bool: *value, Valid: true}
 }
 
+func pgtime(value time.Time) pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: value.UTC(), Valid: true}
+}
+
+func derefString(value *string, fallback string) string {
+	if value == nil {
+		return fallback
+	}
+	return *value
+}
+
+func derefBool(value *bool, fallback bool) bool {
+	if value == nil {
+		return fallback
+	}
+	return *value
+}
+
+func derefResumeVisibility(value *model.ResumeVisibility, fallback string) string {
+	if value == nil {
+		return fallback
+	}
+	return string(*value)
+}
+
+func derefTeamRecruiting(value *model.TeamRecruitingState, fallback string) string {
+	if value == nil {
+		return fallback
+	}
+	return string(*value)
+}
+
+func derefTeamVisibility(value *model.TeamVisibility, fallback string) string {
+	if value == nil {
+		return fallback
+	}
+	return string(*value)
+}
+
+func derefProjectLifecycle(value *model.ProjectLifecycleState, fallback string) string {
+	if value == nil {
+		return fallback
+	}
+	return string(*value)
+}
+
+func derefProjectApproval(value *model.ProjectApprovalState, fallback string) string {
+	if value == nil {
+		return fallback
+	}
+	return string(*value)
+}
+
+func profileComplete(input model.UpdateProfileInput) bool {
+	return input.FullName != "" &&
+		input.Bio != nil && *input.Bio != "" &&
+		input.Discipline != nil && *input.Discipline != "" &&
+		input.University != nil && *input.University != ""
+}
+
 func timeString(value pgtype.Timestamptz) string {
 	if !value.Valid {
 		return ""
 	}
 	return value.Time.UTC().Format("2006-01-02T15:04:05Z07:00")
+}
+
+func timeStringPointer(value pgtype.Timestamptz) *string {
+	if !value.Valid {
+		return nil
+	}
+	out := timeString(value)
+	return &out
+}
+
+func uuidStringPointer(value pgtype.UUID) *string {
+	if !value.Valid {
+		return nil
+	}
+	out := uuidString(value)
+	return &out
+}
+
+func bytesPointer(value []byte) *string {
+	if len(value) == 0 {
+		return nil
+	}
+	out := string(value)
+	return &out
 }
 
 func uuid(value string) (pgtype.UUID, error) {

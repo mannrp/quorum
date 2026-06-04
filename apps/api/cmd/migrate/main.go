@@ -100,7 +100,7 @@ func loadEnv(path string) error {
 		}
 		key = strings.TrimSpace(key)
 		value = strings.Trim(strings.TrimSpace(value), `"'`)
-		if key != "" {
+		if key != "" && os.Getenv(key) == "" {
 			_ = os.Setenv(key, value)
 		}
 	}

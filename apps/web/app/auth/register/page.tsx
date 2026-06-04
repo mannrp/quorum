@@ -2,12 +2,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useStackApp } from "@stackframe/stack";
 import { Section, Combobox } from "@/components/ui";
-import { graphqlRequest, setAuthToken } from "@/lib/graphql";
+import { graphqlRequest, userFacingError } from "@/lib/graphql";
+import { isStackConfigured, syncStackAccessToken } from "@/lib/stack";
 import type { User } from "@/types/domain";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const stackApp = useStackApp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -15,8 +18,6 @@ export default function RegisterPage() {
   const [discipline, setDiscipline] = useState("");
   const [university, setUniversity] = useState("Concordia");
   const [skills, setSkills] = useState<string[]>([]);
-  const [developerToken, setDeveloperToken] = useState("");
-  const [showDeveloperToken, setShowDeveloperToken] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [successProfile, setSuccessProfile] = useState<User | null>(null);
@@ -38,14 +39,21 @@ export default function RegisterPage() {
       return;
     }
 
-    // Generate a mock auth token
-    const mockToken = btoa(JSON.stringify({ email, username, fullName, role: "STUDENT", time: Date.now() }));
-    const activeToken = showDeveloperToken && developerToken ? developerToken : mockToken;
-    
-    setAuthToken(activeToken);
-
     try {
-      // Execute backend bootstrap profile
+      if (!isStackConfigured()) {
+        throw new Error("Stack Auth is not configured. Set NEXT_PUBLIC_STACK_PROJECT_ID and NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY.");
+      }
+      const signUp = await stackApp.signUpWithCredential({
+        email,
+        password,
+        noRedirect: true,
+        noVerificationCallback: true,
+      });
+      if (signUp.status === "error") {
+        throw signUp.error;
+      }
+      const activeToken = await syncStackAccessToken(stackApp);
+
       const result = await graphqlRequest<{ bootstrapProfile: User }>(
         `mutation Bootstrap($input: BootstrapProfileInput!) {
           bootstrapProfile(input: $input) { id username fullName discipline university }
@@ -54,7 +62,6 @@ export default function RegisterPage() {
         activeToken
       );
 
-      // Now add tags/skills if possible
       await graphqlRequest(
         `mutation UpdateSkills($input: UpdateProfileInput!) {
           updateProfile(input: $input) { id }
@@ -65,11 +72,10 @@ export default function RegisterPage() {
             discipline: result.bootstrapProfile.discipline,
             university: result.bootstrapProfile.university,
             bio: "Academically driven student looking to build a strong capstone foundation.",
-            // Mocking skills update by updating tags if schema matches, otherwise ignore
           }
         },
         activeToken
-      ).catch(() => null);
+      );
 
       setSuccessProfile(result.bootstrapProfile);
       setTimeout(() => {
@@ -77,34 +83,24 @@ export default function RegisterPage() {
       }, 1500);
 
     } catch (err) {
-      console.warn("GraphQL Bootstrap failed, utilizing local mocked profile bootstrap", err);
-      // Fallback local mock to allow developers to bypass API hurdles
-      const localProfile: User = {
-        id: "mock-student-bootstrap-id",
-        username,
-        fullName,
-        email,
-        discipline,
-        university,
-        tags: skills.map((s, idx) => ({ id: `skill-${idx}`, name: s, isPredefined: true }))
-      };
-      setSuccessProfile(localProfile);
-      setTimeout(() => {
-        router.push("/dashboard");
-      }, 1500);
+      setError(userFacingError(err));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSSORegister = (provider: string) => {
+  const handleSSORegister = async (provider: string) => {
+    setError(null);
     setLoading(true);
-    setTimeout(() => {
-      // Redirect to onboarding page to complete profile setup after SSO
-      const mockSSOToken = btoa(JSON.stringify({ email: `sso-reg@concordia.ca`, time: Date.now() }));
-      setAuthToken(mockSSOToken);
-      router.push("/onboarding");
-    }, 800);
+    try {
+      if (!isStackConfigured()) {
+        throw new Error("Stack Auth is not configured for OAuth signup.");
+      }
+      await stackApp.signInWithOAuth(provider, { returnTo: "/onboarding" });
+    } catch (err) {
+      setError(userFacingError(err));
+      setLoading(false);
+    }
   };
 
   return (
@@ -117,7 +113,7 @@ export default function RegisterPage() {
             <div className="col-span-full space-y-2">
               <button
                 type="button"
-                onClick={() => handleSSORegister("Concordia")}
+                onClick={() => setError("Concordia SSO is not configured for beta yet. Use email/password registration.")}
                 disabled={loading}
                 className="w-full inline-flex items-center justify-center gap-2.5 rounded-md border border-[#cbd5e1] dark:border-stone-800 bg-[#800020] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#680016] active:scale-[0.98] transition cursor-pointer"
               >
@@ -126,7 +122,7 @@ export default function RegisterPage() {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => handleSSORegister("Google")}
+                  onClick={() => void handleSSORegister("google")}
                   disabled={loading}
                   className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-stone-250 dark:border-stone-800 bg-white dark:bg-[#161a2b] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 hover:bg-stone-50 active:scale-[0.98] transition cursor-pointer"
                 >
@@ -134,7 +130,7 @@ export default function RegisterPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleSSORegister("GitHub")}
+                  onClick={() => void handleSSORegister("github")}
                   disabled={loading}
                   className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-stone-250 dark:border-stone-800 bg-stone-900 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-black active:scale-[0.98] transition cursor-pointer"
                 >
@@ -201,29 +197,6 @@ export default function RegisterPage() {
               Already have a token or account?{" "}
               <Link href="/auth/login" className="text-[#283593] font-bold hover:underline">Log in here</Link>
             </p>
-
-            {/* Developer options */}
-            <div className="col-span-full pt-4 border-t border-stone-200 dark:border-stone-850">
-              <button
-                type="button"
-                onClick={() => setShowDeveloperToken(!showDeveloperToken)}
-                className="text-[10px] font-bold uppercase tracking-wider text-stone-400 hover:text-stone-600 transition outline-none"
-              >
-                {showDeveloperToken ? "[-] Hide developer options" : "[+] Advanced token bootstrapping"}
-              </button>
-
-              {showDeveloperToken && (
-                <div className="space-y-2 mt-2">
-                  <label className="text-[9px] font-bold uppercase tracking-wider text-stone-400">Manual Bearer Token</label>
-                  <textarea
-                    value={developerToken}
-                    onChange={(e) => setDeveloperToken(e.target.value)}
-                    placeholder="Enter manual developer Neon Auth bearer token to bootstrap with..."
-                    className="input-field min-h-20 text-xs font-mono"
-                  />
-                </div>
-              )}
-            </div>
 
           </form>
         ) : (

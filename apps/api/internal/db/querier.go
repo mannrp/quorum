@@ -13,46 +13,85 @@ import (
 type Querier interface {
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (TeamMembership, error)
 	ApplyToProject(ctx context.Context, arg ApplyToProjectParams) (ProjectApplication, error)
+	ArchiveProject(ctx context.Context, id pgtype.UUID) error
+	ArchiveTeam(ctx context.Context, id pgtype.UUID) error
 	AssociateProject(ctx context.Context, arg AssociateProjectParams) (Team, error)
 	ClaimProject(ctx context.Context, arg ClaimProjectParams) (Project, error)
+	ConfirmJoinRequest(ctx context.Context, id pgtype.UUID) (TeamJoinRequest, error)
+	ConfirmProjectOfferByOwner(ctx context.Context, id pgtype.UUID) (ProjectApplication, error)
+	ConfirmProjectOfferByTeam(ctx context.Context, id pgtype.UUID) (ProjectApplication, error)
+	CountTeamCoLeads(ctx context.Context, teamID pgtype.UUID) (int32, error)
+	CountTeamMembers(ctx context.Context, teamID pgtype.UUID) (int32, error)
+	CountUnreadMessages(ctx context.Context, receiverID pgtype.UUID) (int32, error)
+	CountUnreadNotifications(ctx context.Context, userID pgtype.UUID) (int32, error)
+	CountUserTeams(ctx context.Context, userID pgtype.UUID) (int32, error)
+	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (AuditLog, error)
 	CreateJoinRequest(ctx context.Context, arg CreateJoinRequestParams) (TeamJoinRequest, error)
+	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
 	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
+	CreateTeamInvitation(ctx context.Context, arg CreateTeamInvitationParams) (TeamInvitation, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
-	DeleteProject(ctx context.Context, id pgtype.UUID) error
-	DeleteTeam(ctx context.Context, id pgtype.UUID) error
-	DeleteUser(ctx context.Context, id pgtype.UUID) error
+	DeactivateUser(ctx context.Context, id pgtype.UUID) error
+	ExpireDueJoinRequests(ctx context.Context, expiresAt pgtype.Timestamptz) error
+	ExpireDueProjectOffers(ctx context.Context, expiresAt pgtype.Timestamptz) error
+	ExpireDueTeamInvitations(ctx context.Context, expiresAt pgtype.Timestamptz) error
+	ExpireJoinRequest(ctx context.Context, id pgtype.UUID) (TeamJoinRequest, error)
+	ExpireOtherTeamInvitations(ctx context.Context, arg ExpireOtherTeamInvitationsParams) error
+	ExpireProjectOffer(ctx context.Context, id pgtype.UUID) (ProjectApplication, error)
+	ExpireTeamInvitation(ctx context.Context, id pgtype.UUID) (TeamInvitation, error)
 	GetJoinRequest(ctx context.Context, id pgtype.UUID) (TeamJoinRequest, error)
+	GetJoinRequestForUserTeam(ctx context.Context, arg GetJoinRequestForUserTeamParams) (TeamJoinRequest, error)
 	GetMessage(ctx context.Context, id pgtype.UUID) (Message, error)
 	GetNotification(ctx context.Context, id pgtype.UUID) (Notification, error)
 	GetProject(ctx context.Context, id pgtype.UUID) (Project, error)
 	GetProjectApplication(ctx context.Context, id pgtype.UUID) (ProjectApplication, error)
+	GetProjectApplicationForTeamProject(ctx context.Context, arg GetProjectApplicationForTeamProjectParams) (ProjectApplication, error)
 	GetTeam(ctx context.Context, id pgtype.UUID) (Team, error)
+	GetTeamInvitation(ctx context.Context, id pgtype.UUID) (TeamInvitation, error)
+	GetTeamInvitationForUserTeam(ctx context.Context, arg GetTeamInvitationForUserTeamParams) (TeamInvitation, error)
+	GetTeamMembership(ctx context.Context, arg GetTeamMembershipParams) (TeamMembership, error)
+	GetUniversalDeadline(ctx context.Context) (UniversalDeadline, error)
 	GetUser(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserByAuthID(ctx context.Context, authUserID string) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	IsAdmin(ctx context.Context, userID pgtype.UUID) (bool, error)
 	ListAdminUsers(ctx context.Context) ([]User, error)
+	ListAuditLogs(ctx context.Context, limit int32) ([]AuditLog, error)
 	ListInboxUsers(ctx context.Context, senderID pgtype.UUID) ([]User, error)
 	ListJoinRequestsForTeam(ctx context.Context, teamID pgtype.UUID) ([]ListJoinRequestsForTeamRow, error)
 	ListMessagesWithUser(ctx context.Context, arg ListMessagesWithUserParams) ([]Message, error)
 	ListNotifications(ctx context.Context, userID pgtype.UUID) ([]Notification, error)
 	ListProjectApplications(ctx context.Context, projectID pgtype.UUID) ([]ListProjectApplicationsRow, error)
 	ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error)
+	ListProjectsForOwner(ctx context.Context, ownerID pgtype.UUID) ([]Project, error)
+	ListTeamInvitationsForTeam(ctx context.Context, teamID pgtype.UUID) ([]TeamInvitation, error)
+	ListTeamInvitationsForUser(ctx context.Context, invitedUserID pgtype.UUID) ([]TeamInvitation, error)
 	ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]ListTeamMembersRow, error)
 	ListTeams(ctx context.Context, arg ListTeamsParams) ([]Team, error)
+	ListTeamsForUser(ctx context.Context, userID pgtype.UUID) ([]Team, error)
 	ListUserTags(ctx context.Context, userID pgtype.UUID) ([]Tag, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
-	MarkMessageRead(ctx context.Context, id pgtype.UUID) (Message, error)
-	MarkNotificationRead(ctx context.Context, id pgtype.UUID) (Notification, error)
+	MarkMessageRead(ctx context.Context, arg MarkMessageReadParams) (Message, error)
+	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) (Notification, error)
 	PromoteTeamMember(ctx context.Context, arg PromoteTeamMemberParams) (TeamMembership, error)
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
 	RespondToApplication(ctx context.Context, arg RespondToApplicationParams) (ProjectApplication, error)
 	RespondToJoinRequest(ctx context.Context, arg RespondToJoinRequestParams) (TeamJoinRequest, error)
+	RespondToTeamInvitation(ctx context.Context, arg RespondToTeamInvitationParams) (TeamInvitation, error)
 	SendMessage(ctx context.Context, arg SendMessageParams) (Message, error)
+	SendProjectOffer(ctx context.Context, arg SendProjectOfferParams) (ProjectApplication, error)
 	UpdateProfile(ctx context.Context, arg UpdateProfileParams) (User, error)
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
+	UpdateProjectApprovalState(ctx context.Context, arg UpdateProjectApprovalStateParams) (Project, error)
+	UpdateProjectLifecycleState(ctx context.Context, arg UpdateProjectLifecycleStateParams) (Project, error)
 	UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error)
+	UpdateTeamCapstoneState(ctx context.Context, arg UpdateTeamCapstoneStateParams) error
+	UpsertUniversalDeadline(ctx context.Context, arg UpsertUniversalDeadlineParams) (UniversalDeadline, error)
+	WithdrawApplication(ctx context.Context, id pgtype.UUID) (ProjectApplication, error)
+	WithdrawCompetingProjectApplications(ctx context.Context, arg WithdrawCompetingProjectApplicationsParams) error
+	WithdrawCompetingTeamApplications(ctx context.Context, arg WithdrawCompetingTeamApplicationsParams) error
+	WithdrawOtherJoinRequests(ctx context.Context, arg WithdrawOtherJoinRequestsParams) error
 }
 
 var _ Querier = (*Queries)(nil)

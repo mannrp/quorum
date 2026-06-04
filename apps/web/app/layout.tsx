@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Open_Sans, Inter } from "next/font/google";
+import { AppShell } from "@/components/app-shell";
+import { QuorumStackProvider } from "@/components/stack-auth-provider";
 import "./globals.css";
 
 const openSans = Open_Sans({
@@ -25,9 +27,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${openSans.variable} ${inter.variable}`}>
       <body>
-        <AppShell>{children}</AppShell>
+        <QuorumStackProvider>
+          <AppShell>{children}</AppShell>
+        </QuorumStackProvider>
       </body>
     </html>
   );
 }
-import { AppShell } from "@/components/app-shell";

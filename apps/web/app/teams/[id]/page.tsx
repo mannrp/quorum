@@ -2,7 +2,7 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { ActionButton, Section, Status, Badge, Modal } from "@/components/ui";
-import { getAuthToken, graphqlRequest, useGraphQL } from "@/lib/graphql";
+import { getAuthToken, graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { TEAM_QUERY } from "@/lib/queries";
 import type { Team, TeamRole, User } from "@/types/domain";
 
@@ -31,7 +31,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
         );
         if (res.me) setMe(res.me);
       } catch (err) {
-        console.warn("Unable to fetch session inside team detail page", err);
+        setNotice(userFacingError(err));
       }
     };
     void fetchMe();
@@ -51,7 +51,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
       setNotice("Join request successfully submitted!");
       setIsJoinOpen(false);
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Request failed");
+      setNotice(userFacingError(err));
     } finally {
       setSubmitting(false);
     }
@@ -71,7 +71,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
       setConfirmNotice(`Member successfully ${role === "CO_LEAD" ? "promoted to Co-Lead" : "demoted to Member"}.`);
       await reload();
     } catch (err) {
-      setConfirmNotice(err instanceof Error ? err.message : "Role modification failed");
+      setConfirmNotice(userFacingError(err));
     }
   };
 

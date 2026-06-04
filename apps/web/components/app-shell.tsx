@@ -2,8 +2,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useState, useEffect, useCallback } from "react";
-import { AUTH_TOKEN_KEY, getAuthToken, graphqlRequest } from "@/lib/graphql";
-import { ME_QUERY } from "@/lib/queries";
+import { AUTH_TOKEN_KEY, getAuthToken, graphqlRequest, userFacingError } from "@/lib/graphql";
+import { DASHBOARD_CONTEXT_QUERY, ME_QUERY } from "@/lib/queries";
 import type { User } from "@/types/domain";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -14,6 +14,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [unreadMsg, setUnreadMsg] = useState(0);
   const [unreadNotif, setUnreadNotif] = useState(0);
+  const [sessionError, setSessionError] = useState<string | null>(null);
 
   // Initialize theme from document class
   useEffect(() => {
@@ -35,34 +36,26 @@ export function AppShell({ children }: { children: ReactNode }) {
     const token = getAuthToken();
     if (!token) {
       setMe(null);
+      setSessionError(null);
       setLoading(false);
       return;
     }
     try {
+      setSessionError(null);
       const res = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, token);
       if (res.me) {
         setMe(res.me);
-        // Fetch unread messages & notifications counts
-        const notifRes = await graphqlRequest<{ myNotifications: { read: boolean }[] }>(
-          `query shellNotifs { myNotifications { read } }`,
-          {},
-          token
-        );
-        const msgRes = await graphqlRequest<{ myMessages: { read: boolean; receiver: { id: string } }[] }>(
-          `query shellMsgs { myMessages(withUser: "") { read receiver { id } } }`.replace('(withUser: "")', ''), // Fetch generic recent if supported, else fallback
-          {},
-          token
-        ).catch(() => ({ myMessages: [] }));
+        const dashboardRes = await graphqlRequest<{
+          dashboardContext: { unreadMessages: number; unreadNotifications: number };
+        }>(DASHBOARD_CONTEXT_QUERY, {}, token);
 
-        setUnreadNotif(notifRes.myNotifications.filter((n) => !n.read).length);
-        setUnreadMsg(
-          msgRes.myMessages.filter((m) => !m.read && m.receiver.id === res.me?.id).length || 2 // Dynamic fallback to show premium micro interaction
-        );
+        setUnreadNotif(dashboardRes.dashboardContext.unreadNotifications);
+        setUnreadMsg(dashboardRes.dashboardContext.unreadMessages);
       } else {
         setMe(null);
       }
     } catch (err) {
-      console.warn("Auth token invalid or session inactive", err);
+      setSessionError(userFacingError(err));
       setMe(null);
     } finally {
       setLoading(false);
@@ -167,6 +160,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </nav>
       </header>
+      {sessionError && (
+        <div className="mx-auto max-w-6xl px-4 pt-3">
+          <div className="rounded border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700 dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-300">
+            {sessionError}
+          </div>
+        </div>
+      )}
       
       {/* Mobile nav bar visible on smaller screens */}
       {me && (

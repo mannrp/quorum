@@ -8,14 +8,18 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/local/quorum/apps/api/internal/config"
+	apiserver "github.com/local/quorum/apps/api/internal/server"
 )
 
 type authUser struct {
@@ -40,6 +44,7 @@ type runner struct {
 	cfg       config.Config
 	client    *http.Client
 	apiURL    string
+	apiMode   string
 	authBase  string
 	origin    string
 	failures  []string
@@ -49,7 +54,7 @@ type runner struct {
 func main() {
 	var apiURL string
 	var runID string
-	flag.StringVar(&apiURL, "api", "http://localhost:8080/graphql", "GraphQL API URL")
+	flag.StringVar(&apiURL, "api", "", "GraphQL API URL; leave empty to run an in-process server")
 	flag.StringVar(&runID, "run-id", time.Now().UTC().Format("20060102T150405Z"), "unique run id")
 	flag.Parse()
 
@@ -66,10 +71,28 @@ func main() {
 		fatal("config", fmt.Errorf("NEON_AUTH_JWKS_URL has unexpected shape: %s", cfg.NeonAuthJWKSURL))
 	}
 
+	var pool *pgxpool.Pool
+	var testServer *httptest.Server
+	apiMode := "external"
+	if strings.TrimSpace(apiURL) == "" {
+		pool, err = pgxpool.New(context.Background(), cfg.DatabaseURL)
+		if err != nil {
+			fatal("database pool", err)
+		}
+		defer pool.Close()
+
+		logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+		testServer = httptest.NewServer(apiserver.NewHandler(cfg, pool, logger))
+		defer testServer.Close()
+		apiURL = testServer.URL + "/graphql"
+		apiMode = "in-process"
+	}
+
 	r := &runner{
 		cfg:      cfg,
 		client:   &http.Client{Timeout: 15 * time.Second},
 		apiURL:   apiURL,
+		apiMode:  apiMode,
 		authBase: authBase,
 		origin:   cfg.AppOrigin,
 	}
@@ -84,13 +107,13 @@ func (r *runner) run(ctx context.Context, runID string) error {
 		Label:    "qa_admin_lead",
 		Email:    fmt.Sprintf("qa_admin_lead_%s@example.com", strings.ToLower(runID)),
 		Password: "QuorumE2E!20260602",
-		Username: "qa_admin_lead",
+		Username: "qa_admin_lead_" + strings.ToLower(runID),
 	}
 	owner := &authUser{
 		Label:    "qa_project_owner",
 		Email:    fmt.Sprintf("qa_project_owner_%s@example.com", strings.ToLower(runID)),
 		Password: "QuorumE2E!20260602",
-		Username: "qa_project_owner",
+		Username: "qa_project_owner_" + strings.ToLower(runID),
 	}
 
 	r.step("healthz", func() error {
@@ -130,18 +153,26 @@ func (r *runner) run(ctx context.Context, runID string) error {
 			if err != nil {
 				return err
 			}
+			if err := expectNoGraphErrors(resp); err == nil {
+				me := asMap(resp.Data["me"])
+				if me["id"] != nil {
+					user.UserID = fmt.Sprint(me["id"])
+				}
+				return nil
+			}
 			return expectGraphError(resp, "authentication required")
 		})
 		r.step(user.Label+" bootstrap profile", func() error {
 			resp, err := r.graphql(ctx, user.Token, `
 mutation Bootstrap($input: BootstrapProfileInput!) {
-  bootstrapProfile(input: $input) { id username email fullName discipline university }
+  bootstrapProfile(input: $input) { id username email fullName discipline university profileComplete }
 }`, map[string]any{"input": map[string]any{
 				"username":   user.Username,
 				"email":      user.Email,
 				"fullName":   strings.ReplaceAll(title(user.Label), "_", " "),
 				"discipline": "SOEN",
 				"university": "Concordia",
+				"bio":        "Automated E2E validation profile.",
 			}})
 			if err != nil {
 				return err
@@ -153,6 +184,29 @@ mutation Bootstrap($input: BootstrapProfileInput!) {
 			user.UserID = fmt.Sprint(created["id"])
 			if created["username"] != user.Username {
 				return fmt.Errorf("username = %v, want %s", created["username"], user.Username)
+			}
+			return nil
+		})
+		r.step(user.Label+" complete profile gate", func() error {
+			resp, err := r.graphql(ctx, user.Token, `
+mutation CompleteProfile($input: UpdateProfileInput!) {
+  updateProfile(input: $input) { id username profileComplete }
+}`, map[string]any{"input": map[string]any{
+				"fullName":              strings.ReplaceAll(title(user.Label), "_", " "),
+				"bio":                   "Automated E2E validation profile.",
+				"discipline":            "SOEN",
+				"university":            "Concordia",
+				"preferredProjectAreas": []string{"Distributed systems", "Product engineering"},
+			}})
+			if err != nil {
+				return err
+			}
+			if err := expectNoGraphErrors(resp); err != nil {
+				return err
+			}
+			updated := asMap(resp.Data["updateProfile"])
+			if updated["profileComplete"] != true {
+				return fmt.Errorf("profileComplete = %v, want true", updated["profileComplete"])
 			}
 			return nil
 		})
@@ -178,19 +232,19 @@ mutation Bootstrap($input: BootstrapProfileInput!) {
 		}
 		defer conn.Close(ctx)
 		_, err = conn.Exec(ctx, `
-INSERT INTO admin_users (user_id)
-SELECT id FROM users WHERE username = 'qa_admin_lead'
-ON CONFLICT DO NOTHING`)
+INSERT INTO admin_users (user_id) VALUES ($1)
+ON CONFLICT DO NOTHING`, admin.UserID)
 		return err
 	})
 
 	var teamID string
 	r.step("admin createTeam", func() error {
+		teamName := "E2E Team " + runID
 		resp, err := r.graphql(ctx, admin.Token, `
 mutation CreateTeam($input: CreateTeamInput!) {
   createTeam(input: $input) { id name members { role user { username } } }
 }`, map[string]any{"input": map[string]any{
-			"name":        "E2E Team " + runID,
+			"name":        teamName,
 			"description": "Created by automated Neon E2E validation.",
 			"discipline":  "SOEN",
 			"maxSize":     12,
@@ -199,6 +253,10 @@ mutation CreateTeam($input: CreateTeamInput!) {
 			return err
 		}
 		if err := expectNoGraphErrors(resp); err != nil {
+			if !graphHasError(resp, "you are already on a team") {
+				return err
+			}
+			teamID, err = r.findPublicID(ctx, "teams", "name", teamName)
 			return err
 		}
 		teamID = fmt.Sprint(asMap(resp.Data["createTeam"])["id"])
@@ -207,11 +265,12 @@ mutation CreateTeam($input: CreateTeamInput!) {
 
 	var projectID string
 	r.step("owner createProject", func() error {
+		projectTitle := "E2E Project " + runID
 		resp, err := r.graphql(ctx, owner.Token, `
 mutation CreateProject($input: CreateProjectInput!) {
   createProject(input: $input) { id title status owner { username } }
 }`, map[string]any{"input": map[string]any{
-			"title":       "E2E Project " + runID,
+			"title":       projectTitle,
 			"description": "Created by automated Neon E2E validation.",
 			"constraints": "Use the validation branch only.",
 			"disciplines": []string{"SOEN", "ELEC"},
@@ -222,6 +281,10 @@ mutation CreateProject($input: CreateProjectInput!) {
 			return err
 		}
 		if err := expectNoGraphErrors(resp); err != nil {
+			if !graphHasError(resp, "users may own only one project in v1") {
+				return err
+			}
+			projectID, err = r.findPublicID(ctx, "projects", "title", projectTitle)
 			return err
 		}
 		projectID = fmt.Sprint(asMap(resp.Data["createProject"])["id"])
@@ -455,7 +518,7 @@ func (r *runner) createAuthUser(ctx context.Context, user *authUser) error {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusConflict || resp.StatusCode == http.StatusBadRequest {
+	if resp.StatusCode == http.StatusConflict || resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusUnprocessableEntity {
 		resp, raw, err = r.postJSON(ctx, r.authBase+"/sign-in/email", "", map[string]any{
 			"email":       user.Email,
 			"password":    user.Password,
@@ -572,6 +635,36 @@ func (r *runner) getJSON(ctx context.Context, url string, target any, validate f
 	return validate(resp.StatusCode)
 }
 
+func (r *runner) findPublicID(ctx context.Context, collection string, field string, value string) (string, error) {
+	var query string
+	switch collection {
+	case "teams":
+		query = `query Find($search: String) { teams(search: $search) { id name } }`
+	case "projects":
+		query = `query Find($search: String) { projects(search: $search) { id title } }`
+	default:
+		return "", fmt.Errorf("unsupported collection %q", collection)
+	}
+	resp, err := r.graphql(ctx, "", query, map[string]any{"search": value})
+	if err != nil {
+		return "", err
+	}
+	if err := expectNoGraphErrors(resp); err != nil {
+		return "", err
+	}
+	for _, item := range asSlice(resp.Data[collection]) {
+		record := asMap(item)
+		if record[field] == value {
+			id := fmt.Sprint(record["id"])
+			if err := requireNonEmpty(collection+" id", id); err != nil {
+				return "", err
+			}
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("could not find %s where %s = %q", collection, field, value)
+}
+
 func (r *runner) writeTokens(runID string, users ...*authUser) error {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	dir := filepath.Join(root, ".planning")
@@ -582,6 +675,7 @@ func (r *runner) writeTokens(runID string, users ...*authUser) error {
 	payload := map[string]any{
 		"createdAt": time.Now().UTC().Format(time.RFC3339),
 		"apiURL":    r.apiURL,
+		"apiMode":   r.apiMode,
 		"authBase":  r.authBase,
 		"users":     users,
 	}
@@ -615,6 +709,15 @@ func expectGraphError(resp *graphResponse, want string) error {
 		}
 	}
 	return fmt.Errorf("missing expected graphql error %q; got %s", want, graphErrorText(resp))
+}
+
+func graphHasError(resp *graphResponse, want string) bool {
+	for _, err := range resp.Errors {
+		if strings.Contains(err.Message, want) {
+			return true
+		}
+	}
+	return false
 }
 
 func graphErrorText(resp *graphResponse) string {

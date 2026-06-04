@@ -2,13 +2,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useStackApp } from "@stackframe/stack";
 import { Section } from "@/components/ui";
-import { graphqlRequest, setAuthToken } from "@/lib/graphql";
+import { graphqlRequest, setAuthToken, userFacingError } from "@/lib/graphql";
 import { ME_QUERY } from "@/lib/queries";
+import { isStackConfigured, syncStackAccessToken } from "@/lib/stack";
 import type { User } from "@/types/domain";
 
 export default function LoginPage() {
   const router = useRouter();
+  const stackApp = useStackApp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [developerToken, setDeveloperToken] = useState("");
@@ -17,40 +20,34 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [successMe, setSuccessMe] = useState<User | null>(null);
 
+  const routeAfterToken = async (token: string) => {
+    const result = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, token);
+    if (result.me) {
+      setSuccessMe(result.me);
+      router.push("/dashboard");
+    } else {
+      router.push("/onboarding");
+    }
+  };
+
   const handleCredentialsLogin = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
     setLoading(true);
-    
-    // Simulate user login: Generate a client-side mock token if backend credentials endpoint isn't fully routed.
-    // Standard Neon Auth token maps to this mock identifier.
-    const mockToken = btoa(JSON.stringify({ email, role: "STUDENT", time: Date.now() }));
-    
+
     try {
-      setAuthToken(mockToken);
-      // Attempt to load profile from backend using mock token
-      const result = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, mockToken);
-      if (result.me) {
-        setSuccessMe(result.me);
-        router.push("/dashboard");
-      } else {
-        // If profile doesn't exist, redirect to onboarding with session active
-        router.push("/onboarding");
+      if (!isStackConfigured()) {
+        throw new Error("Stack Auth is not configured. Set NEXT_PUBLIC_STACK_PROJECT_ID and NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY.");
       }
+      const result = await stackApp.signInWithCredential({ email, password, noRedirect: true });
+      if (result.status === "error") {
+        throw result.error;
+      }
+      const token = await syncStackAccessToken(stackApp);
+      await routeAfterToken(token);
     } catch (err) {
-      // Fallback in case of absolute local database network disconnect: Mock a default user profile to allow full manual testing
-      console.warn("GraphQL verify failed, utilizing mocked session state for safety", err);
-      const fallbackMe: User = {
-        id: "mock-student-id",
-        username: email.split("@")[0] || "student",
-        fullName: "Jane Doe",
-        email: email,
-        discipline: "SOEN",
-        university: "Concordia",
-        tags: [{ id: "tag-1", name: "TypeScript", isPredefined: true }, { id: "tag-2", name: "React", isPredefined: true }, { id: "tag-3", name: "Next.js", isPredefined: true }],
-      };
-      setSuccessMe(fallbackMe);
-      router.push("/dashboard");
+      setAuthToken("");
+      setError(userFacingError(err));
     } finally {
       setLoading(false);
     }
@@ -62,28 +59,27 @@ export default function LoginPage() {
     setLoading(true);
     setAuthToken(developerToken);
     try {
-      const result = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, developerToken);
-      if (result.me) {
-        setSuccessMe(result.me);
-        router.push("/dashboard");
-      } else {
-        router.push("/onboarding");
-      }
+      await routeAfterToken(developerToken);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to verify token");
+      setAuthToken("");
+      setError(userFacingError(err));
     } finally {
       setLoading(false);
     }
   };
 
-  const triggerSSO = (provider: string) => {
+  const triggerSSO = async (provider: string) => {
+    setError(null);
     setLoading(true);
-    setTimeout(() => {
-      // Generate SSO token mockup
-      const mockSSOToken = btoa(JSON.stringify({ email: `sso-${provider}@concordia.ca`, provider, time: Date.now() }));
-      setAuthToken(mockSSOToken);
-      router.push("/dashboard");
-    }, 800);
+    try {
+      if (!isStackConfigured()) {
+        throw new Error("Stack Auth is not configured for OAuth sign-in.");
+      }
+      await stackApp.signInWithOAuth(provider, { returnTo: "/dashboard" });
+    } catch (err) {
+      setError(userFacingError(err));
+      setLoading(false);
+    }
   };
 
   return (
@@ -93,7 +89,7 @@ export default function LoginPage() {
           {/* SSO Integrations */}
           <div className="space-y-2">
             <button
-              onClick={() => triggerSSO("Concordia")}
+              onClick={() => setError("Concordia SSO is not configured for beta yet. Use email/password or a QA bearer token.")}
               disabled={loading}
               className="w-full inline-flex items-center justify-center gap-2.5 rounded-md border border-[#cbd5e1] dark:border-stone-800 bg-[#800020] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#680016] active:scale-[0.98] transition cursor-pointer"
             >
@@ -101,14 +97,14 @@ export default function LoginPage() {
             </button>
             <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={() => triggerSSO("Google")}
+                onClick={() => void triggerSSO("google")}
                 disabled={loading}
                 className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-stone-250 dark:border-stone-800 bg-white dark:bg-[#161a2b] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#1e253c] active:scale-[0.98] transition cursor-pointer"
               >
                 Google SSO
               </button>
               <button
-                onClick={() => triggerSSO("GitHub")}
+                onClick={() => void triggerSSO("github")}
                 disabled={loading}
                 className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-stone-250 dark:border-stone-800 bg-stone-900 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-black active:scale-[0.98] transition cursor-pointer"
               >

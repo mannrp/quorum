@@ -1,7 +1,8 @@
 "use client";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Status } from "@/components/ui";
-import { getAuthToken, graphqlRequest, useGraphQL } from "@/lib/graphql";
+import { getAuthToken, graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { NOTIFICATIONS_QUERY } from "@/lib/queries";
 import type { Notification } from "@/types/domain";
 
@@ -9,15 +10,17 @@ export default function NotificationsPage() {
   const router = useRouter();
   const { data, error, loading, reload } = useGraphQL<{ myNotifications: Notification[] }>(NOTIFICATIONS_QUERY, {}, { auth: true });
   const notifications = data?.myNotifications || [];
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const markRead = async (id: string, event: React.MouseEvent) => {
     event.stopPropagation(); // Avoid triggering route navigation
     try {
+      setActionError(null);
       const token = getAuthToken();
       await graphqlRequest(`mutation MarkNotification($id: ID!) { markNotificationRead(notificationId: $id) }`, { id }, token);
       await reload();
     } catch (err) {
-      console.warn("MarkNotificationRead failed, simulating locally", err);
+      setActionError(userFacingError(err));
     }
   };
 
@@ -72,6 +75,7 @@ export default function NotificationsPage() {
 
       {loading && <Section title="Loading"><p className="text-xs text-stone-500 animate-pulse">Syncing notices...</p></Section>}
       {error && <Section title="GraphQL Error"><p className="text-xs text-rose-500 font-bold">{error}</p></Section>}
+      {actionError && <Section title="Action Failed"><p className="text-xs text-rose-500 font-bold">{actionError}</p></Section>}
 
       <div className="space-y-3">
         {!loading && !error && notifications.map((notification) => (
