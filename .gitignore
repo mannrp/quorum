@@ -1,10 +1,14 @@
 node_modules
 .turbo
 .next
+.gocache/
+.playwright-mcp/
 dist
 *.log
 *.tsbuildinfo
+.planning/DESIGN*
 .planning/
+quorum-e2e-*.png
 .env
 .env.*
 !.env.example
