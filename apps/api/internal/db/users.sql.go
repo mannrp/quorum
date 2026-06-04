@@ -12,9 +12,9 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (auth_user_id, username, email, full_name, discipline, university)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, auth_user_id, username, email, full_name, bio, discipline, university, linkedin_url, github_url, portfolio_url, resume_url, avatar_url, created_at, updated_at
+INSERT INTO users (auth_user_id, username, email, full_name, discipline, university, user_intent, bio)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, auth_user_id, username, email, full_name, bio, discipline, university, linkedin_url, github_url, portfolio_url, resume_url, avatar_url, created_at, updated_at, user_intent, resume_visibility, discord, availability_note, preferred_project_areas, profile_complete, deactivated_at, archived_at
 `
 
 type CreateUserParams struct {
@@ -24,6 +24,8 @@ type CreateUserParams struct {
 	FullName   string      `json:"full_name"`
 	Discipline pgtype.Text `json:"discipline"`
 	University pgtype.Text `json:"university"`
+	UserIntent string      `json:"user_intent"`
+	Bio        pgtype.Text `json:"bio"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -34,6 +36,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.FullName,
 		arg.Discipline,
 		arg.University,
+		arg.UserIntent,
+		arg.Bio,
 	)
 	var i User
 	err := row.Scan(
@@ -52,21 +56,33 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.AvatarUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserIntent,
+		&i.ResumeVisibility,
+		&i.Discord,
+		&i.AvailabilityNote,
+		&i.PreferredProjectAreas,
+		&i.ProfileComplete,
+		&i.DeactivatedAt,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
 
-const deleteUser = `-- name: DeleteUser :exec
-DELETE FROM users WHERE id = $1
+const deactivateUser = `-- name: DeactivateUser :exec
+UPDATE users
+SET deactivated_at = now(),
+    archived_at = now(),
+    updated_at = now()
+WHERE id = $1
 `
 
-func (q *Queries) DeleteUser(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteUser, id)
+func (q *Queries) DeactivateUser(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deactivateUser, id)
 	return err
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, auth_user_id, username, email, full_name, bio, discipline, university, linkedin_url, github_url, portfolio_url, resume_url, avatar_url, created_at, updated_at FROM users WHERE id = $1
+SELECT id, auth_user_id, username, email, full_name, bio, discipline, university, linkedin_url, github_url, portfolio_url, resume_url, avatar_url, created_at, updated_at, user_intent, resume_visibility, discord, availability_note, preferred_project_areas, profile_complete, deactivated_at, archived_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -88,12 +104,20 @@ func (q *Queries) GetUser(ctx context.Context, id pgtype.UUID) (User, error) {
 		&i.AvatarUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserIntent,
+		&i.ResumeVisibility,
+		&i.Discord,
+		&i.AvailabilityNote,
+		&i.PreferredProjectAreas,
+		&i.ProfileComplete,
+		&i.DeactivatedAt,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
 
 const getUserByAuthID = `-- name: GetUserByAuthID :one
-SELECT id, auth_user_id, username, email, full_name, bio, discipline, university, linkedin_url, github_url, portfolio_url, resume_url, avatar_url, created_at, updated_at FROM users WHERE auth_user_id = $1
+SELECT id, auth_user_id, username, email, full_name, bio, discipline, university, linkedin_url, github_url, portfolio_url, resume_url, avatar_url, created_at, updated_at, user_intent, resume_visibility, discord, availability_note, preferred_project_areas, profile_complete, deactivated_at, archived_at FROM users WHERE auth_user_id = $1
 `
 
 func (q *Queries) GetUserByAuthID(ctx context.Context, authUserID string) (User, error) {
@@ -115,12 +139,20 @@ func (q *Queries) GetUserByAuthID(ctx context.Context, authUserID string) (User,
 		&i.AvatarUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserIntent,
+		&i.ResumeVisibility,
+		&i.Discord,
+		&i.AvailabilityNote,
+		&i.PreferredProjectAreas,
+		&i.ProfileComplete,
+		&i.DeactivatedAt,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, auth_user_id, username, email, full_name, bio, discipline, university, linkedin_url, github_url, portfolio_url, resume_url, avatar_url, created_at, updated_at FROM users WHERE username = $1
+SELECT id, auth_user_id, username, email, full_name, bio, discipline, university, linkedin_url, github_url, portfolio_url, resume_url, avatar_url, created_at, updated_at, user_intent, resume_visibility, discord, availability_note, preferred_project_areas, profile_complete, deactivated_at, archived_at FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -142,6 +174,14 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.AvatarUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserIntent,
+		&i.ResumeVisibility,
+		&i.Discord,
+		&i.AvailabilityNote,
+		&i.PreferredProjectAreas,
+		&i.ProfileComplete,
+		&i.DeactivatedAt,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
@@ -175,11 +215,13 @@ func (q *Queries) ListUserTags(ctx context.Context, userID pgtype.UUID) ([]Tag, 
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT DISTINCT u.id, u.auth_user_id, u.username, u.email, u.full_name, u.bio, u.discipline, u.university, u.linkedin_url, u.github_url, u.portfolio_url, u.resume_url, u.avatar_url, u.created_at, u.updated_at
+SELECT DISTINCT u.id, u.auth_user_id, u.username, u.email, u.full_name, u.bio, u.discipline, u.university, u.linkedin_url, u.github_url, u.portfolio_url, u.resume_url, u.avatar_url, u.created_at, u.updated_at, u.user_intent, u.resume_visibility, u.discord, u.availability_note, u.preferred_project_areas, u.profile_complete, u.deactivated_at, u.archived_at
 FROM users u
 LEFT JOIN user_tags ut ON ut.user_id = u.id
 LEFT JOIN tags t ON t.id = ut.tag_id
 WHERE ($1::text IS NULL OR u.discipline = $1::text)
+  AND u.deactivated_at IS NULL
+  AND u.archived_at IS NULL
   AND ($2::text IS NULL OR t.name = $2::text)
   AND (
     $3::text IS NULL
@@ -220,6 +262,14 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.AvatarUrl,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UserIntent,
+			&i.ResumeVisibility,
+			&i.Discord,
+			&i.AvailabilityNote,
+			&i.PreferredProjectAreas,
+			&i.ProfileComplete,
+			&i.DeactivatedAt,
+			&i.ArchivedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -242,22 +292,34 @@ SET full_name = $2,
     portfolio_url = $8,
     resume_url = $9,
     avatar_url = $10,
+    user_intent = $11,
+    resume_visibility = $12,
+    discord = $13,
+    availability_note = $14,
+    preferred_project_areas = $15,
+    profile_complete = $16,
     updated_at = now()
 WHERE id = $1
-RETURNING id, auth_user_id, username, email, full_name, bio, discipline, university, linkedin_url, github_url, portfolio_url, resume_url, avatar_url, created_at, updated_at
+RETURNING id, auth_user_id, username, email, full_name, bio, discipline, university, linkedin_url, github_url, portfolio_url, resume_url, avatar_url, created_at, updated_at, user_intent, resume_visibility, discord, availability_note, preferred_project_areas, profile_complete, deactivated_at, archived_at
 `
 
 type UpdateProfileParams struct {
-	ID           pgtype.UUID `json:"id"`
-	FullName     string      `json:"full_name"`
-	Bio          pgtype.Text `json:"bio"`
-	Discipline   pgtype.Text `json:"discipline"`
-	University   pgtype.Text `json:"university"`
-	LinkedinUrl  pgtype.Text `json:"linkedin_url"`
-	GithubUrl    pgtype.Text `json:"github_url"`
-	PortfolioUrl pgtype.Text `json:"portfolio_url"`
-	ResumeUrl    pgtype.Text `json:"resume_url"`
-	AvatarUrl    pgtype.Text `json:"avatar_url"`
+	ID                    pgtype.UUID `json:"id"`
+	FullName              string      `json:"full_name"`
+	Bio                   pgtype.Text `json:"bio"`
+	Discipline            pgtype.Text `json:"discipline"`
+	University            pgtype.Text `json:"university"`
+	LinkedinUrl           pgtype.Text `json:"linkedin_url"`
+	GithubUrl             pgtype.Text `json:"github_url"`
+	PortfolioUrl          pgtype.Text `json:"portfolio_url"`
+	ResumeUrl             pgtype.Text `json:"resume_url"`
+	AvatarUrl             pgtype.Text `json:"avatar_url"`
+	UserIntent            string      `json:"user_intent"`
+	ResumeVisibility      string      `json:"resume_visibility"`
+	Discord               pgtype.Text `json:"discord"`
+	AvailabilityNote      pgtype.Text `json:"availability_note"`
+	PreferredProjectAreas []string    `json:"preferred_project_areas"`
+	ProfileComplete       bool        `json:"profile_complete"`
 }
 
 func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (User, error) {
@@ -272,6 +334,12 @@ func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (U
 		arg.PortfolioUrl,
 		arg.ResumeUrl,
 		arg.AvatarUrl,
+		arg.UserIntent,
+		arg.ResumeVisibility,
+		arg.Discord,
+		arg.AvailabilityNote,
+		arg.PreferredProjectAreas,
+		arg.ProfileComplete,
 	)
 	var i User
 	err := row.Scan(
@@ -290,6 +358,14 @@ func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (U
 		&i.AvatarUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserIntent,
+		&i.ResumeVisibility,
+		&i.Discord,
+		&i.AvailabilityNote,
+		&i.PreferredProjectAreas,
+		&i.ProfileComplete,
+		&i.DeactivatedAt,
+		&i.ArchivedAt,
 	)
 	return i, err
 }

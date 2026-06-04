@@ -13,6 +13,19 @@ type AdminUser struct {
 	GrantedAt pgtype.Timestamptz `json:"granted_at"`
 }
 
+type AuditLog struct {
+	ID               pgtype.UUID        `json:"id"`
+	ActorUserID      pgtype.UUID        `json:"actor_user_id"`
+	ActionType       string             `json:"action_type"`
+	TargetEntityType string             `json:"target_entity_type"`
+	TargetEntityID   pgtype.UUID        `json:"target_entity_id"`
+	PreviousValue    []byte             `json:"previous_value"`
+	NewValue         []byte             `json:"new_value"`
+	Reason           pgtype.Text        `json:"reason"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
 type Message struct {
 	ID         pgtype.UUID        `json:"id"`
 	SenderID   pgtype.UUID        `json:"sender_id"`
@@ -32,29 +45,49 @@ type Notification struct {
 }
 
 type Project struct {
-	ID          pgtype.UUID        `json:"id"`
-	Title       string             `json:"title"`
-	Description string             `json:"description"`
-	Constraints pgtype.Text        `json:"constraints"`
-	Disciplines []string           `json:"disciplines"`
-	TeamSizeMin int32              `json:"team_size_min"`
-	TeamSizeMax int32              `json:"team_size_max"`
-	Status      string             `json:"status"`
-	OwnerID     pgtype.UUID        `json:"owner_id"`
-	TeamID      pgtype.UUID        `json:"team_id"`
-	FileUrl     pgtype.Text        `json:"file_url"`
-	VideoUrl    pgtype.Text        `json:"video_url"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID                     pgtype.UUID        `json:"id"`
+	Title                  string             `json:"title"`
+	Description            string             `json:"description"`
+	Constraints            pgtype.Text        `json:"constraints"`
+	Disciplines            []string           `json:"disciplines"`
+	TeamSizeMin            int32              `json:"team_size_min"`
+	TeamSizeMax            int32              `json:"team_size_max"`
+	Status                 string             `json:"status"`
+	OwnerID                pgtype.UUID        `json:"owner_id"`
+	TeamID                 pgtype.UUID        `json:"team_id"`
+	FileUrl                pgtype.Text        `json:"file_url"`
+	VideoUrl               pgtype.Text        `json:"video_url"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	Summary                string             `json:"summary"`
+	LifecycleState         string             `json:"lifecycle_state"`
+	ApprovalState          string             `json:"approval_state"`
+	RequiredSkills         []string           `json:"required_skills"`
+	NiceToHaveSkills       []string           `json:"nice_to_have_skills"`
+	Deliverables           pgtype.Text        `json:"deliverables"`
+	Timeline               pgtype.Text        `json:"timeline"`
+	EvaluationCriteria     pgtype.Text        `json:"evaluation_criteria"`
+	ExternalResources      []string           `json:"external_resources"`
+	OwnerContactPreference pgtype.Text        `json:"owner_contact_preference"`
+	ApplicationQuestions   []byte             `json:"application_questions"`
+	ArchivedAt             pgtype.Timestamptz `json:"archived_at"`
 }
 
 type ProjectApplication struct {
-	ID        pgtype.UUID        `json:"id"`
-	ProjectID pgtype.UUID        `json:"project_id"`
-	TeamID    pgtype.UUID        `json:"team_id"`
-	Message   pgtype.Text        `json:"message"`
-	Status    string             `json:"status"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID               pgtype.UUID        `json:"id"`
+	ProjectID        pgtype.UUID        `json:"project_id"`
+	TeamID           pgtype.UUID        `json:"team_id"`
+	Message          pgtype.Text        `json:"message"`
+	Status           string             `json:"status"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	ApplicantID      pgtype.UUID        `json:"applicant_id"`
+	Answers          []byte             `json:"answers"`
+	ReviewMessage    pgtype.Text        `json:"review_message"`
+	OfferMessage     pgtype.Text        `json:"offer_message"`
+	TeamConfirmedAt  pgtype.Timestamptz `json:"team_confirmed_at"`
+	OwnerConfirmedAt pgtype.Timestamptz `json:"owner_confirmed_at"`
+	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
+	WithdrawnAt      pgtype.Timestamptz `json:"withdrawn_at"`
 }
 
 type Tag struct {
@@ -64,25 +97,49 @@ type Tag struct {
 }
 
 type Team struct {
-	ID          pgtype.UUID        `json:"id"`
-	Name        string             `json:"name"`
-	Description pgtype.Text        `json:"description"`
-	IsComplete  bool               `json:"is_complete"`
-	MaxSize     int32              `json:"max_size"`
-	Discipline  pgtype.Text        `json:"discipline"`
-	CreatedBy   pgtype.UUID        `json:"created_by"`
-	ProjectID   pgtype.UUID        `json:"project_id"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID               pgtype.UUID        `json:"id"`
+	Name             string             `json:"name"`
+	Description      pgtype.Text        `json:"description"`
+	IsComplete       bool               `json:"is_complete"`
+	MaxSize          int32              `json:"max_size"`
+	Discipline       pgtype.Text        `json:"discipline"`
+	CreatedBy        pgtype.UUID        `json:"created_by"`
+	ProjectID        pgtype.UUID        `json:"project_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	RecruitingState  string             `json:"recruiting_state"`
+	CapstoneState    string             `json:"capstone_state"`
+	Visibility       string             `json:"visibility"`
+	DiscordLink      pgtype.Text        `json:"discord_link"`
+	ExistingSkills   []string           `json:"existing_skills"`
+	NeededSkills     []string           `json:"needed_skills"`
+	ProjectInterests []string           `json:"project_interests"`
+	ArchivedAt       pgtype.Timestamptz `json:"archived_at"`
+}
+
+type TeamInvitation struct {
+	ID            pgtype.UUID        `json:"id"`
+	TeamID        pgtype.UUID        `json:"team_id"`
+	InvitedUserID pgtype.UUID        `json:"invited_user_id"`
+	InvitedBy     pgtype.UUID        `json:"invited_by"`
+	Message       pgtype.Text        `json:"message"`
+	Status        string             `json:"status"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	RespondedAt   pgtype.Timestamptz `json:"responded_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
 type TeamJoinRequest struct {
-	ID        pgtype.UUID        `json:"id"`
-	TeamID    pgtype.UUID        `json:"team_id"`
-	UserID    pgtype.UUID        `json:"user_id"`
-	Message   pgtype.Text        `json:"message"`
-	Status    string             `json:"status"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID          pgtype.UUID        `json:"id"`
+	TeamID      pgtype.UUID        `json:"team_id"`
+	UserID      pgtype.UUID        `json:"user_id"`
+	Message     pgtype.Text        `json:"message"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	RespondedAt pgtype.Timestamptz `json:"responded_at"`
+	ConfirmedAt pgtype.Timestamptz `json:"confirmed_at"`
+	WithdrawnAt pgtype.Timestamptz `json:"withdrawn_at"`
 }
 
 type TeamMembership struct {
@@ -93,22 +150,37 @@ type TeamMembership struct {
 	JoinedAt pgtype.Timestamptz `json:"joined_at"`
 }
 
+type UniversalDeadline struct {
+	ID         string             `json:"id"`
+	DeadlineAt pgtype.Timestamptz `json:"deadline_at"`
+	UpdatedBy  pgtype.UUID        `json:"updated_by"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type User struct {
-	ID           pgtype.UUID        `json:"id"`
-	AuthUserID   string             `json:"auth_user_id"`
-	Username     string             `json:"username"`
-	Email        pgtype.Text        `json:"email"`
-	FullName     string             `json:"full_name"`
-	Bio          pgtype.Text        `json:"bio"`
-	Discipline   pgtype.Text        `json:"discipline"`
-	University   pgtype.Text        `json:"university"`
-	LinkedinUrl  pgtype.Text        `json:"linkedin_url"`
-	GithubUrl    pgtype.Text        `json:"github_url"`
-	PortfolioUrl pgtype.Text        `json:"portfolio_url"`
-	ResumeUrl    pgtype.Text        `json:"resume_url"`
-	AvatarUrl    pgtype.Text        `json:"avatar_url"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID                    pgtype.UUID        `json:"id"`
+	AuthUserID            string             `json:"auth_user_id"`
+	Username              string             `json:"username"`
+	Email                 pgtype.Text        `json:"email"`
+	FullName              string             `json:"full_name"`
+	Bio                   pgtype.Text        `json:"bio"`
+	Discipline            pgtype.Text        `json:"discipline"`
+	University            pgtype.Text        `json:"university"`
+	LinkedinUrl           pgtype.Text        `json:"linkedin_url"`
+	GithubUrl             pgtype.Text        `json:"github_url"`
+	PortfolioUrl          pgtype.Text        `json:"portfolio_url"`
+	ResumeUrl             pgtype.Text        `json:"resume_url"`
+	AvatarUrl             pgtype.Text        `json:"avatar_url"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	UserIntent            string             `json:"user_intent"`
+	ResumeVisibility      string             `json:"resume_visibility"`
+	Discord               pgtype.Text        `json:"discord"`
+	AvailabilityNote      pgtype.Text        `json:"availability_note"`
+	PreferredProjectAreas []string           `json:"preferred_project_areas"`
+	ProfileComplete       bool               `json:"profile_complete"`
+	DeactivatedAt         pgtype.Timestamptz `json:"deactivated_at"`
+	ArchivedAt            pgtype.Timestamptz `json:"archived_at"`
 }
 
 type UserTag struct {

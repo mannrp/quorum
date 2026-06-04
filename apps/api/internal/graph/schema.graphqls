@@ -12,6 +12,14 @@ type User {
   portfolioUrl: String
   resumeUrl: String
   avatarUrl: String
+  userIntent: String!
+  resumeVisibility: ResumeVisibility!
+  discord: String
+  availabilityNote: String
+  preferredProjectAreas: [String!]!
+  profileComplete: Boolean!
+  deactivatedAt: String
+  archivedAt: String
   tags: [Tag!]!
   createdAt: String!
 }
@@ -29,10 +37,27 @@ type Team {
   isComplete: Boolean!
   maxSize: Int!
   discipline: String
+  recruitingState: TeamRecruitingState!
+  capstoneState: TeamCapstoneState!
+  visibility: TeamVisibility!
+  discordLink: String
+  existingSkills: [String!]!
+  neededSkills: [String!]!
+  projectInterests: [String!]!
+  archivedAt: String
+  permissions: TeamPermissions!
   members: [TeamMembership!]!
   project: Project
   createdBy: User!
   createdAt: String!
+}
+
+type TeamPermissions {
+  canEdit: Boolean!
+  canManageMembers: Boolean!
+  canInviteMembers: Boolean!
+  canArchive: Boolean!
+  canApplyToProjects: Boolean!
 }
 
 type TeamMembership {
@@ -48,19 +73,47 @@ type TeamJoinRequest {
   team: Team!
   user: User!
   message: String
-  status: ApplicationStatus!
+  status: JoinRequestStatus!
+  expiresAt: String
+  respondedAt: String
+  confirmedAt: String
+  createdAt: String!
+}
+
+type TeamInvitation {
+  id: ID!
+  team: Team!
+  invitedUser: User!
+  invitedBy: User!
+  message: String
+  status: TeamInvitationStatus!
+  expiresAt: String!
+  respondedAt: String
   createdAt: String!
 }
 
 type Project {
   id: ID!
   title: String!
+  summary: String!
   description: String!
   constraints: String
   disciplines: [String!]!
   teamSizeMin: Int!
   teamSizeMax: Int!
   status: ProjectStatus!
+  lifecycleState: ProjectLifecycleState!
+  approvalState: ProjectApprovalState!
+  requiredSkills: [String!]!
+  niceToHaveSkills: [String!]!
+  deliverables: String
+  timeline: String
+  evaluationCriteria: String
+  externalResources: [String!]!
+  ownerContactPreference: String
+  applicationQuestions: String!
+  archivedAt: String
+  permissions: ProjectPermissions!
   owner: User!
   team: Team
   fileUrl: String
@@ -69,12 +122,28 @@ type Project {
   createdAt: String!
 }
 
+type ProjectPermissions {
+  canEdit: Boolean!
+  canReviewApplications: Boolean!
+  canSubmitForApproval: Boolean!
+  canApprove: Boolean!
+  canArchive: Boolean!
+}
+
 type ProjectApplication {
   id: ID!
   project: Project!
   team: Team!
+  applicant: User
   message: String
+  answers: String!
   status: ApplicationStatus!
+  reviewMessage: String
+  offerMessage: String
+  teamConfirmedAt: String
+  ownerConfirmedAt: String
+  expiresAt: String
+  withdrawnAt: String
   createdAt: String!
 }
 
@@ -95,6 +164,36 @@ type Notification {
   createdAt: String!
 }
 
+type Deadline {
+  id: ID!
+  deadlineAt: String!
+  updatedBy: User
+  updatedAt: String!
+}
+
+type AuditLog {
+  id: ID!
+  actor: User
+  actionType: String!
+  targetEntityType: String!
+  targetEntityId: ID
+  previousValue: String
+  newValue: String
+  reason: String
+  metadata: String!
+  createdAt: String!
+}
+
+type DashboardContext {
+  myTeams: [Team!]!
+  myProjects: [Project!]!
+  myInvitations: [TeamInvitation!]!
+  unreadMessages: Int!
+  unreadNotifications: Int!
+  universalDeadline: Deadline
+  isAdmin: Boolean!
+}
+
 type UploadSignature {
   url: String!
   key: String!
@@ -109,8 +208,16 @@ type UploadField {
 }
 
 enum TeamRole { LEAD CO_LEAD MEMBER }
+enum TeamRecruitingState { RECRUITING PAUSED FULL HIDDEN }
+enum TeamCapstoneState { FORMING APPLYING OFFER_RECEIVED MATCHED CLOSED }
+enum TeamVisibility { VISIBLE HIDDEN }
 enum ProjectStatus { OPEN IN_REVIEW CLAIMED CLOSED }
-enum ApplicationStatus { PENDING ACCEPTED REJECTED }
+enum ProjectLifecycleState { DRAFT OPEN REVIEWING OFFER_SENT MATCHED CLOSED ARCHIVED }
+enum ProjectApprovalState { UNVERIFIED SUBMITTED_FOR_APPROVAL PROFESSOR_APPROVED CHANGES_REQUESTED }
+enum ApplicationStatus { PENDING ACCEPTED REJECTED DRAFT SUBMITTED UNDER_REVIEW MESSAGE_SENT OFFER_SENT TEAM_CONFIRMED OWNER_CONFIRMED MATCHED WITHDRAWN EXPIRED }
+enum JoinRequestStatus { PENDING ACCEPTED ACCEPTED_PENDING_CONFIRMATION CONFIRMED REJECTED WITHDRAWN EXPIRED }
+enum TeamInvitationStatus { PENDING ACCEPTED DECLINED WITHDRAWN EXPIRED }
+enum ResumeVisibility { PRIVATE TEAM_LEADS PROJECT_OWNERS PROJECT_OWNERS_AND_PROFESSORS PUBLIC }
 enum UploadAssetKind { RESUME PROJECT_FILE AVATAR VIDEO }
 
 input UpdateProfileInput {
@@ -123,14 +230,22 @@ input UpdateProfileInput {
   portfolioUrl: String
   resumeUrl: String
   avatarUrl: String
+  userIntent: String
+  resumeVisibility: ResumeVisibility
+  discord: String
+  availabilityNote: String
+  preferredProjectAreas: [String!]
+  profileComplete: Boolean
 }
 
 input BootstrapProfileInput {
   username: String!
-  email: String
+  email: String!
   fullName: String!
-  discipline: String
-  university: String
+  discipline: String!
+  university: String!
+  userIntent: String = "STUDENT"
+  bio: String
 }
 
 input CreateTeamInput {
@@ -138,6 +253,12 @@ input CreateTeamInput {
   description: String
   discipline: String
   maxSize: Int = 12
+  recruitingState: TeamRecruitingState = RECRUITING
+  visibility: TeamVisibility = VISIBLE
+  discordLink: String
+  existingSkills: [String!] = []
+  neededSkills: [String!] = []
+  projectInterests: [String!] = []
 }
 
 input UpdateTeamInput {
@@ -146,10 +267,17 @@ input UpdateTeamInput {
   discipline: String
   maxSize: Int!
   isComplete: Boolean!
+  recruitingState: TeamRecruitingState = RECRUITING
+  visibility: TeamVisibility = VISIBLE
+  discordLink: String
+  existingSkills: [String!] = []
+  neededSkills: [String!] = []
+  projectInterests: [String!] = []
 }
 
 input CreateProjectInput {
   title: String!
+  summary: String
   description: String!
   constraints: String
   disciplines: [String!]!
@@ -157,18 +285,46 @@ input CreateProjectInput {
   teamSizeMax: Int = 12
   fileUrl: String
   videoUrl: String
+  lifecycleState: ProjectLifecycleState = DRAFT
+  approvalState: ProjectApprovalState = UNVERIFIED
+  requiredSkills: [String!] = []
+  niceToHaveSkills: [String!] = []
+  deliverables: String
+  timeline: String
+  evaluationCriteria: String
+  externalResources: [String!] = []
+  ownerContactPreference: String
+  applicationQuestions: String
 }
 
 input UpdateProjectInput {
   title: String!
+  summary: String!
   description: String!
   constraints: String
   disciplines: [String!]!
   teamSizeMin: Int!
   teamSizeMax: Int!
-  status: ProjectStatus!
+  status: ProjectStatus
+  lifecycleState: ProjectLifecycleState = OPEN
+  approvalState: ProjectApprovalState = UNVERIFIED
   fileUrl: String
   videoUrl: String
+  requiredSkills: [String!] = []
+  niceToHaveSkills: [String!] = []
+  deliverables: String
+  timeline: String
+  evaluationCriteria: String
+  externalResources: [String!] = []
+  ownerContactPreference: String
+  applicationQuestions: String
+}
+
+input ApplyToProjectInput {
+  projectId: ID!
+  teamId: ID!
+  message: String
+  answers: String
 }
 
 input SignUploadInput {
@@ -180,38 +336,58 @@ input SignUploadInput {
 
 type Query {
   me: User
+  dashboardContext: DashboardContext!
   user(username: String!): User
   users(discipline: String, tag: String, search: String): [User!]!
   team(id: ID!): Team
   teams(discipline: String, hasProject: Boolean, isComplete: Boolean, search: String): [Team!]!
   project(id: ID!): Project
-  projects(discipline: String, status: ProjectStatus, search: String): [Project!]!
+  projects(discipline: String, status: ProjectLifecycleState, search: String): [Project!]!
   myMessages(withUser: ID!): [Message!]!
   myInbox: [User!]!
   myNotifications: [Notification!]!
+  myTeamInvitations: [TeamInvitation!]!
+  universalDeadline: Deadline
+  auditLogs(limit: Int = 100): [AuditLog!]!
 }
 
 type Mutation {
   bootstrapProfile(input: BootstrapProfileInput!): User!
   updateProfile(input: UpdateProfileInput!): User!
+  deactivateAccount(reason: String): Boolean!
   createTeam(input: CreateTeamInput!): Team!
   updateTeam(id: ID!, input: UpdateTeamInput!): Team!
+  archiveTeam(id: ID!, reason: String): Boolean!
   deleteTeam(id: ID!): Boolean!
   removeMember(teamId: ID!, userId: ID!): Boolean!
+  leaveTeam(teamId: ID!): Boolean!
   promoteMember(teamId: ID!, userId: ID!, role: TeamRole!): TeamMembership!
   requestJoin(teamId: ID!, message: String): TeamJoinRequest!
-  respondToJoinRequest(requestId: ID!, accept: Boolean!): Boolean!
+  respondToJoinRequest(requestId: ID!, accept: Boolean!): TeamJoinRequest!
+  confirmJoinRequest(requestId: ID!): TeamJoinRequest!
+  inviteTeamMember(teamId: ID!, userId: ID!, message: String): TeamInvitation!
+  respondToTeamInvitation(invitationId: ID!, accept: Boolean!): TeamInvitation!
   createProject(input: CreateProjectInput!): Project!
   updateProject(id: ID!, input: UpdateProjectInput!): Project!
+  submitProjectForApproval(projectId: ID!): Project!
+  reviewProjectApproval(projectId: ID!, approvalState: ProjectApprovalState!, reason: String): Project!
+  archiveProject(id: ID!, reason: String): Boolean!
   deleteProject(id: ID!): Boolean!
+  applyToProjectInput(input: ApplyToProjectInput!): ProjectApplication!
   applyToProject(projectId: ID!, teamId: ID!, message: String): ProjectApplication!
   respondToApplication(applicationId: ID!, accept: Boolean!): Boolean!
+  rejectApplication(applicationId: ID!, message: String): ProjectApplication!
+  sendProjectOffer(applicationId: ID!, message: String): ProjectApplication!
+  confirmProjectOfferByTeam(applicationId: ID!): ProjectApplication!
+  confirmProjectOfferByOwner(applicationId: ID!): ProjectApplication!
+  withdrawApplication(applicationId: ID!): ProjectApplication!
   associateProject(teamId: ID!, projectId: ID!): Team!
   sendMessage(receiverId: ID!, body: String!): Message!
   markRead(messageId: ID!): Boolean!
   markNotificationRead(notificationId: ID!): Boolean!
+  setUniversalDeadline(deadlineAt: String!, reason: String): Deadline!
   signUpload(input: SignUploadInput!): UploadSignature!
-  removeUser(userId: ID!): Boolean!
-  removeTeam(teamId: ID!): Boolean!
-  removeProject(projectId: ID!): Boolean!
+  removeUser(userId: ID!, reason: String): Boolean!
+  removeTeam(teamId: ID!, reason: String): Boolean!
+  removeProject(projectId: ID!, reason: String): Boolean!
 }
