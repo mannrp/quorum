@@ -14,6 +14,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [unreadMsg, setUnreadMsg] = useState(0);
   const [unreadNotif, setUnreadNotif] = useState(0);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
   // Initialize theme from document class
@@ -36,6 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     const token = getAuthToken();
     if (!token) {
       setMe(null);
+      setIsAdmin(false);
       setSessionError(null);
       setLoading(false);
       return;
@@ -46,17 +48,20 @@ export function AppShell({ children }: { children: ReactNode }) {
       if (res.me) {
         setMe(res.me);
         const dashboardRes = await graphqlRequest<{
-          dashboardContext: { unreadMessages: number; unreadNotifications: number };
+          dashboardContext: { unreadMessages: number; unreadNotifications: number; isAdmin: boolean };
         }>(DASHBOARD_CONTEXT_QUERY, {}, token);
 
         setUnreadNotif(dashboardRes.dashboardContext.unreadNotifications);
         setUnreadMsg(dashboardRes.dashboardContext.unreadMessages);
+        setIsAdmin(dashboardRes.dashboardContext.isAdmin);
       } else {
         setMe(null);
+        setIsAdmin(false);
       }
     } catch (err) {
       setSessionError(userFacingError(err));
       setMe(null);
+      setIsAdmin(false);
     } finally {
       setLoading(false);
     }
@@ -70,6 +75,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const handleLogout = () => {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     setMe(null);
+    setIsAdmin(false);
     router.push("/");
   };
 
@@ -80,7 +86,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         { name: "Projects", href: "/projects" },
         { name: "Inbox", href: "/inbox", badge: unreadMsg },
         { name: "Notifications", href: "/notifications", badge: unreadNotif },
-        ...(me.email?.includes("admin") || me.username === "admin" ? [{ name: "Admin", href: "/admin" }] : []),
+        ...(isAdmin ? [{ name: "Admin", href: "/admin" }] : []),
       ]
     : [
         { name: "Home", href: "/" },

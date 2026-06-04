@@ -13,12 +13,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [me, setMe] = useState<User | null>(null);
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [isApplyOpen, setIsApplyOpen] = useState(false);
-  const [answers, setAnswers] = useState({
-    q1: "We are extremely interested in this project due to our experience in container orchestration.",
-    q2: "Our team has completed coursework in SOEN 387 and has hands-on React / Node.js skills.",
-    q3: "We will adopt a test-driven development flow and build an automated CI/CD pipeline.",
-    message: "We have complete discipline coverage for this project scope."
-  });
+  const [interest, setInterest] = useState("");
+  const [experience, setExperience] = useState("");
+  const [approach, setApproach] = useState("");
+  const [message, setMessage] = useState("");
+  const [customAnswers, setCustomAnswers] = useState<string[]>([]);
+  const [isReviewStep, setIsReviewStep] = useState(false);
 
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -64,11 +64,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
     const answerPayload = JSON.stringify({
       defaultQuestions: {
-        interest: answers.q1,
-        experience: answers.q2,
-        approach: answers.q3
+        interest,
+        experience,
+        approach
       },
       customQuestions: project.applicationQuestions || "",
+      customAnswers: customAnswers,
       submittedAt: new Date().toISOString()
     });
 
@@ -78,11 +79,18 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         `mutation Apply($input: ApplyToProjectInput!) {
           applyToProjectInput(input: $input) { id status }
         }`,
-        { input: { projectId: id, teamId: myTeam.id, message: answers.message, answers: answerPayload } },
+        { input: { projectId: id, teamId: myTeam.id, message, answers: answerPayload } },
         token
       );
       setNotice("Application submitted successfully.");
       setIsApplyOpen(false);
+      // reset form
+      setInterest("");
+      setExperience("");
+      setApproach("");
+      setMessage("");
+      setCustomAnswers([]);
+      setIsReviewStep(false);
       await reload();
     } catch (err) {
       setNotice(userFacingError(err));
@@ -198,6 +206,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   {project.owner.fullName}
                 </Link>
               </div>
+              {me && me.id !== project.owner.id && (
+                <div className="pt-2">
+                  <Link href={`/inbox?userId=${project.owner.id}`} className="btn-secondary w-full py-1.5 text-[11px] block text-center">
+                    ✉ Message Owner
+                  </Link>
+                </div>
+              )}
             </div>
           </Section>
 
@@ -246,61 +261,154 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             <button onClick={() => setIsApplyOpen(false)} className="btn-secondary py-1.5 px-3.5 text-xs mt-2">Dismiss</button>
           </div>
         ) : (
-          <form onSubmit={handleApplySubmit} className="space-y-4">
-            <div className="p-3 bg-indigo-50 dark:bg-indigo-950/20 text-[10px] border-l-4 border-l-[#283593] text-stone-600 dark:text-slate-350 leading-relaxed">
-              Applying on behalf of team: <strong>{myTeam.name}</strong> ({myTeam.maxSize} max slots).
-            </div>
+          (() => {
+            let customQuestionsList: string[] = [];
+            try {
+              if (project?.applicationQuestions) {
+                customQuestionsList = JSON.parse(project.applicationQuestions);
+                if (!Array.isArray(customQuestionsList)) {
+                  customQuestionsList = [];
+                }
+              }
+            } catch (e) {
+              if (project?.applicationQuestions?.trim()) {
+                customQuestionsList = [project.applicationQuestions];
+              }
+            }
 
-            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">1. Why is your team interested in this project?</label>
-                <textarea
-                  required
-                  value={answers.q1}
-                  onChange={(e) => setAnswers({ ...answers, q1: e.target.value })}
-                  className="input-field text-xs min-h-16"
-                />
-              </div>
+            const handleCustomAnswerChange = (idx: number, val: string) => {
+              setCustomAnswers((prev) => {
+                const next = [...prev];
+                next[idx] = val;
+                return next;
+              });
+            };
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">2. What relevant skills or experience does your team bring?</label>
-                <textarea
-                  required
-                  value={answers.q2}
-                  onChange={(e) => setAnswers({ ...answers, q2: e.target.value })}
-                  className="input-field text-xs min-h-16"
-                />
-              </div>
+            const handleNextStep = (e: React.FormEvent) => {
+              e.preventDefault();
+              setIsReviewStep(true);
+            };
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">3. How would your team approach the project?</label>
-                <textarea
-                  required
-                  value={answers.q3}
-                  onChange={(e) => setAnswers({ ...answers, q3: e.target.value })}
-                  className="input-field text-xs min-h-16"
-                />
-              </div>
+            if (isReviewStep) {
+              return (
+                <div className="space-y-4">
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/20 text-[10px] border-l-4 border-l-amber-500 text-stone-700 dark:text-slate-350 leading-relaxed font-semibold">
+                    Please review your application responses carefully before submitting.
+                  </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Additional Message to Sponsor</label>
-                <textarea
-                  value={answers.message}
-                  onChange={(e) => setAnswers({ ...answers, message: e.target.value })}
-                  className="input-field text-xs min-h-16"
-                />
-              </div>
-            </div>
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 text-xs">
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-stone-500 uppercase text-[9px]">1. Interest in Project</h4>
+                      <p className="bg-stone-50 dark:bg-[#111422] p-2.5 rounded border border-stone-200 dark:border-stone-850 whitespace-pre-wrap">{interest || "(Blank)"}</p>
+                    </div>
 
-            <div className="flex gap-2 justify-end pt-3 border-t border-stone-200 dark:border-stone-800">
-              <button type="button" onClick={() => setIsApplyOpen(false)} className="btn-secondary py-2 text-xs" disabled={submitting}>
-                Cancel
-              </button>
-              <button type="submit" className="btn-primary py-2 text-xs" disabled={submitting}>
-                {submitting ? "Submitting application..." : "Submit Claim Application"}
-              </button>
-            </div>
-          </form>
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-stone-500 uppercase text-[9px]">2. Team Skills & Experience</h4>
+                      <p className="bg-stone-50 dark:bg-[#111422] p-2.5 rounded border border-stone-200 dark:border-stone-850 whitespace-pre-wrap">{experience || "(Blank)"}</p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-stone-500 uppercase text-[9px]">3. Team Project Approach</h4>
+                      <p className="bg-stone-50 dark:bg-[#111422] p-2.5 rounded border border-stone-200 dark:border-stone-850 whitespace-pre-wrap">{approach || "(Blank)"}</p>
+                    </div>
+
+                    {customQuestionsList.map((q, idx) => (
+                      <div key={idx} className="space-y-1">
+                        <h4 className="font-bold text-stone-500 uppercase text-[9px]">Custom: {q}</h4>
+                        <p className="bg-stone-50 dark:bg-[#111422] p-2.5 rounded border border-stone-200 dark:border-stone-850 whitespace-pre-wrap">{customAnswers[idx] || "(Blank)"}</p>
+                      </div>
+                    ))}
+
+                    {message && (
+                      <div className="space-y-1">
+                        <h4 className="font-bold text-stone-500 uppercase text-[9px]">Additional Message</h4>
+                        <p className="bg-stone-50 dark:bg-[#111422] p-2.5 rounded border border-stone-200 dark:border-stone-850 whitespace-pre-wrap">{message}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 justify-end pt-3 border-t border-stone-200 dark:border-stone-800">
+                    <button type="button" onClick={() => setIsReviewStep(false)} className="btn-secondary py-2 text-xs" disabled={submitting}>
+                      Back to Edit
+                    </button>
+                    <button onClick={(e) => void handleApplySubmit(e)} className="btn-primary py-2 text-xs" disabled={submitting}>
+                      {submitting ? "Submitting Application..." : "Confirm & Submit Claims"}
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <form onSubmit={handleNextStep} className="space-y-4">
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-950/20 text-[10px] border-l-4 border-l-[#283593] text-stone-600 dark:text-slate-350 leading-relaxed">
+                  Applying on behalf of team: <strong>{myTeam.name}</strong> ({myTeam.maxSize} max slots).
+                </div>
+
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">1. Why is your team interested in this project?</label>
+                    <textarea
+                      required
+                      value={interest}
+                      onChange={(e) => setInterest(e.target.value)}
+                      className="input-field text-xs min-h-16"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">2. What relevant skills or experience does your team bring?</label>
+                    <textarea
+                      required
+                      value={experience}
+                      onChange={(e) => setExperience(e.target.value)}
+                      className="input-field text-xs min-h-16"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">3. How would your team approach the project?</label>
+                    <textarea
+                      required
+                      value={approach}
+                      onChange={(e) => setApproach(e.target.value)}
+                      className="input-field text-xs min-h-16"
+                    />
+                  </div>
+
+                  {customQuestionsList.map((q, idx) => (
+                    <div key={idx} className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Custom: {q}</label>
+                      <textarea
+                        required
+                        value={customAnswers[idx] || ""}
+                        onChange={(e) => handleCustomAnswerChange(idx, e.target.value)}
+                        className="input-field text-xs min-h-16"
+                      />
+                    </div>
+                  ))}
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Additional Message to Sponsor</label>
+                    <textarea
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      className="input-field text-xs min-h-16"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 justify-end pt-3 border-t border-stone-200 dark:border-stone-800">
+                  <button type="button" onClick={() => setIsApplyOpen(false)} className="btn-secondary py-2 text-xs" disabled={submitting}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-primary py-2 text-xs" disabled={submitting}>
+                    Continue to Review
+                  </button>
+                </div>
+              </form>
+            );
+          })()
         )}
       </Modal>
     </div>

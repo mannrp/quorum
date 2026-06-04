@@ -31,20 +31,10 @@ Implemented or partially implemented:
 
 Not complete:
 
-- Invitation accept/decline.
-- Join request review loading.
-- Accepted join request confirmation.
-- Project offer team confirmation.
-- Owner final match confirmation.
-- Team application tracking page.
-- Profile skills/intent/resume visibility persistence.
-- Team creation metadata persistence.
-- Project edit page correctness.
+- Join request review loading (Blocked: GraphQL schema lacks queries to retrieve team join requests).
+- Accepted join request confirmation (Blocked: GraphQL schema lacks queries to retrieve team join requests).
+- Profile skills/intent persistence (Blocked: GraphQL schema UpdateProfileInput lacks tags/intent fields).
 - Professor approval UI.
-- Permission-aware navigation based on backend permissions.
-- Confirmation modal consistency.
-- Deadline visibility and remaining-time UX.
-- Full empty/error/success states across all flows.
 
 ---
 

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Section, Status, Badge } from "@/components/ui";
+import { DeadlineDisplay } from "@/components/deadline-display";
 import { getAuthToken, graphqlRequest, userFacingError } from "@/lib/graphql";
 import { DASHBOARD_CONTEXT_QUERY, ME_QUERY } from "@/lib/queries";
 import type { User, Team, Project, ProjectApplication, Notification } from "@/types/domain";
@@ -37,6 +38,7 @@ export default function DashboardPage() {
   const [team, setTeam] = useState<Team | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [applications, setApplications] = useState<ProjectApplication[]>([]);
+  const [teamApps, setTeamApps] = useState<ProjectApplication[]>([]);
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [invitations, setInvitations] = useState<DashboardInvitation[]>([]);
   const [deadline, setDeadline] = useState<Deadline | null>(null);
@@ -79,6 +81,63 @@ export default function DashboardPage() {
       setInvitations(dashboardResult.dashboardContext.myInvitations);
       setDeadline(dashboardResult.dashboardContext.universalDeadline);
       setNotifs(dashboardResult.myNotifications.slice(0, 3));
+
+      // Fetch all projects to filter team's applications
+      const projectsRes = await graphqlRequest<{ projects: Project[] }>(
+        `query GetProjectsWithApplications {
+          projects {
+            id
+            title
+            summary
+            description
+            status
+            lifecycleState
+            owner {
+              id
+              fullName
+              username
+            }
+            applications {
+              id
+              status
+              message
+              answers
+              reviewMessage
+              offerMessage
+              expiresAt
+              teamConfirmedAt
+              ownerConfirmedAt
+              withdrawnAt
+              createdAt
+              team {
+                id
+                name
+              }
+            }
+          }
+        }`,
+        {},
+        token
+      );
+
+      if (primaryTeam && projectsRes.projects) {
+        const filteredApps: ProjectApplication[] = [];
+        for (const p of projectsRes.projects) {
+          if (p.applications) {
+            for (const app of p.applications) {
+              if (app.team && app.team.id === primaryTeam.id) {
+                filteredApps.push({
+                  ...app,
+                  project: p
+                });
+              }
+            }
+          }
+        }
+        setTeamApps(filteredApps);
+      } else {
+        setTeamApps([]);
+      }
 
     } catch (err) {
       setError(userFacingError(err));
@@ -123,7 +182,61 @@ export default function DashboardPage() {
     }
   };
 
+  const handleConfirmOffer = async (applicationId: string) => {
+    if (!window.confirm("Are you sure you want to confirm this project offer? Doing so indicates your team's agreement to match with this project.")) {
+      return;
+    }
+    setNotice(null);
+    setError(null);
+    try {
+      const token = getAuthToken();
+      await graphqlRequest(
+        `mutation ConfirmOffer($applicationId: ID!) {
+          confirmProjectOfferByTeam(applicationId: $applicationId) {
+            id
+            status
+            teamConfirmedAt
+          }
+        }`,
+        { applicationId },
+        token
+      );
+      setNotice("Offer confirmed by your team! Waiting for the project owner's final match confirmation.");
+      await fetchDashboardData();
+    } catch (err) {
+      setError(userFacingError(err));
+    }
+  };
+
+  const handleWithdrawApplication = async (applicationId: string) => {
+    if (!window.confirm("Are you sure you want to withdraw this project application?")) {
+      return;
+    }
+    setNotice(null);
+    setError(null);
+    try {
+      const token = getAuthToken();
+      await graphqlRequest(
+        `mutation WithdrawApp($applicationId: ID!) {
+          withdrawApplication(applicationId: $applicationId) {
+            id
+            status
+            withdrawnAt
+          }
+        }`,
+        { applicationId },
+        token
+      );
+      setNotice("Application successfully withdrawn.");
+      await fetchDashboardData();
+    } catch (err) {
+      setError(userFacingError(err));
+    }
+  };
+
   const deadlineDate = deadline ? new Date(deadline.deadlineAt) : null;
+  const myRoleOnTeam = team?.members.find((m) => m.user.id === me?.id)?.role;
+  const isLeadOrCoLead = myRoleOnTeam === "LEAD" || myRoleOnTeam === "CO_LEAD";
 
   if (loading) {
     return (
@@ -186,17 +299,12 @@ export default function DashboardPage() {
         <div className="space-y-6 md:col-span-1">
           {/* Deadlines */}
           <Section title="Academic Deadlines" variant="tall">
-            {deadlineDate ? (
-              <div className="p-3 border border-stone-250 dark:border-stone-850 rounded-lg space-y-1 bg-[#f8f9fa] dark:bg-[#111422]">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-stone-800 dark:text-slate-200">Universal Match Deadline</span>
-                  {deadlineDate.getTime() - Date.now() < 1000 * 60 * 60 * 24 * 7 && <span className="h-2 w-2 rounded-full bg-rose-500" />}
-                </div>
-                <div className="flex items-center justify-between text-[10px] text-stone-500">
-                  <span>{deadlineDate.toLocaleDateString()}</span>
-                  <span className="text-stone-400">Updated {new Date(deadline!.updatedAt).toLocaleDateString()}</span>
-                </div>
-              </div>
+            {deadline ? (
+              <DeadlineDisplay
+                deadlineAt={deadline.deadlineAt}
+                label="Universal Match Deadline"
+                consequenceText="All matching confirmations must occur before this timestamp."
+              />
             ) : (
               <p className="text-xs text-stone-500 italic">No universal deadline configured.</p>
             )}
@@ -208,15 +316,12 @@ export default function DashboardPage() {
               <div className="space-y-3">
                 {invitations.map((inv) => (
                   <div key={inv.id} className="p-3 border border-stone-250 dark:border-stone-850 rounded-lg space-y-2.5 bg-white dark:bg-[#161a2b]">
-                    <div className="space-y-0.5">
+                    <div className="space-y-2">
                       <div className="flex justify-between items-start">
-                        <span className="text-xs font-bold text-stone-800 dark:text-slate-200">{inv.team.name}</span>
-                        <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 px-1.5 py-0.5 rounded">
-                          {getRemainingTimeText(inv.expiresAt)}
-                        </span>
+                        <span className="text-xs font-bold text-stone-900 dark:text-slate-100">{inv.team.name}</span>
                       </div>
                       <p className="text-[10px] text-stone-500">Invited by {inv.invitedBy.fullName} - &quot;{inv.message || "No message"}&quot;</p>
-                      <p className="text-[9px] text-stone-400">Expires: {new Date(inv.expiresAt).toLocaleDateString()}</p>
+                      <DeadlineDisplay deadlineAt={inv.expiresAt} label="Invitation Expiration" />
                     </div>
                     <div className="flex gap-2">
                       <button className="btn-primary py-1 px-3 text-[9px] w-full" onClick={() => respondToInvitation(inv.id, true)}>Accept</button>
@@ -264,6 +369,73 @@ export default function DashboardPage() {
                   <Link href={`/teams/${team.id}/manage`} className="btn-secondary py-1.5 px-3 text-xs">
                     Manage Roster & Settings
                   </Link>
+                </div>
+
+                {/* Team Applications & Offers Sub-section */}
+                <div className="pt-4 border-t border-stone-200 dark:border-stone-800 space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-stone-400">Project Applications & Offers</h4>
+                  {teamApps.length > 0 ? (
+                    <div className="space-y-3">
+                      {teamApps.map((app) => {
+                        const hasOffer = app.status === "OFFER_SENT";
+                        const isLeadOrCoLead = myRoleOnTeam === "LEAD" || myRoleOnTeam === "CO_LEAD";
+                        return (
+                          <div key={app.id} className={`p-3 border rounded-lg space-y-2.5 ${hasOffer ? "bg-amber-50/50 dark:bg-amber-950/15 border-amber-250 dark:border-amber-900" : "bg-white dark:bg-[#161a2b] border-stone-250 dark:border-stone-850"}`}>
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h5 className="text-xs font-bold text-stone-900 dark:text-slate-100">{app.project?.title}</h5>
+                                <p className="text-[10px] text-stone-500">Sponsored by {app.project?.owner.fullName}</p>
+                              </div>
+                              <Status value={app.status} />
+                            </div>
+
+                            {hasOffer && app.offerMessage && (
+                              <div className="text-xs text-stone-700 dark:text-slate-350 bg-amber-50/20 dark:bg-amber-950/10 p-2.5 rounded border border-amber-200/40 dark:border-amber-900/30 italic">
+                                &quot;{app.offerMessage}&quot;
+                              </div>
+                            )}
+
+                            <div className="space-y-1">
+                              <div className="text-[10px] text-stone-400">
+                                Applied: {new Date(app.createdAt).toLocaleDateString()}
+                              </div>
+                              {app.expiresAt && (
+                                <DeadlineDisplay deadlineAt={app.expiresAt} label="Offer Match Window" />
+                              )}
+                            </div>
+
+                            <div className="flex gap-2">
+                              {hasOffer && (
+                                <button
+                                  onClick={() => handleConfirmOffer(app.id)}
+                                  disabled={!isLeadOrCoLead}
+                                  className="btn-primary py-1 px-3 text-[10px]"
+                                  title={!isLeadOrCoLead ? "Only Team Leads/Co-Leads can confirm offers" : ""}
+                                >
+                                  Confirm Offer
+                                </button>
+                              )}
+                              {app.status === "PENDING" && (
+                                <button
+                                  onClick={() => handleWithdrawApplication(app.id)}
+                                  disabled={!isLeadOrCoLead}
+                                  className="btn-secondary text-rose-500 border-rose-200/40 dark:border-rose-950/40 py-1 px-3 text-[10px]"
+                                  title={!isLeadOrCoLead ? "Only Team Leads/Co-Leads can withdraw applications" : ""}
+                                >
+                                  Withdraw
+                                </button>
+                              )}
+                              <Link href={`/inbox?userId=${app.project?.owner.id}`} className="btn-secondary py-1 px-3 text-[10px] flex items-center gap-1">
+                                Message Owner
+                              </Link>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-stone-500 italic">No project applications submitted yet.</p>
+                  )}
                 </div>
               </div>
             ) : (

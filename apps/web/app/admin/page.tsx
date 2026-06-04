@@ -30,10 +30,14 @@ export default function AdminPage() {
 
   const [activeTab, setActiveTab] = useState<"ACCOUNTS" | "TEAMS" | "PROJECTS" | "DEADLINES" | "AUDIT">("ACCOUNTS");
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteAction | null>(null);
+  const [reason, setReason] = useState("");
   const [deadline, setDeadline] = useState("2026-06-15T23:59");
   const [deadlineNotice, setDeadlineNotice] = useState<string | null>(null);
+  const [deadlineConfirmOpen, setDeadlineConfirmOpen] = useState(false);
+  const [deadlineReason, setDeadlineReason] = useState("");
 
   const handleOpenDelete = (type: "USER" | "TEAM" | "PROJECT", id: string, name: string) => {
+    setReason("");
     setDeleteConfirm({ type, id, name });
   };
 
@@ -42,22 +46,28 @@ export default function AdminPage() {
     const token = getAuthToken();
     try {
       if (deleteConfirm.type === "USER") {
-        await graphqlRequest(`mutation RemoveUser($id: ID!) { removeUser(userId: $id) }`, { id: deleteConfirm.id }, token);
+        await graphqlRequest(`mutation RemoveUser($id: ID!, $reason: String) { removeUser(userId: $id, reason: $reason) }`, { id: deleteConfirm.id, reason }, token);
       } else if (deleteConfirm.type === "TEAM") {
-        await graphqlRequest(`mutation RemoveTeam($id: ID!) { removeTeam(teamId: $id) }`, { id: deleteConfirm.id }, token);
+        await graphqlRequest(`mutation RemoveTeam($id: ID!, $reason: String) { removeTeam(teamId: $id, reason: $reason) }`, { id: deleteConfirm.id, reason }, token);
       } else if (deleteConfirm.type === "PROJECT") {
-        await graphqlRequest(`mutation RemoveProject($id: ID!) { removeProject(projectId: $id) }`, { id: deleteConfirm.id }, token);
+        await graphqlRequest(`mutation RemoveProject($id: ID!, $reason: String) { removeProject(projectId: $id, reason: $reason) }`, { id: deleteConfirm.id, reason }, token);
       }
     } catch (err) {
       setDeadlineNotice(userFacingError(err));
     } finally {
       setDeleteConfirm(null);
+      setReason("");
       await reload();
     }
   };
 
-  const handleDeadlineSave = async (e: React.FormEvent) => {
+  const handleDeadlineSaveClick = (e: React.FormEvent) => {
     e.preventDefault();
+    setDeadlineReason("");
+    setDeadlineConfirmOpen(true);
+  };
+
+  const executeDeadlineSave = async () => {
     setDeadlineNotice(null);
     try {
       const deadlineAt = new Date(deadline).toISOString();
@@ -65,13 +75,15 @@ export default function AdminPage() {
         `mutation SetDeadline($deadlineAt: String!, $reason: String) {
           setUniversalDeadline(deadlineAt: $deadlineAt, reason: $reason) { id deadlineAt updatedAt }
         }`,
-        { deadlineAt, reason: "Updated from admin console" },
+        { deadlineAt, reason: deadlineReason },
         getAuthToken()
       );
       setDeadlineNotice("Universal match deadline saved and propagated.");
+      setDeadlineConfirmOpen(false);
       await reload();
     } catch (err) {
       setDeadlineNotice(userFacingError(err));
+      setDeadlineConfirmOpen(false);
     }
   };
 
@@ -151,9 +163,9 @@ export default function AdminPage() {
                     <td className="py-3 text-right">
                       <button
                         onClick={() => handleOpenDelete("USER", u.id, u.fullName)}
-                        className="rounded px-2.5 py-1.5 text-[9px] font-bold border transition bg-rose-50 hover:bg-rose-500 hover:text-white dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 border-rose-200/50 dark:border-rose-900/50 uppercase tracking-wider"
+                        className="rounded px-2.5 py-1.5 text-[9px] font-bold border transition bg-rose-50 hover:bg-rose-500 hover:text-white dark:bg-rose-950/20 text-rose-600 dark:text-rose-450 border-rose-200/50 dark:border-rose-900/50 uppercase tracking-wider"
                       >
-                        Delete
+                        Deactivate
                       </button>
                     </td>
                   </tr>
@@ -177,7 +189,7 @@ export default function AdminPage() {
                   onClick={() => handleOpenDelete("TEAM", t.id, t.name)}
                   className="rounded px-2.5 py-1.5 text-[9px] font-bold border transition bg-rose-50 hover:bg-rose-500 hover:text-white dark:bg-rose-950/20 text-rose-600 dark:text-rose-450 border-rose-200/50 dark:border-rose-900/50 uppercase tracking-wider"
                 >
-                  Remove Team
+                  Archive Team
                 </button>
               </div>
             ))}
@@ -198,7 +210,7 @@ export default function AdminPage() {
                   onClick={() => handleOpenDelete("PROJECT", p.id, p.title)}
                   className="rounded px-2.5 py-1.5 text-[9px] font-bold border transition bg-rose-50 hover:bg-rose-500 hover:text-white dark:bg-rose-950/20 text-rose-600 dark:text-rose-450 border-rose-200/50 dark:border-rose-900/50 uppercase tracking-wider"
                 >
-                  Remove Post
+                  Archive Project
                 </button>
               </div>
             ))}
@@ -208,7 +220,7 @@ export default function AdminPage() {
 
       {activeTab === "DEADLINES" && (
         <Section title="Capstone Deadlines Configuration">
-          <form onSubmit={handleDeadlineSave} className="space-y-4 max-w-md pt-2">
+          <form onSubmit={handleDeadlineSaveClick} className="space-y-4 max-w-md pt-2">
             {deadlineNotice && <p className="text-xs text-emerald-600 font-bold">{deadlineNotice}</p>}
             <div className="space-y-1">
               <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Universal Match Deadline</label>
@@ -261,19 +273,55 @@ export default function AdminPage() {
       {/* Confirmation Modal */}
       <Modal isOpen={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} title="Destructive Override Confirmation">
         {deleteConfirm && (
-          <div className="space-y-4">
-            <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
-              Are you sure you want to delete the {deleteConfirm.type.toLowerCase()} <strong>&quot;{deleteConfirm.name}&quot;</strong>?
+          <div className="space-y-4 text-xs">
+            <p className="text-stone-600 dark:text-stone-300 leading-relaxed">
+              Are you sure you want to {deleteConfirm.type === "USER" ? "deactivate" : "archive"} the {deleteConfirm.type.toLowerCase()} <strong>&quot;{deleteConfirm.name}&quot;</strong>?
             </p>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Override Reason (Required)</label>
+              <textarea
+                required
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Specify compliance or administrative reason..."
+                className="input-field min-h-16 text-xs"
+              />
+            </div>
             <p className="text-[10px] text-rose-500 font-bold uppercase tracking-wider">
-              ⚠️ This will remove the database record and cannot be restored.
+              ⚠️ This will update the status of the entity on the platform. Historical logs will be preserved.
             </p>
             <div className="flex gap-2 justify-end pt-3 border-t border-stone-200 dark:border-stone-800">
               <button onClick={() => setDeleteConfirm(null)} className="btn-secondary py-1 px-3 text-xs">Cancel</button>
-              <button onClick={handleExecuteDelete} className="btn-primary bg-rose-600 hover:bg-rose-700 py-1 px-3 text-xs">Confirm Delete</button>
+              <button onClick={handleExecuteDelete} disabled={!reason.trim()} className="btn-primary bg-rose-600 hover:bg-rose-700 py-1 px-3 text-xs disabled:opacity-50 disabled:cursor-not-allowed">Confirm Action</button>
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Deadline Confirmation Modal */}
+      <Modal isOpen={deadlineConfirmOpen} onClose={() => setDeadlineConfirmOpen(false)} title="Deadline Update Confirmation">
+        <div className="space-y-4 text-xs">
+          <p className="text-stone-600 dark:text-stone-300 leading-relaxed">
+            Are you sure you want to change the universal capstone matching deadline to <strong>{new Date(deadline).toLocaleString()}</strong>?
+          </p>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Reason for Extension/Change (Required)</label>
+            <textarea
+              required
+              value={deadlineReason}
+              onChange={(e) => setDeadlineReason(e.target.value)}
+              placeholder="e.g., Extension requested by course coordinator..."
+              className="input-field min-h-16 text-xs"
+            />
+          </div>
+          <p className="text-[10px] text-amber-600 font-bold uppercase tracking-wider">
+            ⚠️ Changing the deadline changes the match eligibility window. Active offers or invites exceeding this new time will expire.
+          </p>
+          <div className="flex gap-2 justify-end pt-3 border-t border-stone-200 dark:border-stone-800">
+            <button onClick={() => setDeadlineConfirmOpen(false)} className="btn-secondary py-1 px-3 text-xs">Cancel</button>
+            <button onClick={executeDeadlineSave} disabled={!deadlineReason.trim()} className="btn-primary py-1 px-3 text-xs disabled:opacity-50 disabled:cursor-not-allowed">Confirm & Propagate</button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

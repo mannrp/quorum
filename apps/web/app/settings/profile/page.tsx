@@ -48,6 +48,7 @@ export default function ProfileSettingsPage() {
           setGithubUrl(res.me.githubUrl || "");
           setPortfolioUrl(res.me.portfolioUrl || "");
           setSkills((res.me.tags || []).map((t) => t.name));
+          setResumeVisibility(res.me.resumeVisibility || "PUBLIC");
         }
       } catch (err) {
         setNotice(userFacingError(err));
@@ -89,6 +90,7 @@ export default function ProfileSettingsPage() {
             githubUrl,
             portfolioUrl,
             resumeUrl: resumeUrl || undefined,
+            resumeVisibility,
           },
         },
         token
@@ -193,8 +195,8 @@ export default function ProfileSettingsPage() {
               <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Document Access Level</label>
               <select value={resumeVisibility} onChange={(e) => setResumeVisibility(e.target.value)} className="input-field py-2 text-xs bg-white dark:bg-[#161a2b]">
                 <option value="PUBLIC">Visible to all Quorum Members</option>
-                <option value="TEAM_LEAD_ONLY">Visible only to Team Leads during applications</option>
-                <option value="PROJECT_OWNER_ONLY">Visible only to project sponsors</option>
+                <option value="TEAM_LEADS">Visible only to Team Leads during applications</option>
+                <option value="PROJECT_OWNERS">Visible only to project sponsors</option>
                 <option value="PRIVATE">Keep Private</option>
               </select>
             </div>

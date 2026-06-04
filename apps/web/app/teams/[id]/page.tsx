@@ -131,6 +131,11 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
               Request to Join
             </button>
           )}
+          {me && me.id !== team.createdBy.id && (
+            <Link href={`/inbox?userId=${team.createdBy.id}`} className="btn-secondary w-full sm:w-auto text-center text-xs flex items-center justify-center gap-1">
+              ✉ Message Lead
+            </Link>
+          )}
         </div>
       </div>
 

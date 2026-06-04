@@ -45,6 +45,7 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
   const [actionReqId, setActionReqId] = useState<string | null>(null);
   const [actionType, setActionType] = useState<"ACCEPT" | "REJECT" | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState<{ id: string; name: string } | null>(null);
 
   const team = data?.team;
 
@@ -157,19 +158,25 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
     }
   };
 
-  const removeMember = async (userId: string) => {
-    if (!window.confirm("Are you sure you want to remove this member from the team?")) return;
+  const removeMember = (userId: string, userName: string) => {
+    setMemberToRemove({ id: userId, name: userName });
+  };
+
+  const executeRemoveMember = async () => {
+    if (!memberToRemove) return;
     try {
       const token = getAuthToken();
       await graphqlRequest(
         `mutation RemoveMem($teamId: ID!, $userId: ID!) { removeMember(teamId: $teamId, userId: $userId) }`,
-        { teamId: id, userId },
+        { teamId: id, userId: memberToRemove.id },
         token
       );
       setNotice("Member removed.");
       await reload();
     } catch (err) {
       setNotice(userFacingError(err));
+    } finally {
+      setMemberToRemove(null);
     }
   };
 
@@ -311,7 +318,7 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
                     <p className="text-[10px] text-stone-400">{m.role}</p>
                   </div>
                   {m.role !== "LEAD" && (
-                    <button type="button" onClick={() => removeMember(m.user.id)} className="text-[10px] text-rose-500 font-bold hover:underline">Remove</button>
+                    <button type="button" onClick={() => removeMember(m.user.id, m.user.fullName)} className="text-[10px] text-rose-500 font-bold hover:underline">Remove</button>
                   )}
                 </div>
               ))}
@@ -331,6 +338,21 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
             <button onClick={executeRequestAction} className="btn-primary py-1 px-3 text-xs">Confirm</button>
           </div>
         </div>
+      </Modal>
+
+      {/* Remove Member Confirmation Modal */}
+      <Modal isOpen={!!memberToRemove} onClose={() => setMemberToRemove(null)} title="Remove Team Member">
+        {memberToRemove && (
+          <div className="space-y-4">
+            <p className="text-xs text-stone-600 dark:text-stone-300">
+              Are you sure you want to remove <strong>{memberToRemove.name}</strong> from the team?
+            </p>
+            <div className="flex gap-2 justify-end pt-3 border-t border-stone-200 dark:border-stone-800">
+              <button onClick={() => setMemberToRemove(null)} className="btn-secondary py-1 px-3 text-xs">Cancel</button>
+              <button onClick={executeRemoveMember} className="btn-primary bg-rose-600 hover:bg-rose-700 py-1 px-3 text-xs">Remove Member</button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
