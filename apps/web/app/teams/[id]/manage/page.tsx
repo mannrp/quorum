@@ -215,17 +215,17 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-4 space-y-6">
-      <div className="border-b border-stone-250 dark:border-stone-850 pb-4 flex items-center justify-between">
+    <div className="max-w-4xl mx-auto py-4 px-4 space-y-6">
+      <div className="border-b border-[var(--border-app)] pb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold font-serif text-[#000b60] dark:text-[#a5b4fc]">Manage Team</h1>
-          <p className="text-sm text-stone-500">Edit details, review recruitment requests, and invite team members.</p>
+          <h1 className="text-3xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">Manage Team</h1>
+          <p className="text-sm text-stone-500 font-sans">Edit details, review recruitment requests, and invite team members.</p>
         </div>
         <Link href={`/teams/${id}`} className="btn-secondary py-1.5 px-3 text-xs">View Public Page</Link>
       </div>
 
       {notice && (
-        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-250 dark:border-emerald-900 rounded text-xs font-semibold text-emerald-800 dark:text-emerald-350">
+        <div className="p-3 bg-[var(--color-success-bg)] border border-[var(--color-success)] rounded-none text-xs font-mono font-bold uppercase tracking-wider text-[var(--color-success)]">
           {notice}
         </div>
       )}
@@ -238,23 +238,23 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
             <Section title="Edit Specifications">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Team Name</label>
+                  <label className="text-[9px] font-mono font-bold uppercase tracking-wider text-stone-400">Team Name</label>
                   <input required value={name} onChange={(e) => setName(e.target.value)} className="input-field" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Discipline</label>
+                  <label className="text-[9px] font-mono font-bold uppercase tracking-wider text-stone-400">Discipline</label>
                   <input required value={discipline} onChange={(e) => setDiscipline(e.target.value)} className="input-field" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Discord URL</label>
-                  <input type="url" value={discordUrl} onChange={(e) => setDiscordUrl(e.target.value)} className="input-field text-xs" />
+                  <label className="text-[9px] font-mono font-bold uppercase tracking-wider text-stone-400">Discord URL</label>
+                  <input type="url" value={discordUrl} onChange={(e) => setDiscordUrl(e.target.value)} className="input-field text-xs font-mono" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">Recruitment Status</label>
+                  <label className="text-[9px] font-mono font-bold uppercase tracking-wider text-stone-400 block">Recruitment Status</label>
                   <select
                     value={isComplete ? "COMPLETE" : "RECRUITING"}
                     onChange={(e) => setIsComplete(e.target.value === "COMPLETE")}
-                    className="input-field py-2 text-xs bg-white dark:bg-[#161a2b]"
+                    className="input-field py-2 text-xs bg-[var(--surface-app)] font-mono"
                   >
                     <option value="RECRUITING">Recruiting (Open slots)</option>
                     <option value="COMPLETE">Complete (Recruitment paused)</option>
@@ -262,8 +262,8 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
                 </div>
               </div>
               <div className="space-y-1 pt-2">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Description</label>
-                <textarea required value={description} onChange={(e) => setDescription(e.target.value)} className="input-field min-h-20 text-xs" />
+                <label className="text-[9px] font-mono font-bold uppercase tracking-wider text-stone-400">Description</label>
+                <textarea required value={description} onChange={(e) => setDescription(e.target.value)} className="input-field min-h-20 text-xs font-sans" />
               </div>
               <button type="submit" disabled={saving} className="btn-primary py-2 px-4 text-xs mt-2 w-full">
                 {saving ? "Saving Changes..." : "Commit Settings"}
@@ -274,25 +274,25 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
           {/* Join Requests Roster */}
           <Section title="Recruitment Join Requests">
             {requests.length > 0 ? (
-              <div className="space-y-4 divide-y divide-stone-150 dark:divide-stone-850">
+              <div className="space-y-4 divide-y divide-[var(--border-subtle)]">
                 {requests.map((req) => (
                   <div key={req.id} className="pt-4 first:pt-0 space-y-2">
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="font-bold text-stone-900 dark:text-indigo-300 text-sm">{req.user.fullName}</span>
-                        <p className="text-[10px] text-stone-500">@{req.user.username} • {req.user.discipline} • {req.createdAt}</p>
+                        <span className="font-bold text-[var(--text-app)] text-sm uppercase font-serif tracking-tight">{req.user.fullName}</span>
+                        <p className="text-[10px] text-stone-500 font-mono uppercase tracking-wider">@{req.user.username} • {req.user.discipline} • {req.createdAt}</p>
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => handleRequestAction(req.id, "ACCEPT")} className="btn-primary py-1 px-3 text-[10px]">Accept</button>
-                        <button onClick={() => handleRequestAction(req.id, "REJECT")} className="btn-secondary py-1 px-3 text-[10px] text-rose-500 border-rose-200/40 dark:border-rose-950/40">Decline</button>
+                        <button onClick={() => handleRequestAction(req.id, "REJECT")} className="btn-secondary py-1 px-3 text-[10px] text-rose-500 border-rose-300 dark:border-rose-900">Decline</button>
                       </div>
                     </div>
-                    <p className="text-xs text-stone-500 bg-[#f8f9fa] dark:bg-[#111422] p-2.5 rounded border border-stone-200 dark:border-stone-850 italic">&quot;{req.message}&quot;</p>
+                    <p className="text-xs text-stone-500 bg-[var(--bg-app)] p-3 border border-[var(--border-subtle)] rounded-none font-mono italic">&quot;{req.message}&quot;</p>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-stone-500 italic">No pending recruitment requests at this time.</p>
+              <p className="text-xs text-stone-500 font-mono italic">No pending recruitment requests.</p>
             )}
           </Section>
         </div>
@@ -318,14 +318,14 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
                 className="input-field min-h-16 py-2 px-2 text-xs"
               />
 
-              {inviteNotice && <p className="text-xs text-emerald-600 font-bold">{inviteNotice}</p>}
+              {inviteNotice && <p className="text-xs text-emerald-600 font-mono font-bold uppercase tracking-wider">{inviteNotice}</p>}
 
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {inviteResults.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between p-2 border border-stone-250 dark:border-stone-850 rounded bg-[#f8f9fa] dark:bg-[#111422]">
+                  <div key={r.id} className="flex items-center justify-between p-2.5 border border-[var(--border-subtle)] rounded-none bg-[var(--bg-app)]">
                     <div>
-                      <p className="text-xs font-bold text-stone-800 dark:text-slate-200">{r.fullName}</p>
-                      <p className="text-[9px] text-stone-400">@{r.username}</p>
+                      <p className="text-xs font-bold text-[var(--text-app)]">{r.fullName}</p>
+                      <p className="text-[9px] font-mono text-stone-400">@{r.username}</p>
                     </div>
                     <button type="button" onClick={() => sendInvite(r.id)} className="btn-primary py-1 px-2 text-[9px]">Invite</button>
                   </div>
@@ -338,13 +338,13 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
           <Section title="Roster Controls" variant="tall">
             <div className="space-y-3">
               {team.members.map((m) => (
-                <div key={m.id} className="flex items-center justify-between p-2 border border-stone-200 dark:border-stone-800 rounded bg-white dark:bg-[#161a2b]">
+                <div key={m.id} className="flex items-center justify-between p-2.5 border border-[var(--border-subtle)] rounded-none bg-[var(--surface-app)]">
                   <div>
-                    <span className="text-xs font-bold text-stone-800 dark:text-slate-200">{m.user.fullName}</span>
-                    <p className="text-[10px] text-stone-400">{m.role}</p>
+                    <span className="text-xs font-bold text-[var(--text-app)]">{m.user.fullName}</span>
+                    <p className="text-[9px] font-mono text-stone-400 uppercase tracking-wider">{m.role}</p>
                   </div>
                   {m.role !== "LEAD" && (
-                    <button type="button" onClick={() => removeMember(m.user.id, m.user.fullName)} className="text-[10px] text-rose-500 font-bold hover:underline">Remove</button>
+                    <button type="button" onClick={() => removeMember(m.user.id, m.user.fullName)} className="text-[10px] text-rose-500 font-mono font-bold hover:underline">Remove</button>
                   )}
                 </div>
               ))}
@@ -356,10 +356,10 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
       {/* Confirmation Modal */}
       <Modal isOpen={isConfirmOpen} onClose={() => setIsConfirmOpen(false)} title="Process Join Request">
         <div className="space-y-4">
-          <p className="text-xs text-stone-600 dark:text-stone-300">
+          <p className="text-xs text-stone-650 dark:text-stone-300 font-sans">
             Confirm decision to {actionType === "ACCEPT" ? "approve" : "decline"} this candidate.
           </p>
-          <div className="flex gap-2 justify-end pt-3 border-t border-stone-200 dark:border-stone-800">
+          <div className="flex gap-2 justify-end pt-3 border-t border-[var(--border-subtle)]">
             <button onClick={() => setIsConfirmOpen(false)} className="btn-secondary py-1 px-3 text-xs">Cancel</button>
             <button onClick={executeRequestAction} className="btn-primary py-1 px-3 text-xs">Confirm</button>
           </div>
@@ -370,12 +370,12 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
       <Modal isOpen={!!memberToRemove} onClose={() => setMemberToRemove(null)} title="Remove Team Member">
         {memberToRemove && (
           <div className="space-y-4">
-            <p className="text-xs text-stone-600 dark:text-stone-300">
+            <p className="text-xs text-stone-650 dark:text-stone-300 font-sans">
               Are you sure you want to remove <strong>{memberToRemove.name}</strong> from the team?
             </p>
-            <div className="flex gap-2 justify-end pt-3 border-t border-stone-200 dark:border-stone-800">
+            <div className="flex gap-2 justify-end pt-3 border-t border-[var(--border-subtle)]">
               <button onClick={() => setMemberToRemove(null)} className="btn-secondary py-1 px-3 text-xs">Cancel</button>
-              <button onClick={executeRemoveMember} className="btn-primary bg-rose-600 hover:bg-rose-700 py-1 px-3 text-xs">Remove Member</button>
+              <button onClick={executeRemoveMember} className="btn-primary bg-rose-650 hover:bg-rose-700 py-1 px-3 text-xs border-transparent">Remove Member</button>
             </div>
           </div>
         )}

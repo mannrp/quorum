@@ -295,9 +295,9 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto py-12">
+      <div className="max-w-5xl mx-auto py-12 px-4">
         <Section title="Dashboard Portal Loading">
-          <p className="text-xs text-stone-500 animate-pulse uppercase tracking-wider">Syncing workspace databases...</p>
+          <p className="text-xs text-stone-500 font-mono animate-pulse uppercase tracking-widest">Syncing workspace databases...</p>
         </Section>
       </div>
     );
@@ -305,9 +305,9 @@ export default function DashboardPage() {
 
   if (error && invitations.length === 0 && !me) {
     return (
-      <div className="max-w-3xl mx-auto py-12">
+      <div className="max-w-3xl mx-auto py-12 px-4">
         <Section title="Dashboard Unavailable">
-          <p className="text-xs text-rose-500 font-bold">{error}</p>
+          <p className="text-xs text-rose-500 font-mono font-bold uppercase tracking-wider">{error}</p>
           <div className="pt-4 flex gap-2">
             <Link href="/auth/login" className="btn-primary py-2 px-4 text-xs">Sign In Again</Link>
             <button onClick={() => window.location.reload()} className="btn-secondary py-2 px-4 text-xs">Retry</button>
@@ -318,18 +318,20 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6 py-4 max-w-5xl mx-auto">
+    <div className="space-y-6 py-4 max-w-5xl mx-auto px-4">
       {/* Welcome Banner */}
-      <div className="panel-wide bg-white dark:bg-[#161a2b] p-8 space-y-4">
+      <div className="panel-wide p-6 space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#283593] dark:text-[#a5b4fc]">
+            <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-[var(--accent-app)]">
               [-] Academics Console
             </span>
-            <h1 className="text-2xl font-bold font-serif text-[#000b60] dark:text-[#a5b4fc] tracking-tight">
+            <h1 className="text-2xl font-bold font-serif text-[var(--text-app)] tracking-tight uppercase">
               Welcome Back, {me?.fullName}
             </h1>
-            <p className="text-xs text-stone-500">@{me?.username} • Concordia University • {me?.discipline || "SOEN"}</p>
+            <p className="text-[10px] font-mono uppercase tracking-wider text-stone-500">
+              @{me?.username} • Concordia University • {me?.discipline || "SOEN"}
+            </p>
           </div>
           <div className="flex gap-2">
             <Link href="/settings/profile" className="btn-secondary py-2 px-3.5 text-xs">Edit Settings</Link>
@@ -338,13 +340,13 @@ export default function DashboardPage() {
       </div>
 
       {notice && (
-        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-250 dark:border-emerald-900 rounded text-xs font-semibold text-emerald-800 dark:text-emerald-350">
+        <div className="p-3 bg-[var(--color-success-bg)] border border-[var(--color-success)] rounded-none text-xs font-mono font-bold uppercase tracking-wider text-[var(--color-success)]">
           {notice}
         </div>
       )}
 
       {error && (
-        <div className="p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-250 dark:border-rose-900 rounded text-xs font-semibold text-rose-800 dark:text-rose-350">
+        <div className="p-3 bg-[var(--color-danger-bg)] border border-[var(--color-danger)] rounded-none text-xs font-mono font-bold uppercase tracking-wider text-[var(--color-danger)]">
           {error}
         </div>
       )}
@@ -361,7 +363,7 @@ export default function DashboardPage() {
                 consequenceText="All matching confirmations must occur before this timestamp."
               />
             ) : (
-              <p className="text-xs text-stone-500 italic">No universal deadline configured.</p>
+              <p className="text-xs text-stone-500 font-mono italic">No universal deadline configured.</p>
             )}
           </Section>
 
@@ -370,23 +372,25 @@ export default function DashboardPage() {
             {invitations.length > 0 ? (
               <div className="space-y-3">
                 {invitations.map((inv) => (
-                  <div key={inv.id} className="p-3 border border-stone-250 dark:border-stone-850 rounded-lg space-y-2.5 bg-white dark:bg-[#161a2b]">
-                    <div className="space-y-2">
+                  <div key={inv.id} className="p-4 border border-[var(--border-subtle)] rounded-none space-y-3 bg-[var(--surface-app)]">
+                    <div className="space-y-1.5">
                       <div className="flex justify-between items-start">
-                        <span className="text-xs font-bold text-stone-900 dark:text-slate-100">{inv.team.name}</span>
+                        <span className="text-xs font-bold text-[var(--text-app)] uppercase font-serif tracking-tight">{inv.team.name}</span>
                       </div>
-                      <p className="text-[10px] text-stone-500">Invited by {inv.invitedBy.fullName} - &quot;{inv.message || "No message"}&quot;</p>
-                      <DeadlineDisplay deadlineAt={inv.expiresAt} label="Invitation Expiration" />
+                      <p className="text-[10px] text-stone-500 font-sans">
+                        Invited by <strong className="text-[var(--text-app)]">{inv.invitedBy.fullName}</strong>: &quot;{inv.message || "No message"}&quot;
+                      </p>
+                      <DeadlineDisplay deadlineAt={inv.expiresAt} label="Expiration" />
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 pt-1">
                       <button className="btn-primary py-1 px-3 text-[9px] w-full" onClick={() => respondToInvitation(inv.id, true)}>Accept</button>
-                      <button className="btn-secondary py-1 px-3 text-[9px] w-full text-rose-500 border-rose-200/40 dark:border-rose-950/40" onClick={() => respondToInvitation(inv.id, false)}>Decline</button>
+                      <button className="btn-secondary py-1 px-3 text-[9px] w-full text-rose-500 border-rose-300 dark:border-rose-900" onClick={() => respondToInvitation(inv.id, false)}>Decline</button>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-stone-500 italic">No pending team invitations.</p>
+              <p className="text-xs text-stone-500 font-mono italic">No pending team invitations.</p>
             )}
           </Section>
 
@@ -395,12 +399,14 @@ export default function DashboardPage() {
             {myRequests.length > 0 ? (
               <div className="space-y-3">
                 {myRequests.map((req) => (
-                  <div key={req.id} className="p-3 border border-amber-250 dark:border-amber-900 rounded-lg space-y-2.5 bg-amber-50/50 dark:bg-amber-950/15">
-                    <div className="space-y-2">
+                  <div key={req.id} className="p-4 border border-[var(--color-warning)] rounded-none space-y-3 bg-[var(--color-warning-bg)]">
+                    <div className="space-y-1.5">
                       <div className="flex justify-between items-start">
-                        <span className="text-xs font-bold text-stone-900 dark:text-slate-100">{req.team.name}</span>
+                        <span className="text-xs font-bold text-[var(--text-app)] uppercase font-serif tracking-tight">{req.team.name}</span>
                       </div>
-                      <p className="text-[10px] text-stone-500">Your request to join this team was accepted. Please confirm your membership.</p>
+                      <p className="text-[10px] text-stone-600 dark:text-stone-400 font-sans">
+                        Your request to join this team was accepted. Please confirm your membership.
+                      </p>
                       {req.expiresAt && (
                         <DeadlineDisplay deadlineAt={req.expiresAt} label="Confirmation Expiration" />
                       )}
@@ -412,7 +418,7 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-stone-500 italic">No accepted join requests pending confirmation.</p>
+              <p className="text-xs text-stone-500 font-mono italic">No accepted join requests.</p>
             )}
           </Section>
         </div>
@@ -425,23 +431,25 @@ export default function DashboardPage() {
               <div className="space-y-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
-                    <Link href={`/teams/${team.id}`} className="text-lg font-bold text-stone-900 dark:text-indigo-300 hover:underline">
+                    <Link href={`/teams/${team.id}`} className="text-lg font-bold text-[var(--text-app)] hover:text-[var(--accent-app)] font-serif uppercase tracking-tight">
                       {team.name}
                     </Link>
-                    <p className="text-xs text-stone-500 line-clamp-2">{team.description}</p>
+                    <p className="text-xs text-stone-500 font-sans line-clamp-2">{team.description}</p>
                   </div>
                   <div className="flex flex-col gap-1 items-end">
                     <Status value={team.isComplete ? "COMPLETE" : "RECRUITING"} />
-                    <span className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">{team.members.length}/{team.maxSize} Members</span>
+                    <span className="text-[9px] font-mono text-stone-400 font-bold uppercase tracking-wider">
+                      {team.members.length}/{team.maxSize} Members
+                    </span>
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-stone-200 dark:border-stone-800 flex flex-wrap gap-2 items-center justify-between">
+                <div className="pt-3 border-t border-[var(--border-subtle)] flex flex-wrap gap-2 items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Roster Preview:</span>
-                    <div className="flex -space-x-2">
-                      {team.members.slice(0, 3).map((m) => (
-                        <div key={m.id} title={m.user.fullName} className="h-6 w-6 rounded-full bg-indigo-50 border border-stone-300 dark:border-stone-850 flex items-center justify-center text-[10px] font-bold text-[#283593] uppercase">
+                    <span className="text-[9px] font-mono font-bold text-stone-400 uppercase tracking-wider">Roster Preview:</span>
+                    <div className="flex -space-x-1">
+                      {team.members.slice(0, 4).map((m) => (
+                        <div key={m.id} title={m.user.fullName} className="h-6 w-6 rounded-none bg-[var(--bg-app)] border border-[var(--border-app)] flex items-center justify-center text-[9px] font-mono font-bold text-[var(--text-app)] uppercase">
                           {m.user.fullName.charAt(0)}
                         </div>
                       ))}
@@ -453,31 +461,31 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Team Applications & Offers Sub-section */}
-                <div className="pt-4 border-t border-stone-200 dark:border-stone-800 space-y-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-stone-400">Project Applications & Offers</h4>
+                <div className="pt-4 border-t border-[var(--border-subtle)] space-y-3">
+                  <h4 className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">Project Applications & Offers</h4>
                   {teamApps.length > 0 ? (
                     <div className="space-y-3">
                       {teamApps.map((app) => {
                         const hasOffer = app.status === "OFFER_SENT";
                         const isLeadOrCoLead = myRoleOnTeam === "LEAD" || myRoleOnTeam === "CO_LEAD";
                         return (
-                          <div key={app.id} className={`p-3 border rounded-lg space-y-2.5 ${hasOffer ? "bg-amber-50/50 dark:bg-amber-950/15 border-amber-250 dark:border-amber-900" : "bg-white dark:bg-[#161a2b] border-stone-250 dark:border-stone-850"}`}>
+                          <div key={app.id} className={`p-4 border rounded-none space-y-3 ${hasOffer ? "bg-[var(--color-warning-bg)] border-[var(--color-warning)]" : "bg-[var(--surface-app)] border-[var(--border-subtle)]"}`}>
                             <div className="flex justify-between items-start">
                               <div>
-                                <h5 className="text-xs font-bold text-stone-900 dark:text-slate-100">{app.project?.title}</h5>
-                                <p className="text-[10px] text-stone-500">Sponsored by {app.project?.owner.fullName}</p>
+                                <h5 className="text-xs font-bold text-[var(--text-app)] uppercase font-serif tracking-tight">{app.project?.title}</h5>
+                                <p className="text-[9px] font-mono text-stone-500 uppercase tracking-wider">Sponsored by {app.project?.owner.fullName}</p>
                               </div>
                               <Status value={app.status} />
                             </div>
 
                             {hasOffer && app.offerMessage && (
-                              <div className="text-xs text-stone-700 dark:text-slate-350 bg-amber-50/20 dark:bg-amber-950/10 p-2.5 rounded border border-amber-200/40 dark:border-amber-900/30 italic">
+                              <div className="text-xs text-stone-750 dark:text-stone-300 bg-[var(--bg-app)] p-3 border border-[var(--border-subtle)] italic font-mono">
                                 &quot;{app.offerMessage}&quot;
                               </div>
                             )}
 
-                            <div className="space-y-1">
-                              <div className="text-[10px] text-stone-400">
+                            <div className="space-y-1 font-mono text-[9px] text-stone-500">
+                              <div>
                                 Applied: {new Date(app.createdAt).toLocaleDateString()}
                               </div>
                               {app.expiresAt && (
@@ -485,7 +493,7 @@ export default function DashboardPage() {
                               )}
                             </div>
 
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 pt-1">
                               {hasOffer && (
                                 <button
                                   onClick={() => handleConfirmOffer(app.id)}
@@ -500,7 +508,7 @@ export default function DashboardPage() {
                                 <button
                                   onClick={() => handleWithdrawApplication(app.id)}
                                   disabled={!isLeadOrCoLead}
-                                  className="btn-secondary text-rose-500 border-rose-200/40 dark:border-rose-950/40 py-1 px-3 text-[10px]"
+                                  className="btn-secondary text-rose-500 border-rose-300 dark:border-rose-900 py-1 px-3 text-[10px]"
                                   title={!isLeadOrCoLead ? "Only Team Leads/Co-Leads can withdraw applications" : ""}
                                 >
                                   Withdraw
@@ -515,13 +523,13 @@ export default function DashboardPage() {
                       })}
                     </div>
                   ) : (
-                    <p className="text-xs text-stone-500 italic">No project applications submitted yet.</p>
+                    <p className="text-xs text-stone-500 font-mono italic">No project applications submitted yet.</p>
                   )}
                 </div>
               </div>
             ) : (
-              <div className="text-center py-8 space-y-4">
-                <p className="text-xs text-stone-500">You are not currently associated with a capstone team.</p>
+              <div className="text-center py-8 space-y-4 border border-dashed border-[var(--border-app)] p-6">
+                <p className="text-xs text-stone-500 font-mono">You are not currently associated with a capstone team.</p>
                 <div className="flex gap-2 justify-center">
                   <Link href="/teams/new" className="btn-primary py-2 px-4 text-xs">Create a Team</Link>
                   <Link href="/teams" className="btn-secondary py-2 px-4 text-xs">Join Existing Group</Link>
@@ -536,17 +544,17 @@ export default function DashboardPage() {
               <div className="space-y-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
-                    <Link href={`/projects/${project.id}`} className="text-lg font-bold text-stone-900 dark:text-indigo-300 hover:underline">
+                    <Link href={`/projects/${project.id}`} className="text-lg font-bold text-[var(--text-app)] hover:text-[var(--accent-app)] font-serif uppercase tracking-tight">
                       {project.title}
                     </Link>
-                    <p className="text-xs text-stone-500 line-clamp-2">{project.description}</p>
+                    <p className="text-xs text-stone-500 font-sans line-clamp-2">{project.description}</p>
                   </div>
                   <Status value={project.status} />
                 </div>
 
-                <div className="pt-3 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between">
-                  <span className="text-xs text-stone-500">
-                    Received <strong className="text-indigo-600 dark:text-indigo-450">{applications.length}</strong> capstone applications.
+                <div className="pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between">
+                  <span className="text-xs text-stone-500 font-mono">
+                    Received <strong className="text-[var(--accent-app)]">{applications.length}</strong> capstone applications.
                   </span>
                   <div className="flex gap-2">
                     <Link href={`/projects/${project.id}/edit`} className="btn-secondary py-1.5 px-3 text-xs">Edit Post</Link>
@@ -557,8 +565,8 @@ export default function DashboardPage() {
             </Section>
           ) : me && (me.email?.includes("owner") || me.username.includes("owner")) ? (
             <Section title="Project Sponsor Account">
-              <div className="text-center py-6 space-y-3">
-                <p className="text-xs text-stone-500">You have project owner intent but haven&apos;t submitted a capstone challenge yet.</p>
+              <div className="text-center py-8 border border-dashed border-[var(--border-app)] p-6 space-y-3">
+                <p className="text-xs text-stone-500 font-mono">You have project owner intent but haven&apos;t submitted a capstone challenge yet.</p>
                 <Link href="/projects/new" className="btn-primary py-2 px-4 text-xs inline-block">Sponsor New Project</Link>
               </div>
             </Section>
@@ -569,17 +577,17 @@ export default function DashboardPage() {
             {notifs.length > 0 ? (
               <div className="space-y-2">
                 {notifs.map((n) => (
-                  <div key={n.id} className="p-3 rounded-lg border border-stone-200 dark:border-stone-850 flex items-center justify-between bg-white dark:bg-[#161a2b]">
+                  <div key={n.id} className="p-3 rounded-none border border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-app)]">
                     <div className="flex items-center gap-3">
-                      <div className="h-5 w-5 rounded bg-indigo-50 border border-indigo-200 flex items-center justify-center text-[10px] font-bold text-indigo-700">!</div>
-                      <span className="text-xs text-stone-700 dark:text-slate-350">{n.type === "MESSAGE" ? "New message received." : n.type === "APPLICATION" ? "New project application update." : "Capstone workflow update."}</span>
+                      <div className="h-5 w-5 rounded-none bg-[var(--bg-app)] border border-[var(--border-app)] flex items-center justify-center text-[9px] font-mono font-bold text-[var(--accent-app)]">!</div>
+                      <span className="text-xs text-stone-700 dark:text-slate-350 font-sans">{n.type === "MESSAGE" ? "New message received." : n.type === "APPLICATION" ? "New project application update." : "Capstone workflow update."}</span>
                     </div>
-                    <Link href="/notifications" className="text-[10px] font-bold uppercase text-[#283593] hover:underline">View</Link>
+                    <Link href="/notifications" className="text-[9px] font-mono font-bold uppercase text-[var(--accent-app)]">View</Link>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-stone-500 italic">No recent updates.</p>
+              <p className="text-xs text-stone-500 font-mono italic">No recent updates.</p>
             )}
           </Section>
         </div>
