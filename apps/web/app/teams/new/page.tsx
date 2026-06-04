@@ -44,7 +44,12 @@ export default function CreateTeamPage() {
             name,
             description,
             maxSize: Number(maxSize),
-            discipline: discipline || "SOEN"
+            discipline: discipline || "SOEN",
+            visibility: visibility === "HIDDEN" ? "HIDDEN" : "VISIBLE",
+            discordLink: discordUrl || null,
+            existingSkills,
+            neededSkills,
+            recruitingState: "RECRUITING"
           }
         },
         token

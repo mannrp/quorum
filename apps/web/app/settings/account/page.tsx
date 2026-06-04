@@ -40,13 +40,11 @@ export default function AccountSettingsPage() {
     setNotice(null);
     try {
       const activeToken = getAuthToken();
-      if (me?.id) {
-        await graphqlRequest(
-          `mutation RemoveUser($id: ID!) { removeUser(userId: $id) }`,
-          { id: me.id },
-          activeToken
-        );
-      }
+      await graphqlRequest(
+        `mutation DeactivateAccount($reason: String) { deactivateAccount(reason: $reason) }`,
+        { reason: "Self-service deactivation from settings" },
+        activeToken
+      );
       localStorage.removeItem(AUTH_TOKEN_KEY);
       router.push("/");
     } catch (err) {
@@ -65,7 +63,7 @@ export default function AccountSettingsPage() {
     <div className="max-w-2xl mx-auto py-4 space-y-6">
       <div className="border-b border-stone-200 dark:border-stone-850 pb-4">
         <h1 className="text-3xl font-bold font-serif text-[#000b60] dark:text-[#a5b4fc]">Account Security</h1>
-        <p className="text-sm text-stone-500">Manage active auth tokens, dev credentials, and account termination options.</p>
+        <p className="text-sm text-stone-500">Manage active auth tokens, dev credentials, and account deactivation options.</p>
       </div>
 
       <Section title="Active Neon Auth Session">
@@ -92,9 +90,9 @@ export default function AccountSettingsPage() {
       <Section title="Danger Zone" className="border-l-4 border-l-rose-500">
         <div className="space-y-4">
           <div className="space-y-1">
-            <h4 className="text-sm font-bold text-stone-800 dark:text-stone-200">Deactivate / Delete Account</h4>
+            <h4 className="text-sm font-bold text-stone-800 dark:text-stone-200">Deactivate Account</h4>
             <p className="text-xs text-stone-500 leading-relaxed">
-              Terminating your Quorum profile will immediately withdraw all pending project applications, remove you from your active team membership roster, and delete your academic resume from our storage buckets.
+              Terminating your Quorum profile will immediately withdraw all pending project applications, remove you from your active team membership roster, and deactivate your academic profile.
             </p>
           </div>
 
@@ -102,21 +100,21 @@ export default function AccountSettingsPage() {
             onClick={() => setIsDeleteOpen(true)}
             className="rounded-md border border-rose-250 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/20 px-4 py-2 text-xs font-bold uppercase tracking-wider text-rose-600 dark:text-rose-450 hover:bg-rose-600 hover:text-white dark:hover:bg-rose-900 transition cursor-pointer"
           >
-            Permanently Terminate Account
+            Permanently Deactivate Account
           </button>
         </div>
       </Section>
 
       {/* Confirmation Modal */}
-      <Modal isOpen={isDeleteOpen} onClose={() => setIsDeleteOpen(false)} title="Confirm Account Termination">
+      <Modal isOpen={isDeleteOpen} onClose={() => setIsDeleteOpen(false)} title="Confirm Account Deactivation">
         <div className="space-y-4">
           <p className="text-sm text-stone-600 dark:text-stone-300 leading-relaxed">
-            Are you absolutely sure you want to delete your Quorum profile? This operation is <strong className="text-rose-500">final and cannot be undone</strong>.
+            Are you absolutely sure you want to deactivate your Quorum profile? This operation is <strong className="text-rose-500">final and cannot be undone</strong>.
           </p>
           <ul className="list-disc pl-5 text-xs text-stone-500 space-y-1 leading-relaxed">
             <li>You will be removed from your capstone team.</li>
             <li>All applications submitted by you will be withdrawn.</li>
-            <li>Your inbox and chat history will be archived.</li>
+            <li>Your inbox and profile details will be deactivated/archived.</li>
           </ul>
           <div className="flex gap-3 justify-end pt-4 border-t border-stone-200 dark:border-stone-800">
             <button onClick={() => setIsDeleteOpen(false)} className="btn-secondary py-2 text-xs">
@@ -127,7 +125,7 @@ export default function AccountSettingsPage() {
               disabled={deleting}
               className="inline-flex items-center justify-center rounded-md bg-rose-600 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-rose-700 active:scale-[0.98] transition cursor-pointer"
             >
-              {deleting ? "Deleting profile..." : "Confirm Delete"}
+              {deleting ? "Deactivating profile..." : "Confirm Deactivation"}
             </button>
           </div>
         </div>

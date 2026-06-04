@@ -185,8 +185,56 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                 <span className="text-stone-500">Focus Core:</span>
                 <span className="font-semibold text-[#283593] dark:text-indigo-400">{team.discipline || "Cross-disciplinary"}</span>
               </div>
+              {team.discordLink && (
+                <div className="flex justify-between py-2 border-b border-stone-200 dark:border-stone-800">
+                  <span className="text-stone-500">Discord Link:</span>
+                  <a href={team.discordLink} target="_blank" rel="noopener noreferrer" className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
+                    Join Server
+                  </a>
+                </div>
+              )}
+              <div className="flex justify-between py-2 border-b border-stone-200 dark:border-stone-800">
+                <span className="text-stone-500">Recruiting:</span>
+                <span className="font-semibold text-stone-800 dark:text-slate-200">{team.recruitingState}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-stone-200 dark:border-stone-800">
+                <span className="text-stone-500">Visibility:</span>
+                <span className="font-semibold text-stone-800 dark:text-slate-200">{team.visibility}</span>
+              </div>
             </div>
           </Section>
+
+          {(() => {
+            const existingSkills = team.existingSkills || [];
+            const neededSkills = team.neededSkills || [];
+            if (existingSkills.length === 0 && neededSkills.length === 0) return null;
+            return (
+              <Section title="Roster Skills & Fit">
+                <div className="space-y-4 text-xs">
+                  {existingSkills.length > 0 && (
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">Existing Competencies</span>
+                      <div className="flex flex-wrap gap-1">
+                        {existingSkills.map(skill => (
+                          <Badge key={skill} label={skill} type="tag" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {neededSkills.length > 0 && (
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#283593] dark:text-indigo-300 block mb-1">Actively Recruiting For</span>
+                      <div className="flex flex-wrap gap-1">
+                        {neededSkills.map(skill => (
+                          <Badge key={skill} label={skill} type="discipline" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Section>
+            );
+          })()}
 
           <Section title="Linked Capstone Post">
             {team.project ? (

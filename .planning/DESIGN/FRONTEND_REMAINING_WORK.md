@@ -114,7 +114,7 @@ Move `Link` import to the import block at the top.
 
 ---
 
-## 2.3 Team Creation Collects Fields It Does Not Submit
+## 2.3 [x] Team Creation Collects Fields It Does Not Submit
 
 ### Current State
 
@@ -164,7 +164,7 @@ Also change UI value `PUBLIC` to backend enum `VISIBLE`, or map it carefully bef
 
 ---
 
-## 2.4 Account Settings Uses Admin-Only Remove User Mutation
+## 2.4 [x] Account Settings Uses Admin-Only Remove User Mutation
 
 ### Current State
 
