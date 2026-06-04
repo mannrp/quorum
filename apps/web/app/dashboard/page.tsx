@@ -20,6 +20,15 @@ type DashboardInvitation = {
 
 type Deadline = { id: string; deadlineAt: string; updatedAt: string };
 
+type DashboardJoinRequest = {
+  id: string;
+  status: string;
+  message?: string | null;
+  expiresAt?: string | null;
+  createdAt: string;
+  team: { id: string; name: string };
+};
+
 function getRemainingTimeText(expiresAtStr: string): string {
   const expiresAt = new Date(expiresAtStr);
   const diffMs = expiresAt.getTime() - Date.now();
@@ -41,6 +50,7 @@ export default function DashboardPage() {
   const [teamApps, setTeamApps] = useState<ProjectApplication[]>([]);
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [invitations, setInvitations] = useState<DashboardInvitation[]>([]);
+  const [myRequests, setMyRequests] = useState<DashboardJoinRequest[]>([]);
   const [deadline, setDeadline] = useState<Deadline | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +91,25 @@ export default function DashboardPage() {
       setInvitations(dashboardResult.dashboardContext.myInvitations);
       setDeadline(dashboardResult.dashboardContext.universalDeadline);
       setNotifs(dashboardResult.myNotifications.slice(0, 3));
+
+      const requestsResult = await graphqlRequest<{ myJoinRequests: DashboardJoinRequest[] }>(
+        `query GetMyJoinRequests($status: JoinRequestStatus) {
+          myJoinRequests(status: $status) {
+            id
+            status
+            message
+            expiresAt
+            createdAt
+            team {
+              id
+              name
+            }
+          }
+        }`,
+        { status: "ACCEPTED_PENDING_CONFIRMATION" },
+        token
+      );
+      setMyRequests(requestsResult.myJoinRequests || []);
 
       // Fetch all projects to filter team's applications
       const projectsRes = await graphqlRequest<{ projects: Project[] }>(
@@ -148,6 +177,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     void fetchDashboardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   const respondToInvitation = async (invitationId: string, accept: boolean) => {
@@ -179,6 +209,31 @@ export default function DashboardPage() {
       } else {
         setError(msg);
       }
+    }
+  };
+
+  const handleConfirmJoinRequest = async (requestId: string) => {
+    if (!window.confirm("Are you sure you want to confirm joining this team?")) {
+      return;
+    }
+    setNotice(null);
+    setError(null);
+    try {
+      const token = getAuthToken();
+      await graphqlRequest(
+        `mutation ConfirmJoinRequest($requestId: ID!) {
+          confirmJoinRequest(requestId: $requestId) {
+            id
+            status
+          }
+        }`,
+        { requestId },
+        token
+      );
+      setNotice("You have successfully confirmed your membership on the team!");
+      await fetchDashboardData();
+    } catch (err) {
+      setError(userFacingError(err));
     }
   };
 
@@ -332,6 +387,32 @@ export default function DashboardPage() {
               </div>
             ) : (
               <p className="text-xs text-stone-500 italic">No pending team invitations.</p>
+            )}
+          </Section>
+
+          {/* Accepted Join Requests */}
+          <Section title="Accepted Join Requests" variant="tall">
+            {myRequests.length > 0 ? (
+              <div className="space-y-3">
+                {myRequests.map((req) => (
+                  <div key={req.id} className="p-3 border border-amber-250 dark:border-amber-900 rounded-lg space-y-2.5 bg-amber-50/50 dark:bg-amber-950/15">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-start">
+                        <span className="text-xs font-bold text-stone-900 dark:text-slate-100">{req.team.name}</span>
+                      </div>
+                      <p className="text-[10px] text-stone-500">Your request to join this team was accepted. Please confirm your membership.</p>
+                      {req.expiresAt && (
+                        <DeadlineDisplay deadlineAt={req.expiresAt} label="Confirmation Expiration" />
+                      )}
+                    </div>
+                    <button className="btn-primary py-1.5 px-3 text-[9px] w-full" onClick={() => handleConfirmJoinRequest(req.id)}>
+                      Confirm Membership
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-stone-500 italic">No accepted join requests pending confirmation.</p>
             )}
           </Section>
         </div>

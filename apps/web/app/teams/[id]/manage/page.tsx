@@ -58,9 +58,35 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
       setDiscipline(team.discipline || "SOEN");
       setIsComplete(team.isComplete);
       
-      setRequests([]);
+      const loadRequests = async () => {
+        try {
+          const token = getAuthToken();
+          const res = await graphqlRequest<{ teamJoinRequests: JoinRequest[] }>(
+            `query GetTeamJoinRequests($teamId: ID!) {
+              teamJoinRequests(teamId: $teamId, status: PENDING) {
+                id
+                message
+                status
+                createdAt
+                user {
+                  id
+                  fullName
+                  username
+                  discipline
+                }
+              }
+            }`,
+            { teamId: id },
+            token
+          );
+          setRequests(res.teamJoinRequests || []);
+        } catch (err) {
+          console.error("Error loading join requests", err);
+        }
+      };
+      void loadRequests();
     }
-  }, [team]);
+  }, [team, id]);
 
   // Search users for invite
   const handleInviteSearch = async () => {

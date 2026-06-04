@@ -91,6 +91,8 @@ export default function ProfileSettingsPage() {
             portfolioUrl,
             resumeUrl: resumeUrl || undefined,
             resumeVisibility,
+            skills,
+            tags: skills,
           },
         },
         token
