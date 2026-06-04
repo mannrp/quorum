@@ -22,6 +22,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [isSubmitApprovalOpen, setIsSubmitApprovalOpen] = useState(false);
+  const [submittingApproval, setSubmittingApproval] = useState(false);
 
   const project = data?.project;
 
@@ -100,6 +102,32 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
+  const handleConfirmSubmitApproval = async () => {
+    setSubmittingApproval(true);
+    setNotice(null);
+    try {
+      const token = getAuthToken();
+      await graphqlRequest(
+        `mutation SubmitApproval($projectId: ID!) {
+          submitProjectForApproval(projectId: $projectId) {
+            id
+            approvalState
+          }
+        }`,
+        { projectId: id },
+        token
+      );
+      setNotice("Project successfully submitted for professor approval!");
+      setIsSubmitApprovalOpen(false);
+      await reload();
+    } catch (err) {
+      setNotice(userFacingError(err));
+      setIsSubmitApprovalOpen(false);
+    } finally {
+      setSubmittingApproval(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto py-12">
@@ -133,6 +161,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold font-serif text-[#000b60] dark:text-[#a5b4fc] tracking-tight">{project.title}</h1>
             <Status value={project.status} />
+            <Status value={project.approvalState || "UNVERIFIED"} />
           </div>
           <div className="flex flex-wrap gap-1.5">
             {project.disciplines.map((discipline) => (
@@ -142,13 +171,37 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           {notice && <p className="text-xs text-emerald-600 font-bold">{notice}</p>}
         </div>
 
-        <button
-          onClick={() => setIsApplyOpen(true)}
-          disabled={project.status === "CLAIMED"}
-          className={`btn-primary w-full sm:w-auto text-xs ${project.status === "CLAIMED" ? "opacity-50 cursor-not-allowed hover:bg-[#283593]" : ""}`}
-        >
-          {project.status === "CLAIMED" ? "Project Claimed" : "Apply with Team"}
-        </button>
+        {me && me.id !== project.owner.id ? (
+          <button
+            onClick={() => setIsApplyOpen(true)}
+            disabled={project.status === "CLAIMED"}
+            className={`btn-primary w-full sm:w-auto text-xs ${project.status === "CLAIMED" ? "opacity-50 cursor-not-allowed hover:bg-[#283593]" : ""}`}
+          >
+            {project.status === "CLAIMED" ? "Project Claimed" : "Apply with Team"}
+          </button>
+        ) : me ? (
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
+            <Link href={`/projects/${id}/edit`} className="btn-secondary py-2 px-3.5 text-xs text-center">
+              Edit Project
+            </Link>
+            {project.permissions?.canSubmitForApproval && (project.approvalState || "UNVERIFIED") !== "PROFESSOR_APPROVED" && (project.approvalState || "UNVERIFIED") !== "SUBMITTED_FOR_APPROVAL" && (
+              <button
+                onClick={() => setIsSubmitApprovalOpen(true)}
+                className="btn-primary py-2 px-3.5 text-xs"
+              >
+                Submit for Approval
+              </button>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={() => setIsApplyOpen(true)}
+            disabled={project.status === "CLAIMED"}
+            className={`btn-primary w-full sm:w-auto text-xs ${project.status === "CLAIMED" ? "opacity-50 cursor-not-allowed hover:bg-[#283593]" : ""}`}
+          >
+            {project.status === "CLAIMED" ? "Project Claimed" : "Apply with Team"}
+          </button>
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
@@ -410,6 +463,26 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             );
           })()
         )}
+      </Modal>
+
+      {/* Submit for Approval Confirmation Modal */}
+      <Modal isOpen={isSubmitApprovalOpen} onClose={() => setIsSubmitApprovalOpen(false)} title="Submit Capstone Project for Approval">
+        <div className="space-y-4 text-xs">
+          <p className="text-stone-600 dark:text-stone-300 leading-relaxed">
+            Are you sure you want to submit this project challenge for professor approval?
+          </p>
+          <p className="text-stone-500">
+            Once submitted, course directors and professors will be notified to review the details, constraints, and scope. You will receive updates on the status dashboard.
+          </p>
+          <div className="flex gap-2 justify-end pt-3 border-t border-stone-200 dark:border-stone-800">
+            <button onClick={() => setIsSubmitApprovalOpen(false)} className="btn-secondary py-1.5 text-xs" disabled={submittingApproval}>
+              Cancel
+            </button>
+            <button onClick={handleConfirmSubmitApproval} className="btn-primary py-1.5 text-xs" disabled={submittingApproval}>
+              {submittingApproval ? "Submitting..." : "Confirm Submission"}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

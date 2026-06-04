@@ -25,12 +25,17 @@ export function Status({ value }: { value: string }) {
       case "ACCEPTED":
       case "COMPLETE":
       case "MATCHED":
+      case "PROFESSOR_APPROVED":
         return "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-350 border-emerald-250 dark:border-emerald-900";
       case "REJECTED":
       case "CLOSED":
       case "ARCHIVED":
       case "EXPIRED":
+      case "CHANGES_REQUESTED":
         return "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-350 border-rose-200 dark:border-rose-900";
+      case "UNVERIFIED":
+      case "SUBMITTED_FOR_APPROVAL":
+        return "bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-350 border-amber-250 dark:border-amber-900";
       default:
         return "bg-stone-50 dark:bg-stone-800 text-stone-600 dark:text-stone-300 border-stone-300 dark:border-stone-700";
     }
