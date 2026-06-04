@@ -107,24 +107,24 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
 
   return (
     <div className="max-w-5xl mx-auto py-4 space-y-6">
-      <div className="border-b border-stone-250 dark:border-stone-850 pb-4 flex justify-between items-center">
+      <div className="border-b border-[var(--border-subtle)] pb-4 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold font-serif text-[#000b60] dark:text-[#a5b4fc]">Review Project Claims</h1>
-          <p className="text-sm text-stone-500">Evaluate capstone applications for: <strong className="text-[#283593] dark:text-indigo-400 font-bold">{project.title}</strong></p>
+          <h1 className="text-3xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">Review Project Claims</h1>
+          <p className="text-sm text-stone-500 font-sans">Evaluate capstone applications for: <strong className="text-[var(--accent-app)] font-serif uppercase tracking-tight">{project.title}</strong></p>
         </div>
         <Link href={`/projects/${id}`} className="btn-secondary py-1.5 px-3 text-xs">Back to Project</Link>
       </div>
 
       {notice && (
-        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-250 dark:border-emerald-900 rounded text-xs font-semibold text-emerald-800 dark:text-emerald-350">
+        <div className="p-3 bg-[var(--color-success-bg)] border border-[var(--color-success)] rounded-none text-xs font-mono font-semibold text-[var(--color-success)]">
           {notice}
         </div>
       )}
 
       <div className="grid gap-6 md:grid-cols-3 h-[500px]">
         {/* Left column: applications list */}
-        <div className="panel p-4 flex flex-col space-y-4 md:col-span-1 overflow-y-auto bg-stone-50/50 dark:bg-[#161a2b]">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-stone-400 px-1">Applications Queue</h4>
+        <div className="panel p-4 flex flex-col space-y-4 md:col-span-1 overflow-y-auto bg-[var(--bg-app)]">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-stone-400 px-1 font-mono">Applications Queue</h4>
           <div className="space-y-1.5">
             {apps.map((app) => {
               const isSel = selectedApp?.id === app.id;
@@ -132,17 +132,17 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
                 <button
                   key={app.id}
                   onClick={() => setSelectedApp(app)}
-                  className={`w-full flex flex-col p-3 rounded-lg text-left transition border ${isSel ? "bg-[#283593]/10 border-indigo-200 dark:border-indigo-900 text-stone-900 dark:text-slate-100" : "bg-white dark:bg-[#111422] border-transparent hover:bg-stone-50 dark:hover:bg-[#1e253c]/40 text-stone-600 dark:text-stone-400"}`}
+                  className={`w-full flex flex-col p-3 rounded-none text-left transition border ${isSel ? "bg-[var(--surface-app)] border-[var(--border-app)] border-l-4 border-l-[var(--accent-app)] text-[var(--text-app)]" : "bg-[var(--surface-app)] border-[var(--border-subtle)] hover:border-[var(--accent-app)] text-stone-550"}`}
                 >
                   <div className="flex items-center justify-between w-full">
                     <span className="font-bold text-xs">{app.team.name}</span>
                     <Status value={app.status} />
                   </div>
-                  <span className="text-[9px] text-stone-400 mt-1">{app.createdAt}</span>
+                  <span className="text-[9px] text-stone-400 mt-1 font-mono">{app.createdAt}</span>
                 </button>
               );
             })}
-            {apps.length === 0 && <p className="text-xs text-stone-500 italic px-1">No claims received yet.</p>}
+            {apps.length === 0 && <p className="text-xs text-stone-500 italic px-1 font-mono">No claims received yet.</p>}
           </div>
         </div>
 
@@ -150,11 +150,11 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
         <div className="panel p-0 md:col-span-2 flex flex-col justify-between overflow-hidden">
           {selectedApp ? (
             <>
-              <div className="px-6 py-4 border-b border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/40">
+              <div className="px-6 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-app)]">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h3 className="font-serif font-bold text-lg text-stone-900 dark:text-slate-100">{selectedApp.team.name}</h3>
-                    <p className="text-xs text-stone-400">Submitted {selectedApp.createdAt}</p>
+                    <h3 className="font-serif font-bold text-lg text-[var(--text-app)] uppercase tracking-tight">{selectedApp.team.name}</h3>
+                    <p className="text-xs text-stone-400 font-mono">Submitted {selectedApp.createdAt}</p>
                   </div>
                   <div className="flex gap-2">
                     {selectedApp.status === "TEAM_CONFIRMED" && (
@@ -173,24 +173,24 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
               <div className="flex-1 p-6 overflow-y-auto space-y-6">
                 {selectedApp.message && (
                   <div className="space-y-1">
-                    <h5 className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Team Introduction Note</h5>
-                    <p className="text-xs text-stone-700 dark:text-slate-350 leading-relaxed bg-[#f8f9fa] dark:bg-[#111422] p-3 rounded border border-stone-250 dark:border-stone-850 italic">
+                    <h5 className="text-[10px] font-bold uppercase tracking-wider text-stone-400 font-mono">Team Introduction Note</h5>
+                    <p className="text-xs text-[var(--text-app)] leading-relaxed bg-[var(--bg-app)] p-3 rounded-none border border-[var(--border-app)] italic font-sans">
                       &quot;{selectedApp.message}&quot;
                     </p>
                   </div>
                 )}
 
                 <div className="space-y-3">
-                  <h5 className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Team Roster</h5>
+                  <h5 className="text-[10px] font-bold uppercase tracking-wider text-stone-400 font-mono">Team Roster</h5>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {selectedApp.team.members?.map((m) => (
-                      <div key={m.id} className="p-2 border border-stone-200 dark:border-stone-800 rounded bg-[#f8f9fa] dark:bg-[#111422] flex items-center gap-2">
-                        <div className="h-6 w-6 rounded-full bg-stone-250 dark:bg-stone-800 flex items-center justify-center text-[10px] font-bold text-stone-600 dark:text-indigo-400">
+                      <div key={m.id} className="p-2 border border-[var(--border-app)] rounded-none bg-[var(--bg-app)] flex items-center gap-2">
+                        <div className="h-6 w-6 rounded-none bg-[var(--surface-app)] border border-[var(--border-app)] flex items-center justify-center text-[10px] font-mono font-bold text-[var(--accent-app)]">
                           {m.user.fullName.charAt(0)}
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-stone-800 dark:text-slate-200">{m.user.fullName}</p>
-                          <p className="text-[9px] text-stone-400">@{m.user.username} • {m.user.discipline}</p>
+                          <p className="text-xs font-bold text-[var(--text-app)]">{m.user.fullName}</p>
+                          <p className="text-[9px] text-stone-400 font-mono">@{m.user.username} • {m.user.discipline}</p>
                         </div>
                       </div>
                     ))}
@@ -198,7 +198,7 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
                 </div>
 
                 <div className="space-y-1.5">
-                  <h5 className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Contact Team Lead</h5>
+                  <h5 className="text-[10px] font-bold uppercase tracking-wider text-stone-400 font-mono">Contact Team Lead</h5>
                   <Link href={`/inbox?userId=${selectedApp.team.createdBy?.id || ""}`} className="btn-secondary py-1.5 px-3 text-xs inline-flex items-center gap-1.5">
                     ✉ Send Direct Message
                   </Link>

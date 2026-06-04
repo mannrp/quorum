@@ -80,16 +80,16 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="max-w-2xl mx-auto py-4 space-y-6">
-      <div className="border-b border-stone-250 dark:border-stone-850 pb-4 flex justify-between items-center">
+      <div className="border-b border-[var(--border-subtle)] pb-4 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold font-serif text-[#000b60] dark:text-[#a5b4fc]">Edit Project</h1>
-          <p className="text-sm text-stone-500">Edit sponsored capstone details and status.</p>
+          <h1 className="text-3xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">Edit Project</h1>
+          <p className="text-sm text-stone-500 font-sans">Edit sponsored capstone details and status.</p>
         </div>
         <Link href={`/projects/${id}`} className="btn-secondary py-1.5 px-3 text-xs">View Project</Link>
       </div>
 
       {notice && (
-        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-250 dark:border-emerald-900 rounded text-xs font-semibold text-emerald-800 dark:text-emerald-350">
+        <div className="p-3 bg-[var(--color-success-bg)] border border-[var(--color-success)] rounded-none text-xs font-mono font-semibold text-[var(--color-success)]">
           {notice}
         </div>
       )}
