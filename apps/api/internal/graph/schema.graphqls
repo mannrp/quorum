@@ -347,6 +347,7 @@ type Query {
   myInbox: [User!]!
   myNotifications: [Notification!]!
   myTeamInvitations: [TeamInvitation!]!
+  teamJoinRequests(teamId: ID!, status: JoinRequestStatus): [TeamJoinRequest!]!
   universalDeadline: Deadline
   auditLogs(limit: Int = 100): [AuditLog!]!
 }

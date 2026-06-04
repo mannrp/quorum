@@ -190,6 +190,7 @@ type ComplexityRoot struct {
 		Project           func(childComplexity int, id string) int
 		Projects          func(childComplexity int, discipline *string, status *model.ProjectLifecycleState, search *string) int
 		Team              func(childComplexity int, id string) int
+		TeamJoinRequests  func(childComplexity int, teamID string, status *model.JoinRequestStatus) int
 		Teams             func(childComplexity int, discipline *string, hasProject *bool, isComplete *bool, search *string) int
 		UniversalDeadline func(childComplexity int) int
 		User              func(childComplexity int, username string) int
@@ -357,6 +358,7 @@ type QueryResolver interface {
 	MyInbox(ctx context.Context) ([]*model.User, error)
 	MyNotifications(ctx context.Context) ([]*model.Notification, error)
 	MyTeamInvitations(ctx context.Context) ([]*model.TeamInvitation, error)
+	TeamJoinRequests(ctx context.Context, teamID string, status *model.JoinRequestStatus) ([]*model.TeamJoinRequest, error)
 	UniversalDeadline(ctx context.Context) (*model.Deadline, error)
 	AuditLogs(ctx context.Context, limit *int) ([]*model.AuditLog, error)
 }
@@ -1356,6 +1358,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Team(childComplexity, args["id"].(string)), true
+	case "Query.teamJoinRequests":
+		if e.ComplexityRoot.Query.TeamJoinRequests == nil {
+			break
+		}
+
+		args, err := ec.field_Query_teamJoinRequests_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.TeamJoinRequests(childComplexity, args["teamId"].(string), args["status"].(*model.JoinRequestStatus)), true
 	case "Query.teams":
 		if e.ComplexityRoot.Query.Teams == nil {
 			break
@@ -2325,6 +2338,7 @@ type Query {
   myInbox: [User!]!
   myNotifications: [Notification!]!
   myTeamInvitations: [TeamInvitation!]!
+  teamJoinRequests(teamId: ID!, status: JoinRequestStatus): [TeamJoinRequest!]!
   universalDeadline: Deadline
   auditLogs(limit: Int = 100): [AuditLog!]!
 }
@@ -3726,6 +3740,28 @@ func (ec *executionContext) field_Query_projects_args(ctx context.Context, rawAr
 		return nil, err
 	}
 	args["search"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_teamJoinRequests_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "teamId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["teamId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "status",
+		func(ctx context.Context, v any) (*model.JoinRequestStatus, error) {
+			return ec.unmarshalOJoinRequestStatus2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐJoinRequestStatus(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["status"] = arg1
 	return args, nil
 }
 
@@ -7954,6 +7990,50 @@ func (ec *executionContext) fieldContext_Query_myTeamInvitations(_ context.Conte
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_TeamInvitation(ctx, field)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_teamJoinRequests(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_teamJoinRequests(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().TeamJoinRequests(ctx, fc.Args["teamId"].(string), fc.Args["status"].(*model.JoinRequestStatus))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.TeamJoinRequest) graphql.Marshaler {
+			return ec.marshalNTeamJoinRequest2ᚕᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐTeamJoinRequestᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_teamJoinRequests(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TeamJoinRequest(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_teamJoinRequests_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -13194,6 +13274,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "teamJoinRequests":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_teamJoinRequests(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "universalDeadline":
 			field := field
 
@@ -14701,6 +14803,22 @@ func (ec *executionContext) marshalNTeamJoinRequest2githubᚗcomᚋlocalᚋquoru
 	return ec._TeamJoinRequest(ctx, sel, &v)
 }
 
+func (ec *executionContext) marshalNTeamJoinRequest2ᚕᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐTeamJoinRequestᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.TeamJoinRequest) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNTeamJoinRequest2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐTeamJoinRequest(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) marshalNTeamJoinRequest2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐTeamJoinRequest(ctx context.Context, sel ast.SelectionSet, v *model.TeamJoinRequest) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -15088,6 +15206,22 @@ func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.Sele
 	_ = ctx
 	res := graphql.MarshalInt(*v)
 	return res
+}
+
+func (ec *executionContext) unmarshalOJoinRequestStatus2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐJoinRequestStatus(ctx context.Context, v any) (*model.JoinRequestStatus, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.JoinRequestStatus)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOJoinRequestStatus2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐJoinRequestStatus(ctx context.Context, sel ast.SelectionSet, v *model.JoinRequestStatus) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) marshalOProject2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐProject(ctx context.Context, sel ast.SelectionSet, v *model.Project) graphql.Marshaler {

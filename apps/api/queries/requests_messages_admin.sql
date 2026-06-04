@@ -34,11 +34,11 @@ FROM team_join_requests
 WHERE id = $1;
 
 -- name: ListJoinRequestsForTeam :many
-SELECT tjr.*, u.username, u.full_name
-FROM team_join_requests tjr
-JOIN users u ON u.id = tjr.user_id
-WHERE tjr.team_id = $1
-ORDER BY tjr.created_at DESC;
+SELECT *
+FROM team_join_requests
+WHERE team_id = $1
+  AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
+ORDER BY created_at DESC;
 
 -- name: CreateTeamInvitation :one
 INSERT INTO team_invitations (team_id, invited_user_id, invited_by, message, expires_at)

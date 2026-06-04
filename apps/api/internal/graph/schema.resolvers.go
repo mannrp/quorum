@@ -1622,6 +1622,38 @@ func (r *queryResolver) MyTeamInvitations(ctx context.Context) ([]*model.TeamInv
 	return out, nil
 }
 
+// TeamJoinRequests is the resolver for the teamJoinRequests field.
+func (r *queryResolver) TeamJoinRequests(ctx context.Context, teamID string, status *model.JoinRequestStatus) ([]*model.TeamJoinRequest, error) {
+	tid, err := uuid(teamID)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.requireTeamLead(ctx, tid); err != nil {
+		return nil, err
+	}
+	if err := r.expireDueWorkflows(ctx, r.Queries); err != nil {
+		return nil, err
+	}
+	var statusText *string
+	if status != nil {
+		value := string(*status)
+		statusText = &value
+	}
+	rows, err := r.Queries.ListJoinRequestsForTeam(ctx, db.ListJoinRequestsForTeamParams{TeamID: tid, Status: text(statusText)})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*model.TeamJoinRequest, 0, len(rows))
+	for _, row := range rows {
+		mapped, err := r.joinRequest(ctx, row)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, mapped)
+	}
+	return out, nil
+}
+
 // UniversalDeadline is the resolver for the universalDeadline field.
 func (r *queryResolver) UniversalDeadline(ctx context.Context) (*model.Deadline, error) {
 	deadline, err := r.Queries.GetUniversalDeadline(ctx)

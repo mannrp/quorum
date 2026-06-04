@@ -453,40 +453,21 @@ func (q *Queries) GetProjectApplicationForTeamProject(ctx context.Context, arg G
 }
 
 const listProjectApplications = `-- name: ListProjectApplications :many
-SELECT pa.id, pa.project_id, pa.team_id, pa.message, pa.status, pa.created_at, pa.applicant_id, pa.answers, pa.review_message, pa.offer_message, pa.team_confirmed_at, pa.owner_confirmed_at, pa.expires_at, pa.withdrawn_at, t.name AS team_name
-FROM project_applications pa
-JOIN teams t ON t.id = pa.team_id
-WHERE pa.project_id = $1
-ORDER BY pa.created_at DESC
+SELECT id, project_id, team_id, message, status, created_at, applicant_id, answers, review_message, offer_message, team_confirmed_at, owner_confirmed_at, expires_at, withdrawn_at
+FROM project_applications
+WHERE project_id = $1
+ORDER BY created_at DESC
 `
 
-type ListProjectApplicationsRow struct {
-	ID               pgtype.UUID        `json:"id"`
-	ProjectID        pgtype.UUID        `json:"project_id"`
-	TeamID           pgtype.UUID        `json:"team_id"`
-	Message          pgtype.Text        `json:"message"`
-	Status           string             `json:"status"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	ApplicantID      pgtype.UUID        `json:"applicant_id"`
-	Answers          []byte             `json:"answers"`
-	ReviewMessage    pgtype.Text        `json:"review_message"`
-	OfferMessage     pgtype.Text        `json:"offer_message"`
-	TeamConfirmedAt  pgtype.Timestamptz `json:"team_confirmed_at"`
-	OwnerConfirmedAt pgtype.Timestamptz `json:"owner_confirmed_at"`
-	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
-	WithdrawnAt      pgtype.Timestamptz `json:"withdrawn_at"`
-	TeamName         string             `json:"team_name"`
-}
-
-func (q *Queries) ListProjectApplications(ctx context.Context, projectID pgtype.UUID) ([]ListProjectApplicationsRow, error) {
+func (q *Queries) ListProjectApplications(ctx context.Context, projectID pgtype.UUID) ([]ProjectApplication, error) {
 	rows, err := q.db.Query(ctx, listProjectApplications, projectID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListProjectApplicationsRow
+	var items []ProjectApplication
 	for rows.Next() {
-		var i ListProjectApplicationsRow
+		var i ProjectApplication
 		if err := rows.Scan(
 			&i.ID,
 			&i.ProjectID,
@@ -502,7 +483,6 @@ func (q *Queries) ListProjectApplications(ctx context.Context, projectID pgtype.
 			&i.OwnerConfirmedAt,
 			&i.ExpiresAt,
 			&i.WithdrawnAt,
-			&i.TeamName,
 		); err != nil {
 			return nil, err
 		}
