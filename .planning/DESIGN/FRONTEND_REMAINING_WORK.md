@@ -242,7 +242,7 @@ UI behavior:
 
 ---
 
-## 3.2 Team Join Request Review
+## 3.2 [Attempted - Blocked by Backend Read Queries] Team Join Request Review
 
 ### Current State
 
@@ -277,7 +277,7 @@ After backend exposes join requests:
 
 ---
 
-## 3.3 Applicant Confirm Accepted Join Request
+## 3.3 [Attempted - Blocked by Backend Read Queries] Applicant Confirm Accepted Join Request
 
 ### Current State
 
