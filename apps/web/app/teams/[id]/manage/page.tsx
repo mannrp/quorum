@@ -3,7 +3,7 @@ import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Section, Status, Badge, Modal } from "@/components/ui";
-import { getAuthToken, graphqlRequest, useGraphQL } from "@/lib/graphql";
+import { getAuthToken, graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { TEAM_QUERY } from "@/lib/queries";
 import type { Team, TeamMembership, TeamRole } from "@/types/domain";
 
@@ -34,6 +34,7 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
   // Search state for invitations
   const [inviteSearch, setInviteSearch] = useState("");
   const [inviteResults, setInviteResults] = useState<{ id: string; fullName: string; username: string }[]>([]);
+  const [inviteMessage, setInviteMessage] = useState("We would like to invite you to join our capstone team.");
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
 
   // Join Requests state
@@ -52,27 +53,11 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
     if (team) {
       setName(team.name || "");
       setDescription(team.description || "");
-      setDiscordUrl(""); // local fallback
+      setDiscordUrl(team.discordLink || "");
       setDiscipline(team.discipline || "SOEN");
       setIsComplete(team.isComplete);
       
-      // Load mock Join Requests
-      setRequests([
-        {
-          id: "req-1",
-          message: "Hi, I have a strong foundation in PostgreSQL and Svelte. I would love to build out the frontend components.",
-          status: "PENDING",
-          createdAt: "2026-06-02",
-          user: { id: "user-usr-1", fullName: "Markus Vance", username: "mvance", discipline: "SOEN" }
-        },
-        {
-          id: "req-2",
-          message: "Hey team, looking for a group. I have some background in DevOps and Kubernetes.",
-          status: "PENDING",
-          createdAt: "2026-06-01",
-          user: { id: "user-usr-2", fullName: "Sarah Connor", username: "sconnor", discipline: "COEN" }
-        }
-      ]);
+      setRequests([]);
     }
   }, [team]);
 
@@ -82,16 +67,14 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
     try {
       const token = getAuthToken();
       const res = await graphqlRequest<{ users: { id: string; fullName: string; username: string }[] }>(
-        `query searchUsers($q: String) { users { id fullName username } }`, // mock generic
-        {},
+        `query searchUsers($q: String) { users(search: $q) { id fullName username } }`,
+        { q: inviteSearch },
         token
-      ).catch(() => ({ users: [
-        { id: "usr-inv-1", fullName: "John Doe", username: "johndoe" },
-        { id: "usr-inv-2", fullName: "Alice Vance", username: "alicev" }
-      ]}));
-      setInviteResults(res.users.filter((u) => u.fullName.toLowerCase().includes(inviteSearch.toLowerCase()) || u.username.toLowerCase().includes(inviteSearch.toLowerCase())));
+      );
+      setInviteResults(res.users);
     } catch (err) {
-      console.warn(err);
+      setInviteNotice(userFacingError(err));
+      setInviteResults([]);
     }
   };
 
@@ -101,14 +84,15 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
     try {
       const token = getAuthToken();
       await graphqlRequest(
-        `mutation InviteUser($teamId: ID!, $userId: ID!) { inviteUserToTeam(teamId: $teamId, userId: $userId) { id } }`,
-        { teamId: id, userId },
+        `mutation InviteTeamMember($teamId: ID!, $userId: ID!, $message: String) {
+          inviteTeamMember(teamId: $teamId, userId: $userId, message: $message) { id status expiresAt }
+        }`,
+        { teamId: id, userId, message: inviteMessage },
         token
       );
-      setInviteNotice("Invitation sent successfully!");
+      setInviteNotice("Invitation sent.");
     } catch (err) {
-      console.warn("Invite failed, simulating success locally", err);
-      setInviteNotice("Invitation sent (simulated).");
+      setInviteNotice(userFacingError(err));
     }
   };
 
@@ -119,15 +103,29 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
     try {
       const token = getAuthToken();
       await graphqlRequest(
-        `mutation UpdateTeamDetails($id: ID!, $input: UpdateTeamInput!) { updateTeam(teamId: $id, input: $input) { id } }`,
-        { id, input: { name, description, isComplete, discipline } },
+        `mutation UpdateTeamDetails($id: ID!, $input: UpdateTeamInput!) { updateTeam(id: $id, input: $input) { id } }`,
+        {
+          id,
+          input: {
+            name,
+            description,
+            isComplete,
+            discipline,
+            maxSize: team?.maxSize || 4,
+            recruitingState: isComplete ? "PAUSED" : "RECRUITING",
+            visibility: team?.visibility || "VISIBLE",
+            discordLink: discordUrl || null,
+            existingSkills: team?.existingSkills || [],
+            neededSkills: team?.neededSkills || [],
+            projectInterests: team?.projectInterests || []
+          }
+        },
         token
       );
       setNotice("Team specifications successfully updated.");
       await reload();
     } catch (err) {
-      console.warn("UpdateTeam failed, utilizing mock local state", err);
-      setNotice("Specifications updated (dev simulation active).");
+      setNotice(userFacingError(err));
     } finally {
       setSaving(false);
     }
@@ -144,16 +142,18 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
     try {
       const token = getAuthToken();
       await graphqlRequest(
-        `mutation RespondRequest($requestId: ID!, $status: ApplicationStatus!) { respondToJoinRequest(requestId: $requestId, status: $status) { id } }`,
-        { requestId: actionReqId, status: actionType === "ACCEPT" ? "ACCEPTED" : "REJECT" },
+        `mutation RespondRequest($requestId: ID!, $accept: Boolean!) {
+          respondToJoinRequest(requestId: $requestId, accept: $accept) { id status }
+        }`,
+        { requestId: actionReqId, accept: actionType === "ACCEPT" },
         token
       );
-    } catch (err) {
-      console.warn("RespondRequest failed, updating locally", err);
-    } finally {
       setRequests((prev) => prev.filter((r) => r.id !== actionReqId));
-      setIsConfirmOpen(false);
       setNotice(`Request ${actionType === "ACCEPT" ? "approved" : "declined"}.`);
+    } catch (err) {
+      setNotice(userFacingError(err));
+    } finally {
+      setIsConfirmOpen(false);
     }
   };
 
@@ -162,15 +162,14 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
     try {
       const token = getAuthToken();
       await graphqlRequest(
-        `mutation RemoveMem($teamId: ID!, $userId: ID!) { removeMember(teamId: $teamId, userId: $userId) { id } }`,
+        `mutation RemoveMem($teamId: ID!, $userId: ID!) { removeMember(teamId: $teamId, userId: $userId) }`,
         { teamId: id, userId },
         token
       );
       setNotice("Member removed.");
       await reload();
     } catch (err) {
-      console.warn("RemoveMember failed, updating locally", err);
-      setNotice("Member removed (dev simulated).");
+      setNotice(userFacingError(err));
     }
   };
 
@@ -279,6 +278,12 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
                 />
                 <button type="button" onClick={handleInviteSearch} className="btn-primary py-1 px-3 text-xs">Search</button>
               </div>
+              <textarea
+                value={inviteMessage}
+                onChange={(e) => setInviteMessage(e.target.value)}
+                placeholder="Invitation message..."
+                className="input-field min-h-16 py-2 px-2 text-xs"
+              />
 
               {inviteNotice && <p className="text-xs text-emerald-600 font-bold">{inviteNotice}</p>}
 

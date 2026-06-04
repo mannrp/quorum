@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Combobox } from "@/components/ui";
-import { getAuthToken, graphqlRequest, uploadToSignedPost } from "@/lib/graphql";
+import { getAuthToken, graphqlRequest, uploadToSignedPost, userFacingError } from "@/lib/graphql";
 import { ME_QUERY } from "@/lib/queries";
 import type { UploadSignature, User } from "@/types/domain";
 
@@ -44,7 +44,7 @@ export default function OnboardingPage() {
           setSkills((res.me.tags || []).map((t) => t.name));
         }
       } catch (err) {
-        console.warn("Unable to fetch me query for onboarding, using local states", err);
+        setNotice(userFacingError(err));
       } finally {
         setLoading(false);
       }
@@ -101,11 +101,7 @@ export default function OnboardingPage() {
       }, 1000);
 
     } catch (err) {
-      console.warn("GraphQL update profile failed, simulating onboarding completeness locally", err);
-      setNotice("Setup complete (dev simulation active).");
-      setTimeout(() => {
-        router.push("/dashboard");
-      }, 1000);
+      setNotice(userFacingError(err));
     } finally {
       setUploading(false);
     }

@@ -52,22 +52,24 @@ export default function CreateProjectPage() {
         {
           input: {
             title,
-            description: `${summary}\n\n${description}`,
+            summary,
+            description,
             constraints,
             disciplines,
             teamSizeMin: Number(minSize),
             teamSizeMax: Number(maxSize),
             fileUrl,
             videoUrl,
-            // Custom questions could be stored or serialized
+            lifecycleState: "OPEN",
+            approvalState: "UNVERIFIED",
+            applicationQuestions: JSON.stringify(customQuestions)
           }
         },
         token
       );
       router.push(`/projects/${result.createProject.id}`);
     } catch (err) {
-      console.warn("CreateProject failed, simulating locally", err);
-      router.push(`/projects/mock-project-${Date.now()}`);
+      setError(err instanceof Error ? err.message : "Unable to create project");
     } finally {
       setSaving(false);
     }

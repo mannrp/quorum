@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Section, Status, Modal } from "@/components/ui";
-import { getAuthToken, graphqlRequest, useGraphQL } from "@/lib/graphql";
+import { getAuthToken, graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { ADMIN_QUERY } from "@/lib/queries";
 import type { Project, Team, User } from "@/types/domain";
 
@@ -13,29 +13,25 @@ type DeleteAction = {
 
 type AuditLog = {
   id: string;
-  action: string;
-  actor: string;
-  target: string;
-  timestamp: string;
+  actionType: string;
+  targetEntityType: string;
+  targetEntityId?: string | null;
+  reason?: string | null;
+  createdAt: string;
+  actor?: Pick<User, "id" | "username" | "email" | "fullName"> | null;
 };
 
 export default function AdminPage() {
-  const { data, error, loading, reload } = useGraphQL<{ users: User[]; teams: Team[]; projects: Project[] }>(ADMIN_QUERY, {}, { auth: true });
+  const { data, error, loading, reload } = useGraphQL<{ users: User[]; teams: Team[]; projects: Project[]; auditLogs: AuditLog[] }>(ADMIN_QUERY, {}, { auth: true });
   const users = data?.users || [];
   const teams = data?.teams || [];
   const projects = data?.projects || [];
+  const auditLogs = data?.auditLogs || [];
 
   const [activeTab, setActiveTab] = useState<"ACCOUNTS" | "TEAMS" | "PROJECTS" | "DEADLINES" | "AUDIT">("ACCOUNTS");
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteAction | null>(null);
   const [deadline, setDeadline] = useState("2026-06-15T23:59");
   const [deadlineNotice, setDeadlineNotice] = useState<string | null>(null);
-
-  // Mock audit logs
-  const mockAuditLogs: AuditLog[] = [
-    { id: "log-1", action: "TEAM_ARCHIVE", actor: "admin@concordia.ca", target: "Team Alpha (id: t-10)", timestamp: "2026-06-02 15:30" },
-    { id: "log-2", action: "PROJECT_CLAIM_OVERRIDE", actor: "admin@concordia.ca", target: "Aegis container project (id: p-5) claimed by Team Beta", timestamp: "2026-06-01 10:15" },
-    { id: "log-3", action: "USER_DEACTIVATION", actor: "admin@concordia.ca", target: "Mark Vance (id: u-12)", timestamp: "2026-05-30 08:00" },
-  ];
 
   const handleOpenDelete = (type: "USER" | "TEAM" | "PROJECT", id: string, name: string) => {
     setDeleteConfirm({ type, id, name });
@@ -53,17 +49,30 @@ export default function AdminPage() {
         await graphqlRequest(`mutation RemoveProject($id: ID!) { removeProject(projectId: $id) }`, { id: deleteConfirm.id }, token);
       }
     } catch (err) {
-      console.warn("Delete mutation failed, updating local state directly for simulation", err);
+      setDeadlineNotice(userFacingError(err));
     } finally {
       setDeleteConfirm(null);
       await reload();
     }
   };
 
-  const handleDeadlineSave = (e: React.FormEvent) => {
+  const handleDeadlineSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setDeadlineNotice("Universal match deadlines successfully saved and propagated to students.");
-    setTimeout(() => setDeadlineNotice(null), 3000);
+    setDeadlineNotice(null);
+    try {
+      const deadlineAt = new Date(deadline).toISOString();
+      await graphqlRequest(
+        `mutation SetDeadline($deadlineAt: String!, $reason: String) {
+          setUniversalDeadline(deadlineAt: $deadlineAt, reason: $reason) { id deadlineAt updatedAt }
+        }`,
+        { deadlineAt, reason: "Updated from admin console" },
+        getAuthToken()
+      );
+      setDeadlineNotice("Universal match deadline saved and propagated.");
+      await reload();
+    } catch (err) {
+      setDeadlineNotice(userFacingError(err));
+    }
   };
 
   return (
@@ -230,14 +239,19 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-stone-800 text-stone-600 dark:text-slate-350 font-mono text-[11px]">
-                {mockAuditLogs.map((log) => (
+                {auditLogs.map((log) => (
                   <tr key={log.id}>
-                    <td className="py-3 font-bold text-[#283593] dark:text-indigo-400">{log.action}</td>
-                    <td className="py-3">{log.actor}</td>
-                    <td className="py-3">{log.target}</td>
-                    <td className="py-3 text-stone-400">{log.timestamp}</td>
+                    <td className="py-3 font-bold text-[#283593] dark:text-indigo-400">{log.actionType}</td>
+                    <td className="py-3">{log.actor?.email || log.actor?.username || "system"}</td>
+                    <td className="py-3">{log.targetEntityType}{log.targetEntityId ? ` (${log.targetEntityId})` : ""}</td>
+                    <td className="py-3 text-stone-400">{new Date(log.createdAt).toLocaleString()}</td>
                   </tr>
                 ))}
+                {auditLogs.length === 0 && (
+                  <tr>
+                    <td className="py-4 text-stone-400" colSpan={4}>No audit logs returned by the backend.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

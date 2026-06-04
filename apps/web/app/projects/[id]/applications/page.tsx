@@ -2,7 +2,7 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { Section, Status, Badge, Modal } from "@/components/ui";
-import { getAuthToken, graphqlRequest, useGraphQL } from "@/lib/graphql";
+import { getAuthToken, graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { PROJECT_QUERY } from "@/lib/queries";
 import type { Project, ProjectApplication } from "@/types/domain";
 
@@ -35,10 +35,9 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
     setSubmitting(true);
     try {
       const token = getAuthToken();
-      // Send offer mutation
       await graphqlRequest(
         `mutation SendOffer($applicationId: ID!, $message: String) {
-          sendProjectOffer(applicationId: $applicationId, message: $message) { id status }
+          sendProjectOffer(applicationId: $applicationId, message: $message) { id status offerMessage expiresAt }
         }`,
         { applicationId: selectedApp.id, message: offerMessage },
         token
@@ -47,15 +46,8 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
       setIsOfferOpen(false);
       await reload();
     } catch (err) {
-      console.warn("SendProjectOffer failed, simulating locally", err);
-      setNotice("Offer sent (simulated). 72-hour team confirmation timer active.");
+      setNotice(userFacingError(err));
       setIsOfferOpen(false);
-      // Simulate status change
-      setApps((prev) =>
-        prev.map((a) =>
-          a.id === selectedApp.id ? { ...a, status: "ACCEPTED" } : a
-        )
-      );
     } finally {
       setSubmitting(false);
     }
@@ -67,18 +59,16 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
     try {
       const token = getAuthToken();
       await graphqlRequest(
-        `mutation RejectApp($applicationId: ID!) {
-          rejectApplication(applicationId: $applicationId) { id status }
+        `mutation RejectApp($applicationId: ID!, $message: String) {
+          rejectApplication(applicationId: $applicationId, message: $message) { id status reviewMessage }
         }`,
-        { applicationId: appId },
+        { applicationId: appId, message: "Declined by project owner." },
         token
       );
       setNotice("Application declined.");
       await reload();
     } catch (err) {
-      console.warn("RejectApplication failed, updating locally", err);
-      setNotice("Application declined (simulated).");
-      setApps((prev) => prev.filter((a) => a.id !== appId));
+      setNotice(userFacingError(err));
     }
   };
 
@@ -142,7 +132,7 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
                     <p className="text-xs text-stone-400">Submitted {selectedApp.createdAt}</p>
                   </div>
                   <div className="flex gap-2">
-                    {selectedApp.status !== "ACCEPTED" && (
+                    {selectedApp.status !== "OFFER_SENT" && selectedApp.status !== "MATCHED" && (
                       <button onClick={() => setIsOfferOpen(true)} className="btn-primary py-1 px-3 text-xs">Send Offer</button>
                     )}
                     <button onClick={() => handleReject(selectedApp.id)} className="btn-secondary py-1 px-3 text-xs text-rose-500 border-rose-200/40 dark:border-rose-950/40">Decline</button>

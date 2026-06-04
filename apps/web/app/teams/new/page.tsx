@@ -44,19 +44,14 @@ export default function CreateTeamPage() {
             name,
             description,
             maxSize: Number(maxSize),
-            discipline: discipline || "SOEN",
-            discordUrl,
-            // Convert parameters to matching structures
+            discipline: discipline || "SOEN"
           }
         },
         token
       );
       router.push(`/teams/${result.createTeam.id}`);
     } catch (err) {
-      console.warn("CreateTeam failed, simulating team creation locally", err);
-      // Simulate redirection to a mock team page for developer workflows
-      const mockTeamId = "mock-team-" + Date.now();
-      router.push(`/teams/${mockTeamId}`);
+      setError(err instanceof Error ? err.message : "Unable to create team");
     } finally {
       setSaving(false);
     }

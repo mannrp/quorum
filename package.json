@@ -15,5 +15,8 @@
   },
   "devDependencies": {
     "turbo": "^2.0.11"
+  },
+  "dependencies": {
+    "@stackframe/stack": "^2.8.108"
   }
 }

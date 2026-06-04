@@ -2,7 +2,7 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { Section, Status, Badge, Modal } from "@/components/ui";
-import { getAuthToken, graphqlRequest, useGraphQL } from "@/lib/graphql";
+import { getAuthToken, graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { PROJECT_QUERY } from "@/lib/queries";
 import type { Project, Team, User } from "@/types/domain";
 
@@ -42,7 +42,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             `query myTeamsProject { teams { id name maxSize createdBy { id } members { user { id } role } } }`,
             {},
             token
-          ).catch(() => ({ teams: [] }));
+          );
           
           const userTeam = teamRes.teams.find((t) =>
             t.members.some((m) => m.user.id === meRes.me?.id)
@@ -50,7 +50,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           if (userTeam) setMyTeam(userTeam);
         }
       } catch (err) {
-        console.warn("Unable to fetch user credentials for project claims", err);
+        setNotice(userFacingError(err));
       }
     };
     void fetchSessionData();
@@ -62,23 +62,30 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     setNotice(null);
     setSubmitting(true);
 
-    const messageString = `Q1: ${answers.q1}\n\nQ2: ${answers.q2}\n\nQ3: ${answers.q3}\n\nMessage: ${answers.message}`;
+    const answerPayload = JSON.stringify({
+      defaultQuestions: {
+        interest: answers.q1,
+        experience: answers.q2,
+        approach: answers.q3
+      },
+      customQuestions: project.applicationQuestions || "",
+      submittedAt: new Date().toISOString()
+    });
 
     try {
       const token = getAuthToken();
       await graphqlRequest(
-        `mutation Apply($projectId: ID!, $teamId: ID!, $message: String) {
-          applyToProject(projectId: $projectId, teamId: $teamId, message: $message) { id status }
+        `mutation Apply($input: ApplyToProjectInput!) {
+          applyToProjectInput(input: $input) { id status }
         }`,
-        { projectId: id, teamId: myTeam.id, message: messageString },
+        { input: { projectId: id, teamId: myTeam.id, message: answers.message, answers: answerPayload } },
         token
       );
       setNotice("Application submitted successfully.");
       setIsApplyOpen(false);
       await reload();
     } catch (err) {
-      console.warn("Apply failed, simulating success locally", err);
-      setNotice("Application submitted (simulated).");
+      setNotice(userFacingError(err));
       setIsApplyOpen(false);
     } finally {
       setSubmitting(false);

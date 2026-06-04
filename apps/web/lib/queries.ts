@@ -12,6 +12,14 @@ export const USER_FIELDS = `
   portfolioUrl
   resumeUrl
   avatarUrl
+  userIntent
+  resumeVisibility
+  discord
+  availabilityNote
+  preferredProjectAreas
+  profileComplete
+  deactivatedAt
+  archivedAt
   createdAt
   tags { id name isPredefined }
 `;
@@ -23,21 +31,43 @@ export const TEAM_CARD_FIELDS = `
   isComplete
   maxSize
   discipline
+  recruitingState
+  capstoneState
+  visibility
+  discordLink
+  existingSkills
+  neededSkills
+  projectInterests
+  archivedAt
+  permissions { canEdit canManageMembers canInviteMembers canArchive canApplyToProjects }
   createdAt
   createdBy { id username fullName discipline }
   members { id role joinedAt user { id username fullName discipline } }
-  project { id title description status }
+  project { id title summary description status lifecycleState }
 `;
 
 export const PROJECT_CARD_FIELDS = `
   id
   title
+  summary
   description
   constraints
   disciplines
   teamSizeMin
   teamSizeMax
   status
+  lifecycleState
+  approvalState
+  requiredSkills
+  niceToHaveSkills
+  deliverables
+  timeline
+  evaluationCriteria
+  externalResources
+  ownerContactPreference
+  applicationQuestions
+  archivedAt
+  permissions { canEdit canReviewApplications canSubmitForApproval canApprove canArchive }
   fileUrl
   videoUrl
   createdAt
@@ -48,7 +78,7 @@ export const PROJECT_CARD_FIELDS = `
 export const HOME_QUERY = `
   query Home {
     teams { ${TEAM_CARD_FIELDS} }
-    projects { ${PROJECT_CARD_FIELDS} applications { id status message createdAt team { ${TEAM_CARD_FIELDS} } } }
+    projects { ${PROJECT_CARD_FIELDS} applications { id status message answers reviewMessage offerMessage expiresAt teamConfirmedAt ownerConfirmedAt withdrawnAt createdAt team { ${TEAM_CARD_FIELDS} } } }
   }
 `;
 
@@ -72,7 +102,7 @@ export const PROJECTS_QUERY = `
 
 export const PROJECT_QUERY = `
   query Project($id: ID!) {
-    project(id: $id) { ${PROJECT_CARD_FIELDS} applications { id status message createdAt team { ${TEAM_CARD_FIELDS} } } }
+    project(id: $id) { ${PROJECT_CARD_FIELDS} applications { id status message answers reviewMessage offerMessage expiresAt teamConfirmedAt ownerConfirmedAt withdrawnAt createdAt team { ${TEAM_CARD_FIELDS} } } }
   }
 `;
 
@@ -118,6 +148,22 @@ export const ADMIN_QUERY = `
   query Admin {
     users { ${USER_FIELDS} }
     teams { ${TEAM_CARD_FIELDS} }
-    projects { ${PROJECT_CARD_FIELDS} applications { id status message createdAt team { id name isComplete maxSize createdBy { id username fullName } members { id role joinedAt user { id username fullName } } } } }
+    projects { ${PROJECT_CARD_FIELDS} applications { id status message answers reviewMessage offerMessage expiresAt createdAt team { id name isComplete maxSize createdBy { id username fullName } members { id role joinedAt user { id username fullName } } } } }
+    auditLogs(limit: 100) { id actionType targetEntityType targetEntityId reason createdAt actor { id username email fullName } }
+  }
+`;
+
+export const DASHBOARD_CONTEXT_QUERY = `
+  query DashboardContext {
+    dashboardContext {
+      unreadMessages
+      unreadNotifications
+      isAdmin
+      universalDeadline { id deadlineAt updatedAt }
+      myTeams { ${TEAM_CARD_FIELDS} }
+      myProjects { ${PROJECT_CARD_FIELDS} applications { id status message answers createdAt team { ${TEAM_CARD_FIELDS} } } }
+      myInvitations { id status message expiresAt createdAt team { id name createdBy { id username fullName } } invitedBy { id username fullName } }
+    }
+    myNotifications { id type payload read createdAt }
   }
 `;

@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Status, Combobox } from "@/components/ui";
-import { getAuthToken, graphqlRequest, uploadToSignedPost } from "@/lib/graphql";
+import { getAuthToken, graphqlRequest, uploadToSignedPost, userFacingError } from "@/lib/graphql";
 import { ME_QUERY } from "@/lib/queries";
 import type { UploadSignature, User } from "@/types/domain";
 
@@ -50,7 +50,7 @@ export default function ProfileSettingsPage() {
           setSkills((res.me.tags || []).map((t) => t.name));
         }
       } catch (err) {
-        console.warn("Unable to fetch me query for settings", err);
+        setNotice(userFacingError(err));
       } finally {
         setLoading(false);
       }
@@ -97,8 +97,7 @@ export default function ProfileSettingsPage() {
       setNotice("Profile successfully updated.");
       setResumeFile(null);
     } catch (err) {
-      console.warn("UpdateProfile failed, updating mock state", err);
-      setNotice("Settings updated (dev simulation active).");
+      setNotice(userFacingError(err));
     } finally {
       setSaving(false);
     }
