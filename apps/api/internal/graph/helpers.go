@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -732,11 +733,41 @@ func bytesOrCurrent(value *string, fallback []byte) []byte {
 	return []byte(*value)
 }
 
-func profileComplete(input model.UpdateProfileInput) bool {
+func profileSkills(input model.UpdateProfileInput) ([]string, bool) {
+	if input.Skills != nil {
+		return normalizeSkillNames(input.Skills), true
+	}
+	if input.Tags != nil {
+		return normalizeSkillNames(input.Tags), true
+	}
+	return nil, false
+}
+
+func normalizeSkillNames(values []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		name := strings.Join(strings.Fields(value), " ")
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, name)
+	}
+	return out
+}
+
+func profileComplete(input model.UpdateProfileInput, skills []string, replaceSkills bool) bool {
+	hasSkills := !replaceSkills || len(skills) >= 3
 	return input.FullName != "" &&
 		input.Bio != nil && *input.Bio != "" &&
 		input.Discipline != nil && *input.Discipline != "" &&
-		input.University != nil && *input.University != ""
+		input.University != nil && *input.University != "" &&
+		hasSkills
 }
 
 func timeString(value pgtype.Timestamptz) string {

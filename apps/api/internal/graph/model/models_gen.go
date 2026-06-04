@@ -259,6 +259,8 @@ type UpdateProfileInput struct {
 	Discord               *string           `json:"discord,omitempty"`
 	AvailabilityNote      *string           `json:"availabilityNote,omitempty"`
 	PreferredProjectAreas []string          `json:"preferredProjectAreas,omitempty"`
+	Skills                []string          `json:"skills,omitempty"`
+	Tags                  []string          `json:"tags,omitempty"`
 	ProfileComplete       *bool             `json:"profileComplete,omitempty"`
 }
 

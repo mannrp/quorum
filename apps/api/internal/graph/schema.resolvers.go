@@ -51,25 +51,48 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input model.Update
 	if err != nil {
 		return nil, err
 	}
-	user, err := r.Queries.UpdateProfile(ctx, db.UpdateProfileParams{
-		ID:                    current.ID,
-		FullName:              input.FullName,
-		Bio:                   text(input.Bio),
-		Discipline:            text(input.Discipline),
-		University:            text(input.University),
-		LinkedinUrl:           text(input.LinkedinURL),
-		GithubUrl:             text(input.GithubURL),
-		PortfolioUrl:          text(input.PortfolioURL),
-		ResumeUrl:             text(input.ResumeURL),
-		AvatarUrl:             text(input.AvatarURL),
-		UserIntent:            derefString(input.UserIntent, current.UserIntent),
-		ResumeVisibility:      derefResumeVisibility(input.ResumeVisibility, current.ResumeVisibility),
-		Discord:               text(input.Discord),
-		AvailabilityNote:      text(input.AvailabilityNote),
-		PreferredProjectAreas: input.PreferredProjectAreas,
-		ProfileComplete:       derefBool(input.ProfileComplete, profileComplete(input)),
-	})
-	if err != nil {
+	skills, replaceSkills := profileSkills(input)
+	var user db.User
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		user, err = q.UpdateProfile(ctx, db.UpdateProfileParams{
+			ID:                    current.ID,
+			FullName:              input.FullName,
+			Bio:                   text(input.Bio),
+			Discipline:            text(input.Discipline),
+			University:            text(input.University),
+			LinkedinUrl:           text(input.LinkedinURL),
+			GithubUrl:             text(input.GithubURL),
+			PortfolioUrl:          text(input.PortfolioURL),
+			ResumeUrl:             text(input.ResumeURL),
+			AvatarUrl:             text(input.AvatarURL),
+			UserIntent:            derefString(input.UserIntent, current.UserIntent),
+			ResumeVisibility:      derefResumeVisibility(input.ResumeVisibility, current.ResumeVisibility),
+			Discord:               text(input.Discord),
+			AvailabilityNote:      text(input.AvailabilityNote),
+			PreferredProjectAreas: input.PreferredProjectAreas,
+			ProfileComplete:       derefBool(input.ProfileComplete, profileComplete(input, skills, replaceSkills)),
+		})
+		if err != nil {
+			return err
+		}
+		if !replaceSkills {
+			return nil
+		}
+		if err := q.ClearUserTags(ctx, current.ID); err != nil {
+			return err
+		}
+		for _, skill := range skills {
+			tag, err := q.UpsertTag(ctx, skill)
+			if err != nil {
+				return err
+			}
+			if err := q.AddUserTag(ctx, db.AddUserTagParams{UserID: current.ID, TagID: tag.ID}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 	return r.user(ctx, user)
@@ -1614,6 +1637,35 @@ func (r *queryResolver) MyTeamInvitations(ctx context.Context) ([]*model.TeamInv
 	out := make([]*model.TeamInvitation, 0, len(rows))
 	for _, row := range rows {
 		mapped, err := r.teamInvitation(ctx, row)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, mapped)
+	}
+	return out, nil
+}
+
+// MyJoinRequests is the resolver for the myJoinRequests field.
+func (r *queryResolver) MyJoinRequests(ctx context.Context, status *model.JoinRequestStatus) ([]*model.TeamJoinRequest, error) {
+	current, err := requireUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.expireDueWorkflows(ctx, r.Queries); err != nil {
+		return nil, err
+	}
+	var statusText *string
+	if status != nil {
+		value := string(*status)
+		statusText = &value
+	}
+	rows, err := r.Queries.ListJoinRequestsForUser(ctx, db.ListJoinRequestsForUserParams{UserID: current.ID, Status: text(statusText)})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*model.TeamJoinRequest, 0, len(rows))
+	for _, row := range rows {
+		mapped, err := r.joinRequest(ctx, row)
 		if err != nil {
 			return nil, err
 		}

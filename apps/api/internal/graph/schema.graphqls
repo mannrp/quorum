@@ -235,6 +235,8 @@ input UpdateProfileInput {
   discord: String
   availabilityNote: String
   preferredProjectAreas: [String!]
+  skills: [String!]
+  tags: [String!]
   profileComplete: Boolean
 }
 
@@ -347,6 +349,7 @@ type Query {
   myInbox: [User!]!
   myNotifications: [Notification!]!
   myTeamInvitations: [TeamInvitation!]!
+  myJoinRequests(status: JoinRequestStatus): [TeamJoinRequest!]!
   teamJoinRequests(teamId: ID!, status: JoinRequestStatus): [TeamJoinRequest!]!
   universalDeadline: Deadline
   auditLogs(limit: Int = 100): [AuditLog!]!

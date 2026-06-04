@@ -673,6 +673,50 @@ func (q *Queries) ListJoinRequestsForTeam(ctx context.Context, arg ListJoinReque
 	return items, nil
 }
 
+const listJoinRequestsForUser = `-- name: ListJoinRequestsForUser :many
+SELECT id, team_id, user_id, message, status, created_at, expires_at, responded_at, confirmed_at, withdrawn_at
+FROM team_join_requests
+WHERE user_id = $1
+  AND ($2::text IS NULL OR status = $2::text)
+ORDER BY created_at DESC
+`
+
+type ListJoinRequestsForUserParams struct {
+	UserID pgtype.UUID `json:"user_id"`
+	Status pgtype.Text `json:"status"`
+}
+
+func (q *Queries) ListJoinRequestsForUser(ctx context.Context, arg ListJoinRequestsForUserParams) ([]TeamJoinRequest, error) {
+	rows, err := q.db.Query(ctx, listJoinRequestsForUser, arg.UserID, arg.Status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TeamJoinRequest
+	for rows.Next() {
+		var i TeamJoinRequest
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.UserID,
+			&i.Message,
+			&i.Status,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.RespondedAt,
+			&i.ConfirmedAt,
+			&i.WithdrawnAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMessagesWithUser = `-- name: ListMessagesWithUser :many
 SELECT id, sender_id, receiver_id, body, read, created_at
 FROM messages

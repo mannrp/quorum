@@ -40,6 +40,13 @@ WHERE team_id = $1
   AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
 ORDER BY created_at DESC;
 
+-- name: ListJoinRequestsForUser :many
+SELECT *
+FROM team_join_requests
+WHERE user_id = $1
+  AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
+ORDER BY created_at DESC;
+
 -- name: CreateTeamInvitation :one
 INSERT INTO team_invitations (team_id, invited_user_id, invited_by, message, expires_at)
 VALUES ($1, $2, $3, $4, $5)

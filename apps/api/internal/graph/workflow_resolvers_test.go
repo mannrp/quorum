@@ -294,6 +294,51 @@ func TestProjectWorkflowsRequireCompleteProfile(t *testing.T) {
 	}
 }
 
+func TestUpdateProfilePersistsSkillsAndComputesCompletion(t *testing.T) {
+	ctx, r, cleanup := workflowTestResolver(t)
+	defer cleanup()
+
+	user := createWorkflowUser(t, ctx, r.Queries, "skills_user", false)
+	mutation := &mutationResolver{r}
+	updated, err := mutation.UpdateProfile(auth.WithUser(ctx, user), model.UpdateProfileInput{
+		FullName:        user.FullName,
+		Bio:             textStringPointer("Profile with enough skills."),
+		Discipline:      textStringPointer("SOEN"),
+		University:      textStringPointer("Concordia"),
+		UserIntent:      textStringPointer("STUDENT"),
+		Skills:          []string{"Go", " React ", "go", "Postgres"},
+		ProfileComplete: nil,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !updated.ProfileComplete {
+		t.Fatal("profileComplete = false, want true with required fields and three unique skills")
+	}
+	if tagNames(updated.Tags) != "Go,Postgres,React" {
+		t.Fatalf("tags = %s, want normalized unique skills", tagNames(updated.Tags))
+	}
+
+	updated, err = mutation.UpdateProfile(auth.WithUser(ctx, user), model.UpdateProfileInput{
+		FullName:        user.FullName,
+		Bio:             textStringPointer("Profile with too few skills."),
+		Discipline:      textStringPointer("SOEN"),
+		University:      textStringPointer("Concordia"),
+		UserIntent:      textStringPointer("STUDENT"),
+		Tags:            []string{"Rust"},
+		ProfileComplete: nil,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ProfileComplete {
+		t.Fatal("profileComplete = true, want false with fewer than three skills")
+	}
+	if tagNames(updated.Tags) != "Rust" {
+		t.Fatalf("tags = %s, want replaced Rust tag", tagNames(updated.Tags))
+	}
+}
+
 func TestUpdateProjectAcceptsFrontendEditPayloadAndPreservesOmittedFields(t *testing.T) {
 	ctx, r, cleanup := workflowTestResolver(t)
 	defer cleanup()
@@ -395,6 +440,7 @@ func TestTeamJoinRequestsRequiresLeadAndFilters(t *testing.T) {
 	member := createWorkflowUser(t, ctx, r.Queries, "member", true)
 	requester1 := createWorkflowUser(t, ctx, r.Queries, "requester1", true)
 	requester2 := createWorkflowUser(t, ctx, r.Queries, "requester2", true)
+	requester3 := createWorkflowUser(t, ctx, r.Queries, "requester3", true)
 	team := createWorkflowTeam(t, ctx, r.Queries, lead, "Join Requests Team")
 	if _, err := r.Queries.AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: team.ID, UserID: coLead.ID, Role: string(model.TeamRoleCoLead)}); err != nil {
 		t.Fatal(err)
@@ -412,7 +458,14 @@ func TestTeamJoinRequestsRequiresLeadAndFilters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	acceptedRequest, err := mutation.RequestJoin(auth.WithUser(ctx, requester3), uuidString(team.ID), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := r.Pool.Exec(ctx, `UPDATE team_join_requests SET status = 'REJECTED' WHERE id = $1`, rejectedRequest.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Pool.Exec(ctx, `UPDATE team_join_requests SET status = 'ACCEPTED_PENDING_CONFIRMATION' WHERE id = $1`, acceptedRequest.ID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -433,8 +486,17 @@ func TestTeamJoinRequestsRequiresLeadAndFilters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(all) != 2 {
-		t.Fatalf("all requests count = %d, want 2", len(all))
+	if len(all) != 3 {
+		t.Fatalf("all requests count = %d, want 3", len(all))
+	}
+
+	acceptedStatus := model.JoinRequestStatusAcceptedPendingConfirmation
+	selfRequests, err := query.MyJoinRequests(auth.WithUser(ctx, requester3), &acceptedStatus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(selfRequests) != 1 || selfRequests[0].ID != acceptedRequest.ID {
+		t.Fatalf("self accepted requests = %v, want only %s", requestIDs(selfRequests), acceptedRequest.ID)
 	}
 }
 
@@ -750,4 +812,12 @@ func requestIDs(requests []*model.TeamJoinRequest) []string {
 		out = append(out, request.ID)
 	}
 	return out
+}
+
+func tagNames(tags []*model.Tag) string {
+	names := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		names = append(names, tag.Name)
+	}
+	return strings.Join(names, ",")
 }
