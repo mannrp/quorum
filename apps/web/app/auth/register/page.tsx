@@ -105,7 +105,7 @@ export default function RegisterPage() {
 
   return (
     <div className="max-w-2xl mx-auto py-8">
-      <Section title="Create Your Quorum Profile" className="shadow-indigo-950/5">
+      <Section title="Create Your Quorum Profile" className="shadow-none">
         {!successProfile ? (
           <form className="grid gap-4 md:grid-cols-2 pt-2" onSubmit={handleRegisterSubmit}>
             
@@ -115,7 +115,7 @@ export default function RegisterPage() {
                 type="button"
                 onClick={() => setError("Concordia SSO is not configured for beta yet. Use email/password registration.")}
                 disabled={loading}
-                className="w-full inline-flex items-center justify-center gap-2.5 rounded-md border border-[#cbd5e1] dark:border-stone-800 bg-[#800020] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#680016] active:scale-[0.98] transition cursor-pointer"
+                className="w-full inline-flex items-center justify-center gap-2.5 rounded-none border border-[var(--border-app)] bg-[var(--btn-primary-bg)] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-[var(--btn-primary-hover)] transition cursor-pointer"
               >
                 Concordia SSO Signup
               </button>
@@ -124,7 +124,7 @@ export default function RegisterPage() {
                   type="button"
                   onClick={() => void handleSSORegister("google")}
                   disabled={loading}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-stone-250 dark:border-stone-800 bg-white dark:bg-[#161a2b] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 hover:bg-stone-50 active:scale-[0.98] transition cursor-pointer"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-none border border-[var(--border-app)] bg-[var(--surface-app)] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-app)] hover:bg-[var(--bg-app)] transition cursor-pointer"
                 >
                   Google Signup
                 </button>
@@ -132,7 +132,7 @@ export default function RegisterPage() {
                   type="button"
                   onClick={() => void handleSSORegister("github")}
                   disabled={loading}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-stone-250 dark:border-stone-800 bg-stone-900 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-black active:scale-[0.98] transition cursor-pointer"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-none border border-[var(--border-app)] bg-black dark:bg-[#1e1e24] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white hover:opacity-90 transition cursor-pointer"
                 >
                   GitHub Signup
                 </button>
@@ -140,9 +140,9 @@ export default function RegisterPage() {
             </div>
 
             <div className="col-span-full flex items-center justify-between py-1">
-              <div className="h-[1px] w-full bg-stone-200 dark:bg-stone-800"></div>
-              <span className="px-3 text-[10px] text-stone-400 font-bold uppercase tracking-wider">or register manually</span>
-              <div className="h-[1px] w-full bg-stone-200 dark:bg-stone-800"></div>
+              <div className="h-[1px] w-full bg-[var(--border-subtle)]"></div>
+              <span className="px-3 text-[10px] text-stone-400 font-bold uppercase tracking-wider font-mono">or register manually</span>
+              <div className="h-[1px] w-full bg-[var(--border-subtle)]"></div>
             </div>
 
             <div className="space-y-1">
@@ -187,27 +187,27 @@ export default function RegisterPage() {
               />
             </div>
 
-            {error && <p className="col-span-full text-xs text-rose-500 font-bold">{error}</p>}
+            {error && <p className="col-span-full text-xs text-rose-500 font-bold font-mono">{error}</p>}
 
             <button className="col-span-full btn-primary py-3 mt-2" type="submit" disabled={loading}>
               {loading ? "Registering Profile..." : "Complete Registration"}
             </button>
 
-            <p className="col-span-full text-[11px] text-center text-stone-500 pt-2">
+            <p className="col-span-full text-[11px] text-center text-stone-500 pt-2 font-mono">
               Already have a token or account?{" "}
-              <Link href="/auth/login" className="text-[#283593] font-bold hover:underline">Log in here</Link>
+              <Link href="/auth/login" className="text-[var(--accent-app)] font-bold hover:underline">Log in here</Link>
             </p>
 
           </form>
         ) : (
           <div className="text-center py-8 space-y-4 max-w-md mx-auto">
             <div className="space-y-1.5">
-              <p className="font-serif font-bold text-emerald-600 text-lg">Profile Successfully Registered</p>
+              <p className="font-serif font-bold text-emerald-600 text-lg uppercase tracking-tight">Profile Successfully Registered</p>
               <p className="text-sm text-stone-600 dark:text-stone-300">
-                Welcome to Quorum, <span className="font-bold text-[#283593] dark:text-[#a5b4fc]">{successProfile.fullName}</span> (@{successProfile.username}).
+                Welcome to Quorum, <span className="font-bold text-[var(--accent-app)]">{successProfile.fullName}</span> (@{successProfile.username}).
               </p>
             </div>
-            <p className="text-xs text-stone-400 animate-pulse">Redirecting you to the dashboard...</p>
+            <p className="text-xs text-stone-400 animate-pulse font-mono">Redirecting you to the dashboard...</p>
           </div>
         )}
       </Section>

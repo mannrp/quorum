@@ -84,14 +84,14 @@ export default function LoginPage() {
 
   return (
     <div className="max-w-md mx-auto py-8">
-      <Section title="Sign In to Quorum" className="shadow-indigo-950/5">
+      <Section title="Sign In to Quorum" className="shadow-none">
         <div className="space-y-4 pt-2">
           {/* SSO Integrations */}
           <div className="space-y-2">
             <button
               onClick={() => setError("Concordia SSO is not configured for beta yet. Use email/password or a QA bearer token.")}
               disabled={loading}
-              className="w-full inline-flex items-center justify-center gap-2.5 rounded-md border border-[#cbd5e1] dark:border-stone-800 bg-[#800020] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#680016] active:scale-[0.98] transition cursor-pointer"
+              className="w-full inline-flex items-center justify-center gap-2.5 rounded-none border border-[var(--border-app)] bg-[var(--btn-primary-bg)] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-[var(--btn-primary-hover)] transition cursor-pointer"
             >
               <span>Concordia Student Portal</span>
             </button>
@@ -99,14 +99,14 @@ export default function LoginPage() {
               <button
                 onClick={() => void triggerSSO("google")}
                 disabled={loading}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-stone-250 dark:border-stone-800 bg-white dark:bg-[#161a2b] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#1e253c] active:scale-[0.98] transition cursor-pointer"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-none border border-[var(--border-app)] bg-[var(--surface-app)] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-app)] hover:bg-[var(--bg-app)] transition cursor-pointer"
               >
                 Google SSO
               </button>
               <button
                 onClick={() => void triggerSSO("github")}
                 disabled={loading}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-stone-250 dark:border-stone-800 bg-stone-900 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-black active:scale-[0.98] transition cursor-pointer"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-none border border-[var(--border-app)] bg-black dark:bg-[#1e1e24] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white hover:opacity-90 transition cursor-pointer"
               >
                 GitHub
               </button>
@@ -114,9 +114,9 @@ export default function LoginPage() {
           </div>
 
           <div className="flex items-center justify-between py-2">
-            <div className="h-[1px] w-full bg-stone-200 dark:bg-stone-800"></div>
-            <span className="px-3 text-[10px] text-stone-400 font-bold uppercase tracking-wider">or</span>
-            <div className="h-[1px] w-full bg-stone-200 dark:bg-stone-800"></div>
+            <div className="h-[1px] w-full bg-[var(--border-subtle)]"></div>
+            <span className="px-3 text-[10px] text-stone-400 font-bold uppercase tracking-wider font-mono">or</span>
+            <div className="h-[1px] w-full bg-[var(--border-subtle)]"></div>
           </div>
 
           {/* Email / Password Form */}
@@ -136,7 +136,7 @@ export default function LoginPage() {
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Password</label>
-                <a href="#reset" className="text-[9px] text-[#283593] hover:underline">Forgot password?</a>
+                <a href="#reset" className="text-[9px] text-[var(--accent-app)] hover:underline">Forgot password?</a>
               </div>
               <input
                 required
@@ -148,15 +148,15 @@ export default function LoginPage() {
                 disabled={loading}
               />
             </div>
-            {error && <p className="text-xs text-rose-500 font-bold">{error}</p>}
+            {error && <p className="text-xs text-rose-500 font-bold font-mono">{error}</p>}
             <button className="btn-primary w-full py-3 mt-1" type="submit" disabled={loading}>
               {loading ? "Authenticating Session..." : "Connect Session"}
             </button>
           </form>
 
-          <p className="text-[11px] text-center text-stone-500 pt-2">
+          <p className="text-[11px] text-center text-stone-500 pt-2 font-mono">
             First time accessing Quorum?{" "}
-            <Link href="/auth/register" className="text-[#283593] font-bold hover:underline">Create a Profile</Link>
+            <Link href="/auth/register" className="text-[var(--accent-app)] font-bold hover:underline">Create a Profile</Link>
           </p>
 
           {/* Advanced Developer Panel Toggle */}

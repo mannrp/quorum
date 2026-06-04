@@ -150,7 +150,7 @@ export default function OnboardingPage() {
 
           <div className="space-y-1">
             <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Academic Intent</label>
-            <select value={intent} onChange={(e) => setIntent(e.target.value)} className="input-field py-2 text-xs bg-white dark:bg-[#111422]">
+            <select value={intent} onChange={(e) => setIntent(e.target.value)} className="input-field py-2 text-xs bg-[var(--surface-app)]">
               <option value="STUDENT_FIND_TEAM">I want to find or create a capstone team</option>
               <option value="STUDENT_FIND_PROJECT">I want to apply to projects with an existing team</option>
               <option value="PROJECT_OWNER">I want to sponsor/submit a capstone project</option>
@@ -171,7 +171,7 @@ export default function OnboardingPage() {
 
           {/* Academic skills */}
           <div className="space-y-1">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 font-bold text-[#283593] dark:text-indigo-300">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 font-bold text-[var(--accent-app)]">
               Select Academic Skills / Core Competencies (Min 3)
             </label>
             <Combobox

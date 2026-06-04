@@ -119,12 +119,12 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto py-4">
-      <div className="border-b border-stone-250 dark:border-stone-850 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="border-b border-[var(--border-subtle)] pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold font-serif text-[#000b60] dark:text-[#a5b4fc] tracking-tight">Admin Console</h1>
+          <h1 className="text-3xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">Admin Console</h1>
           <p className="text-sm text-stone-500">Oversee Concordia capstone teams, projects, matchings, and overrides.</p>
         </div>
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-450 rounded-lg text-xs font-bold uppercase tracking-wider">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[var(--color-danger-bg)] border border-[var(--color-danger)] text-[var(--color-danger)] rounded-none text-xs font-bold font-mono uppercase tracking-wider">
           Admin Authority
         </div>
       </div>
@@ -135,21 +135,21 @@ export default function AdminPage() {
       {/* Stats row */}
       <div className="grid gap-6 sm:grid-cols-3">
         <div className="panel p-6 space-y-1">
-          <span className="text-stone-400 text-[10px] font-bold uppercase tracking-wider">Accounts</span>
-          <p className="text-3xl font-bold font-serif text-[#283593] dark:text-indigo-300">{users.length}</p>
+          <span className="text-stone-450 text-[10px] font-bold font-mono uppercase tracking-wider">Accounts</span>
+          <p className="text-3xl font-bold font-serif text-[var(--accent-app)]">{users.length}</p>
         </div>
         <div className="panel p-6 space-y-1">
-          <span className="text-stone-400 text-[10px] font-bold uppercase tracking-wider">Capstone Groups</span>
-          <p className="text-3xl font-bold font-serif text-[#283593] dark:text-indigo-300">{teams.length}</p>
+          <span className="text-stone-450 text-[10px] font-bold font-mono uppercase tracking-wider">Capstone Groups</span>
+          <p className="text-3xl font-bold font-serif text-[var(--accent-app)]">{teams.length}</p>
         </div>
         <div className="panel p-6 space-y-1">
-          <span className="text-stone-400 text-[10px] font-bold uppercase tracking-wider">Sponsor Posts</span>
-          <p className="text-3xl font-bold font-serif text-[#283593] dark:text-indigo-300">{projects.length}</p>
+          <span className="text-stone-450 text-[10px] font-bold font-mono uppercase tracking-wider">Sponsor Posts</span>
+          <p className="text-3xl font-bold font-serif text-[var(--accent-app)]">{projects.length}</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-stone-200 dark:border-stone-800 gap-1.5 overflow-x-auto">
+      <div className="flex border-b border-[var(--border-subtle)] gap-1.5 overflow-x-auto">
         {(["ACCOUNTS", "TEAMS", "PROJECTS", "DEADLINES", "AUDIT"] as const).map((tab) => {
           const isActive = activeTab === tab;
           return (
@@ -158,7 +158,7 @@ export default function AdminPage() {
               onClick={() => setActiveTab(tab)}
               className={`pb-2.5 px-4 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 ${
                 isActive
-                  ? "border-[#283593] text-[#283593] dark:border-indigo-400 dark:text-indigo-300 font-bold"
+                  ? "border-[var(--accent-app)] text-[var(--accent-app)] font-bold"
                   : "border-transparent text-stone-400 hover:text-stone-600 dark:hover:text-slate-200"
               }`}
             >
@@ -185,15 +185,15 @@ export default function AdminPage() {
                   <tr key={u.id}>
                     <td className="py-3">
                       <div className="font-bold text-stone-900 dark:text-slate-200">{u.fullName}</div>
-                      <div className="text-[10px] text-stone-400">@{u.username}</div>
+                      <div className="text-[10px] text-stone-400 font-mono">@{u.username}</div>
                     </td>
                     <td className="py-3">
-                      <span className="rounded-full bg-stone-100 dark:bg-stone-800 px-2 py-0.5 text-[10px] border border-stone-250 dark:border-stone-750 font-bold">{u.discipline || "SOEN"}</span>
+                      <span className="rounded-none bg-[var(--bg-app)] px-2 py-0.5 text-[10px] border border-[var(--border-subtle)] font-mono font-bold">{u.discipline || "SOEN"}</span>
                     </td>
                     <td className="py-3 text-right">
                       <button
                         onClick={() => handleOpenDelete("USER", u.id, u.fullName)}
-                        className="rounded px-2.5 py-1.5 text-[9px] font-bold border transition bg-rose-50 hover:bg-rose-500 hover:text-white dark:bg-rose-950/20 text-rose-600 dark:text-rose-450 border-rose-200/50 dark:border-rose-900/50 uppercase tracking-wider"
+                        className="rounded-none px-2.5 py-1.5 text-[9px] font-bold border transition bg-[var(--color-danger-bg)] hover:bg-[var(--color-danger)] hover:text-white text-[var(--color-danger)] border-[var(--color-danger)] uppercase tracking-wider font-mono"
                       >
                         Deactivate
                       </button>
@@ -210,14 +210,14 @@ export default function AdminPage() {
         <Section title="Capstone Groups">
           <div className="space-y-3">
             {teams.map((t) => (
-              <div key={t.id} className="flex items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-3">
+              <div key={t.id} className="flex items-center justify-between gap-4 border-b border-[var(--border-subtle)] pb-3">
                 <div>
                   <p className="text-sm font-bold text-stone-900 dark:text-slate-200">{t.name}</p>
-                  <p className="text-[10px] text-stone-500">{t.members?.length || 0}/{t.maxSize} Members</p>
+                  <p className="text-[10px] text-stone-500 font-mono">{t.members?.length || 0}/{t.maxSize} Members</p>
                 </div>
                 <button
                   onClick={() => handleOpenDelete("TEAM", t.id, t.name)}
-                  className="rounded px-2.5 py-1.5 text-[9px] font-bold border transition bg-rose-50 hover:bg-rose-500 hover:text-white dark:bg-rose-950/20 text-rose-600 dark:text-rose-450 border-rose-200/50 dark:border-rose-900/50 uppercase tracking-wider"
+                  className="rounded-none px-2.5 py-1.5 text-[9px] font-bold border transition bg-[var(--color-danger-bg)] hover:bg-[var(--color-danger)] hover:text-white text-[var(--color-danger)] border-[var(--color-danger)] uppercase tracking-wider font-mono"
                 >
                   Archive Team
                 </button>
@@ -233,15 +233,15 @@ export default function AdminPage() {
           <Section title="Pending Professor Approval">
             <div className="space-y-4">
               {projects.filter((p) => (p.approvalState || "UNVERIFIED") === "SUBMITTED_FOR_APPROVAL").map((p) => (
-                <div key={p.id} className="p-4 border border-stone-250 dark:border-stone-850 rounded-lg space-y-3 bg-[#f8f9fa] dark:bg-[#111422]">
+                <div key={p.id} className="p-4 border border-[var(--border-app)] rounded-none space-y-3 bg-[var(--bg-app)]">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h4 className="font-bold text-sm text-stone-900 dark:text-slate-200">{p.title}</h4>
-                      <p className="text-[10px] text-stone-500">Proposed by {p.owner.fullName} ({p.owner.email})</p>
+                      <h4 className="font-bold text-sm text-stone-900 dark:text-slate-200 font-serif uppercase tracking-tight">{p.title}</h4>
+                      <p className="text-[10px] text-stone-500 font-mono">Proposed by {p.owner.fullName} ({p.owner.email})</p>
                     </div>
                     <Status value={p.approvalState || "UNVERIFIED"} />
                   </div>
-                  <p className="text-xs text-stone-600 dark:text-stone-400 line-clamp-3">{p.description}</p>
+                  <p className="text-xs text-stone-600 dark:text-stone-400 line-clamp-3 font-sans leading-relaxed">{p.description}</p>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setApprovalAction({ id: p.id, title: p.title, state: "PROFESSOR_APPROVED" })}
@@ -251,7 +251,7 @@ export default function AdminPage() {
                     </button>
                     <button
                       onClick={() => setApprovalAction({ id: p.id, title: p.title, state: "CHANGES_REQUESTED" })}
-                      className="btn-secondary text-rose-500 border-rose-250 dark:border-rose-900 py-1 px-3 text-[10px]"
+                      className="btn-secondary text-[var(--color-danger)] border-[var(--color-danger)] py-1 px-3 text-[10px]"
                     >
                       Request Changes
                     </button>
@@ -271,21 +271,21 @@ export default function AdminPage() {
           <Section title="All Sponsor Challenge Posts">
             <div className="space-y-3">
               {projects.map((p) => (
-                <div key={p.id} className="flex items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-3">
+                <div key={p.id} className="flex items-center justify-between gap-4 border-b border-[var(--border-subtle)] pb-3">
                   <div className="space-y-1">
-                    <p className="text-sm font-bold text-stone-900 dark:text-slate-200">{p.title}</p>
+                    <p className="text-sm font-bold text-stone-900 dark:text-slate-200 font-serif uppercase tracking-tight">{p.title}</p>
                     <div className="flex gap-1.5 items-center">
                       <Status value={p.status} />
                       <Status value={p.approvalState || "UNVERIFIED"} />
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Link href={`/projects/${p.id}`} className="rounded px-2.5 py-1.5 text-[9px] font-bold border transition bg-stone-50 hover:bg-stone-200 dark:bg-stone-900/20 text-stone-600 dark:text-slate-350 border-stone-250 dark:border-stone-800 uppercase tracking-wider flex items-center">
+                    <Link href={`/projects/${p.id}`} className="rounded-none px-2.5 py-1.5 text-[9px] font-bold border transition bg-[var(--bg-app)] hover:bg-[var(--accent-app)] hover:text-white text-[var(--text-app)] border-[var(--border-app)] uppercase tracking-wider font-mono flex items-center">
                       View
                     </Link>
                     <button
                       onClick={() => handleOpenDelete("PROJECT", p.id, p.title)}
-                      className="rounded px-2.5 py-1.5 text-[9px] font-bold border transition bg-rose-50 hover:bg-rose-500 hover:text-white dark:bg-rose-950/20 text-rose-600 dark:text-rose-450 border-rose-200/50 dark:border-rose-900/50 uppercase tracking-wider"
+                      className="rounded-none px-2.5 py-1.5 text-[9px] font-bold border transition bg-[var(--color-danger-bg)] hover:bg-[var(--color-danger)] hover:text-white text-[var(--color-danger)] border-[var(--color-danger)] uppercase tracking-wider font-mono"
                     >
                       Archive Project
                     </button>
@@ -332,7 +332,7 @@ export default function AdminPage() {
               <tbody className="divide-y divide-stone-100 dark:divide-stone-800 text-stone-600 dark:text-slate-350 font-mono text-[11px]">
                 {auditLogs.map((log) => (
                   <tr key={log.id}>
-                    <td className="py-3 font-bold text-[#283593] dark:text-indigo-400">{log.actionType}</td>
+                    <td className="py-3 font-bold text-[var(--accent-app)]">{log.actionType}</td>
                     <td className="py-3">{log.actor?.email || log.actor?.username || "system"}</td>
                     <td className="py-3">{log.targetEntityType}{log.targetEntityId ? ` (${log.targetEntityId})` : ""}</td>
                     <td className="py-3 text-stone-400">{new Date(log.createdAt).toLocaleString()}</td>
