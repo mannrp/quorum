@@ -95,12 +95,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       ];
 
   return (
-    <div className="min-h-screen pb-12 bg-[#f8f9fa] dark:bg-[#0c0e17] transition-colors duration-200">
+    <div className="min-h-screen pb-12 transition-colors duration-150">
       <header className="w-full max-w-6xl mx-auto px-4 pt-4">
-        <nav className="glass-nav flex items-center justify-between gap-4 border border-stone-250 dark:border-stone-850 rounded-lg px-6 py-4 bg-white/95 dark:bg-[#0c0e17]/95">
+        <nav className="glass-nav flex items-center justify-between gap-4 border border-[var(--border-app)] px-6 py-4 bg-[var(--surface-app)]">
           <div className="flex items-center gap-6">
-            <Link className="text-xl font-serif font-bold tracking-tight text-[#000b60] dark:text-[#a5b4fc] flex items-center gap-2 group" href={me ? "/dashboard" : "/"}>
-              <span className="text-[#283593] dark:text-[#6366f1] group-hover:scale-105 transition-transform duration-250">Q</span>
+            <Link className="text-xl font-serif font-black tracking-tight text-[var(--text-app)] flex items-center gap-2 group uppercase" href={me ? "/dashboard" : "/"}>
+              <span className="text-[var(--accent-app)] group-hover:scale-105 transition-transform duration-150">[-]</span>
               <span className="group-hover:opacity-90 transition">Quorum</span>
             </Link>
             
@@ -111,15 +111,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <Link
                     key={link.href}
                     href={link.href}
-                    className={`relative rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 border ${
+                    className={`relative rounded-none px-3 py-1.5 text-[9px] font-mono font-bold uppercase tracking-wider transition-all duration-100 border ${
                       isActive
-                        ? "bg-[#283593]/10 dark:bg-indigo-950/40 text-[#283593] dark:text-indigo-300 border-indigo-200/50 dark:border-indigo-900/50"
-                        : "text-stone-500 border-transparent hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-900"
+                        ? "bg-[var(--bg-app)] text-[var(--accent-app)] border-[var(--border-app)]"
+                        : "text-stone-500 border-transparent hover:text-[var(--text-app)] hover:bg-[var(--bg-app)]"
                     }`}
                   >
                     {link.name}
                     {!!link.badge && (
-                      <span className="absolute -top-1.5 -right-1 px-1.5 py-0.5 rounded-full text-[8px] bg-rose-500 text-white font-black animate-pulse">
+                      <span className="absolute -top-1.5 -right-1.5 px-1 py-0.5 rounded-none text-[8px] bg-[var(--accent-app)] text-white font-mono animate-pulse">
                         {link.badge}
                       </span>
                     )}
@@ -132,24 +132,24 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-3">
             <button
               onClick={toggleTheme}
-              className="btn-secondary px-3 py-1.5 text-xs"
+              className="btn-secondary px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider"
               aria-label="Toggle Theme"
             >
               {isDark ? "[-] Light" : "[*] Dark"}
             </button>
 
             {loading ? (
-              <span className="text-[10px] text-stone-400 font-bold uppercase tracking-wider animate-pulse">Loading...</span>
+              <span className="text-[9px] font-mono text-stone-400 font-bold uppercase tracking-wider animate-pulse">Loading...</span>
             ) : me ? (
               <div className="flex items-center gap-2.5">
-                <Link href={`/profile/${me.username}`} className="flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-stone-50 dark:hover:bg-stone-900 border border-transparent hover:border-stone-200 dark:hover:border-stone-850 transition">
-                  <div className="h-6 w-6 rounded-full bg-[#283593] text-white flex items-center justify-center font-bold text-xs uppercase">
+                <Link href={`/profile/${me.username}`} className="flex items-center gap-2 px-2 py-1 border border-transparent hover:border-[var(--border-subtle)] bg-transparent transition">
+                  <div className="h-6 w-6 rounded-none bg-[var(--accent-app)] text-white flex items-center justify-center font-mono font-bold text-xs uppercase">
                     {me.fullName.charAt(0)}
                   </div>
-                  <span className="text-xs font-semibold text-stone-750 dark:text-slate-200 hidden sm:inline">{me.fullName}</span>
+                  <span className="text-xs font-semibold text-[var(--text-app)] hidden sm:inline">{me.fullName}</span>
                 </Link>
-                <div className="h-4 w-[1px] bg-stone-200 dark:bg-stone-800"></div>
-                <button onClick={handleLogout} className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-450 hover:underline">
+                <div className="h-4 w-[1px] bg-[var(--border-subtle)]"></div>
+                <button onClick={handleLogout} className="text-[9px] font-mono font-bold uppercase tracking-wider text-rose-650 hover:underline">
                   Logout
                 </button>
               </div>
@@ -168,7 +168,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
       {sessionError && (
         <div className="mx-auto max-w-6xl px-4 pt-3">
-          <div className="rounded border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700 dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-300">
+          <div className="rounded-none border border-[var(--color-danger)] bg-[var(--color-danger-bg)] px-4 py-2 text-xs font-mono font-bold uppercase tracking-wider text-[var(--color-danger)]">
             {sessionError}
           </div>
         </div>
@@ -176,20 +176,20 @@ export function AppShell({ children }: { children: ReactNode }) {
       
       {/* Mobile nav bar visible on smaller screens */}
       {me && (
-        <div className="md:hidden fixed bottom-4 left-4 right-4 z-50 glass-nav border border-stone-250 dark:border-stone-850 py-2 px-4 flex justify-around bg-white/95 dark:bg-[#0c0e17]/95 rounded-lg shadow-lg">
+        <div className="md:hidden fixed bottom-4 left-4 right-4 z-50 border border-[var(--border-app)] py-2 px-4 flex justify-around bg-[var(--surface-app)]">
           {navLinks.slice(0, 5).map((link) => {
             const isActive = pathname === link.href || (link.href !== "/" && pathname?.startsWith(link.href));
             return (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`relative rounded p-2 text-[10px] font-bold uppercase tracking-wider transition ${
-                  isActive ? "text-[#283593] dark:text-[#a5b4fc]" : "text-stone-500 hover:text-stone-800 dark:hover:text-stone-200"
+                className={`relative p-2 text-[10px] font-mono font-bold uppercase tracking-wider transition ${
+                  isActive ? "text-[var(--accent-app)]" : "text-stone-500 hover:text-stone-850"
                 }`}
               >
                 {link.name.substring(0, 5)}
                 {!!link.badge && (
-                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-rose-500" />
+                  <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-none bg-[var(--accent-app)]" />
                 )}
               </Link>
             );
