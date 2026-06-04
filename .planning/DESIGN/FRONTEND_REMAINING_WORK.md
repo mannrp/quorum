@@ -50,7 +50,7 @@ Not complete:
 
 # 2. Immediate Bugs to Fix
 
-## 2.1 Project Edit Mutation Uses the Wrong Argument Name
+## 2.1 [x] Project Edit Mutation Uses the Wrong Argument Name
 
 ### Current State
 
@@ -88,7 +88,7 @@ mutation UpdateProjectDetails($id: ID!, $input: UpdateProjectInput!) {
 
 ---
 
-## 2.2 Project Edit File Has a Late Import
+## 2.2 [x] Project Edit File Has a Late Import
 
 ### Current State
 

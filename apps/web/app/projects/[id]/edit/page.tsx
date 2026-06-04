@@ -1,6 +1,7 @@
 "use client";
 import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Section, Combobox } from "@/components/ui";
 import { useGraphQL, getAuthToken, graphqlRequest, userFacingError } from "@/lib/graphql";
 import { PROJECT_QUERY } from "@/lib/queries";
@@ -45,7 +46,7 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
       const token = getAuthToken();
       await graphqlRequest(
         `mutation UpdateProjectDetails($id: ID!, $input: UpdateProjectInput!) {
-          updateProject(projectId: $id, input: $input) { id }
+          updateProject(id: $id, input: $input) { id }
         }`,
         {
           id,
@@ -155,4 +156,3 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
     </div>
   );
 }
-import Link from "next/link";
