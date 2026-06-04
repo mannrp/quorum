@@ -115,6 +115,18 @@ func (r *runner) run(ctx context.Context, runID string) error {
 		Password: "QuorumE2E!20260602",
 		Username: "qa_project_owner_" + strings.ToLower(runID),
 	}
+	invitee := &authUser{
+		Label:    "qa_invited_student",
+		Email:    fmt.Sprintf("qa_invited_student_%s@example.com", strings.ToLower(runID)),
+		Password: "QuorumE2E!20260602",
+		Username: "qa_invited_student_" + strings.ToLower(runID),
+	}
+	requester := &authUser{
+		Label:    "qa_join_requester",
+		Email:    fmt.Sprintf("qa_join_requester_%s@example.com", strings.ToLower(runID)),
+		Password: "QuorumE2E!20260602",
+		Username: "qa_join_requester_" + strings.ToLower(runID),
+	}
 
 	r.step("healthz", func() error {
 		healthURL := strings.TrimSuffix(strings.TrimSuffix(r.apiURL, "/graphql"), "/") + "/healthz"
@@ -144,7 +156,7 @@ func (r *runner) run(ctx context.Context, runID string) error {
 		return nil
 	})
 
-	for _, user := range []*authUser{admin, owner} {
+	for _, user := range []*authUser{admin, owner, invitee, requester} {
 		r.step(user.Label+" Neon Auth signup/token", func() error {
 			return r.createAuthUser(ctx, user)
 		})
@@ -237,6 +249,24 @@ ON CONFLICT DO NOTHING`, admin.UserID)
 		return err
 	})
 
+	r.step("admin set universal deadline", func() error {
+		deadline := time.Now().UTC().Add(30 * 24 * time.Hour).Format(time.RFC3339)
+		resp, err := r.graphql(ctx, admin.Token, `
+mutation SetDeadline($deadlineAt: String!, $reason: String) {
+  setUniversalDeadline(deadlineAt: $deadlineAt, reason: $reason) { id deadlineAt updatedAt }
+}`, map[string]any{"deadlineAt": deadline, "reason": "Automated E2E validation window."})
+		if err != nil {
+			return err
+		}
+		if err := expectNoGraphErrors(resp); err != nil {
+			return err
+		}
+		if asMap(resp.Data["setUniversalDeadline"])["id"] != "capstone_match" {
+			return fmt.Errorf("deadline response = %v", resp.Data["setUniversalDeadline"])
+		}
+		return nil
+	})
+
 	var teamID string
 	r.step("admin createTeam", func() error {
 		teamName := "E2E Team " + runID
@@ -261,6 +291,85 @@ mutation CreateTeam($input: CreateTeamInput!) {
 		}
 		teamID = fmt.Sprint(asMap(resp.Data["createTeam"])["id"])
 		return requireNonEmpty("team id", teamID)
+	})
+
+	r.step("team invitation accept flow", func() error {
+		resp, err := r.graphql(ctx, admin.Token, `
+mutation Invite($teamId: ID!, $userId: ID!, $message: String) {
+  inviteTeamMember(teamId: $teamId, userId: $userId, message: $message) { id status invitedUser { username } }
+}`, map[string]any{"teamId": teamID, "userId": invitee.UserID, "message": "Join the automated smoke-test team."})
+		if err != nil {
+			return err
+		}
+		if err := expectNoGraphErrors(resp); err != nil {
+			return err
+		}
+		invitationID := fmt.Sprint(asMap(resp.Data["inviteTeamMember"])["id"])
+		if err := requireNonEmpty("invitation id", invitationID); err != nil {
+			return err
+		}
+
+		resp, err = r.graphql(ctx, invitee.Token, `
+mutation AcceptInvitation($invitationId: ID!) {
+  respondToTeamInvitation(invitationId: $invitationId, accept: true) { id status team { id members { user { username } } } }
+}`, map[string]any{"invitationId": invitationID})
+		if err != nil {
+			return err
+		}
+		if err := expectNoGraphErrors(resp); err != nil {
+			return err
+		}
+		accepted := asMap(resp.Data["respondToTeamInvitation"])
+		if accepted["status"] != "ACCEPTED" {
+			return fmt.Errorf("invitation status = %v, want ACCEPTED", accepted["status"])
+		}
+		return nil
+	})
+
+	r.step("join request confirmation flow", func() error {
+		resp, err := r.graphql(ctx, requester.Token, `
+mutation RequestJoin($teamId: ID!, $message: String) {
+  requestJoin(teamId: $teamId, message: $message) { id status user { username } }
+}`, map[string]any{"teamId": teamID, "message": "Requesting to join from automated smoke test."})
+		if err != nil {
+			return err
+		}
+		if err := expectNoGraphErrors(resp); err != nil {
+			return err
+		}
+		requestID := fmt.Sprint(asMap(resp.Data["requestJoin"])["id"])
+		if err := requireNonEmpty("join request id", requestID); err != nil {
+			return err
+		}
+
+		resp, err = r.graphql(ctx, admin.Token, `
+mutation ReviewJoinRequest($requestId: ID!) {
+  respondToJoinRequest(requestId: $requestId, accept: true) { id status }
+}`, map[string]any{"requestId": requestID})
+		if err != nil {
+			return err
+		}
+		if err := expectNoGraphErrors(resp); err != nil {
+			return err
+		}
+		if asMap(resp.Data["respondToJoinRequest"])["status"] != "ACCEPTED_PENDING_CONFIRMATION" {
+			return fmt.Errorf("join request review = %v", resp.Data["respondToJoinRequest"])
+		}
+
+		resp, err = r.graphql(ctx, requester.Token, `
+mutation ConfirmJoinRequest($requestId: ID!) {
+  confirmJoinRequest(requestId: $requestId) { id status team { id members { user { username } } } }
+}`, map[string]any{"requestId": requestID})
+		if err != nil {
+			return err
+		}
+		if err := expectNoGraphErrors(resp); err != nil {
+			return err
+		}
+		if asMap(resp.Data["confirmJoinRequest"])["status"] != "CONFIRMED" {
+			return fmt.Errorf("join request confirmation = %v", resp.Data["confirmJoinRequest"])
+		}
+		return nil
 	})
 
 	var projectID string
@@ -291,6 +400,7 @@ mutation CreateProject($input: CreateProjectInput!) {
 		return requireNonEmpty("project id", projectID)
 	})
 
+	var applicationID string
 	r.step("admin applyToProject", func() error {
 		resp, err := r.graphql(ctx, admin.Token, `
 mutation Apply($projectId: ID!, $teamId: ID!) {
@@ -301,7 +411,56 @@ mutation Apply($projectId: ID!, $teamId: ID!) {
 		if err != nil {
 			return err
 		}
-		return expectNoGraphErrors(resp)
+		if err := expectNoGraphErrors(resp); err != nil {
+			return err
+		}
+		applicationID = fmt.Sprint(asMap(resp.Data["applyToProject"])["id"])
+		return requireNonEmpty("application id", applicationID)
+	})
+
+	r.step("project offer confirmation flow", func() error {
+		resp, err := r.graphql(ctx, owner.Token, `
+mutation SendOffer($applicationId: ID!, $message: String) {
+  sendProjectOffer(applicationId: $applicationId, message: $message) { id status expiresAt }
+}`, map[string]any{"applicationId": applicationID, "message": "Automated E2E match offer."})
+		if err != nil {
+			return err
+		}
+		if err := expectNoGraphErrors(resp); err != nil {
+			return err
+		}
+		if asMap(resp.Data["sendProjectOffer"])["status"] != "OFFER_SENT" {
+			return fmt.Errorf("offer status = %v", resp.Data["sendProjectOffer"])
+		}
+
+		resp, err = r.graphql(ctx, admin.Token, `
+mutation ConfirmByTeam($applicationId: ID!) {
+  confirmProjectOfferByTeam(applicationId: $applicationId) { id status teamConfirmedAt }
+}`, map[string]any{"applicationId": applicationID})
+		if err != nil {
+			return err
+		}
+		if err := expectNoGraphErrors(resp); err != nil {
+			return err
+		}
+		if asMap(resp.Data["confirmProjectOfferByTeam"])["status"] != "TEAM_CONFIRMED" {
+			return fmt.Errorf("team confirmation = %v", resp.Data["confirmProjectOfferByTeam"])
+		}
+
+		resp, err = r.graphql(ctx, owner.Token, `
+mutation ConfirmByOwner($applicationId: ID!) {
+  confirmProjectOfferByOwner(applicationId: $applicationId) { id status ownerConfirmedAt project { lifecycleState team { id } } }
+}`, map[string]any{"applicationId": applicationID})
+		if err != nil {
+			return err
+		}
+		if err := expectNoGraphErrors(resp); err != nil {
+			return err
+		}
+		if asMap(resp.Data["confirmProjectOfferByOwner"])["status"] != "MATCHED" {
+			return fmt.Errorf("owner confirmation = %v", resp.Data["confirmProjectOfferByOwner"])
+		}
+		return nil
 	})
 
 	var adminToOwnerMsgID string
@@ -419,6 +578,46 @@ mutation MarkNotification($id: ID!) { markNotificationRead(notificationId: $id) 
 		return expectGraphError(resp, "admin access required")
 	})
 
+	r.step("admin audit logs include workflow activity", func() error {
+		resp, err := r.graphql(ctx, admin.Token, `
+query AuditLogs {
+  auditLogs(limit: 50) { id actionType targetEntityType reason createdAt }
+  universalDeadline { id deadlineAt updatedAt }
+}`, nil)
+		if err != nil {
+			return err
+		}
+		if err := expectNoGraphErrors(resp); err != nil {
+			return err
+		}
+		logs := asSlice(resp.Data["auditLogs"])
+		if len(logs) == 0 {
+			return errors.New("audit logs are empty")
+		}
+		want := map[string]bool{
+			"UNIVERSAL_DEADLINE_CHANGED":   false,
+			"TEAM_INVITATION_CREATED":      false,
+			"JOIN_REQUEST_CREATED":         false,
+			"PROJECT_OFFER_TEAM_CONFIRMED": false,
+			"PROJECT_MATCH_FINALIZED":      false,
+		}
+		for _, item := range logs {
+			action := fmt.Sprint(asMap(item)["actionType"])
+			if _, ok := want[action]; ok {
+				want[action] = true
+			}
+		}
+		for action, found := range want {
+			if !found {
+				return fmt.Errorf("missing audit action %s", action)
+			}
+		}
+		if asMap(resp.Data["universalDeadline"])["id"] != "capstone_match" {
+			return fmt.Errorf("universal deadline missing: %v", resp.Data["universalDeadline"])
+		}
+		return nil
+	})
+
 	var disposableProjectID string
 	r.step("admin removal against disposable project", func() error {
 		resp, err := r.graphql(ctx, admin.Token, `
@@ -480,7 +679,7 @@ mutation CreateProject($input: CreateProjectInput!) {
 		return nil
 	})
 
-	if err := r.writeTokens(runID, admin, owner); err != nil {
+	if err := r.writeTokens(runID, admin, owner, invitee, requester); err != nil {
 		r.failures = append(r.failures, "write token artifact: "+err.Error())
 	}
 

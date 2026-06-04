@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Section, Status, Badge } from "@/components/ui";
+import { ConfirmDialog, Section, Status } from "@/components/ui";
 import { DeadlineDisplay } from "@/components/deadline-display";
 import { getAuthToken, graphqlRequest, userFacingError } from "@/lib/graphql";
 import { DASHBOARD_CONTEXT_QUERY, ME_QUERY } from "@/lib/queries";
@@ -27,6 +27,14 @@ type DashboardJoinRequest = {
   expiresAt?: string | null;
   createdAt: string;
   team: { id: string; name: string };
+};
+
+type ConfirmAction = {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  variant?: "primary" | "danger";
+  onConfirm: () => Promise<void>;
 };
 
 function getRemainingTimeText(expiresAtStr: string): string {
@@ -55,6 +63,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   const fetchDashboardData = async () => {
     const token = getAuthToken();
@@ -180,118 +190,144 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
-  const respondToInvitation = async (invitationId: string, accept: boolean) => {
+  const runConfirmedAction = async () => {
+    if (!confirmAction) return;
+    setConfirming(true);
+    try {
+      await confirmAction.onConfirm();
+      setConfirmAction(null);
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const respondToInvitation = (invitationId: string, accept: boolean) => {
     const action = accept ? "accept" : "decline";
-    if (!window.confirm(`Are you sure you want to ${action} this team invitation?`)) {
-      return;
-    }
-    
-    setNotice(null);
-    setError(null);
-    try {
-      const token = getAuthToken();
-      await graphqlRequest(
-        `mutation RespondInvitation($invitationId: ID!, $accept: Boolean!) {
-          respondToTeamInvitation(invitationId: $invitationId, accept: $accept) {
-            id
-            status
+    setConfirmAction({
+      title: `${accept ? "Accept" : "Decline"} Team Invitation`,
+      message: `Are you sure you want to ${action} this team invitation?`,
+      confirmLabel: accept ? "Accept Invitation" : "Decline Invitation",
+      variant: accept ? "primary" : "danger",
+      onConfirm: async () => {
+        setNotice(null);
+        setError(null);
+        try {
+          const token = getAuthToken();
+          await graphqlRequest(
+            `mutation RespondInvitation($invitationId: ID!, $accept: Boolean!) {
+              respondToTeamInvitation(invitationId: $invitationId, accept: $accept) {
+                id
+                status
+              }
+            }`,
+            { invitationId, accept },
+            token
+          );
+          setNotice(`Invitation successfully ${accept ? "accepted" : "declined"}.`);
+          await fetchDashboardData();
+        } catch (err) {
+          const msg = userFacingError(err);
+          if (accept && msg.toLowerCase().includes("already")) {
+            setError(`Failed to accept: You are already on a team. If you wish to join, please leave your current team first.`);
+          } else {
+            setError(msg);
           }
-        }`,
-        { invitationId, accept },
-        token
-      );
-      setNotice(`Invitation successfully ${accept ? "accepted" : "declined"}.`);
-      await fetchDashboardData();
-    } catch (err) {
-      const msg = userFacingError(err);
-      if (accept && msg.toLowerCase().includes("already")) {
-        setError(`Failed to accept: You are already on a team. If you wish to join, please leave your current team first.`);
-      } else {
-        setError(msg);
+        }
       }
-    }
+    });
   };
 
-  const handleConfirmJoinRequest = async (requestId: string) => {
-    if (!window.confirm("Are you sure you want to confirm joining this team?")) {
-      return;
-    }
-    setNotice(null);
-    setError(null);
-    try {
-      const token = getAuthToken();
-      await graphqlRequest(
-        `mutation ConfirmJoinRequest($requestId: ID!) {
-          confirmJoinRequest(requestId: $requestId) {
-            id
-            status
-          }
-        }`,
-        { requestId },
-        token
-      );
-      setNotice("You have successfully confirmed your membership on the team!");
-      await fetchDashboardData();
-    } catch (err) {
-      setError(userFacingError(err));
-    }
+  const handleConfirmJoinRequest = (requestId: string) => {
+    setConfirmAction({
+      title: "Confirm Team Membership",
+      message: "Are you sure you want to confirm joining this team?",
+      confirmLabel: "Confirm Membership",
+      onConfirm: async () => {
+        setNotice(null);
+        setError(null);
+        try {
+          const token = getAuthToken();
+          await graphqlRequest(
+            `mutation ConfirmJoinRequest($requestId: ID!) {
+              confirmJoinRequest(requestId: $requestId) {
+                id
+                status
+              }
+            }`,
+            { requestId },
+            token
+          );
+          setNotice("You have successfully confirmed your membership on the team!");
+          await fetchDashboardData();
+        } catch (err) {
+          setError(userFacingError(err));
+        }
+      }
+    });
   };
 
-  const handleConfirmOffer = async (applicationId: string) => {
-    if (!window.confirm("Are you sure you want to confirm this project offer? Doing so indicates your team's agreement to match with this project.")) {
-      return;
-    }
-    setNotice(null);
-    setError(null);
-    try {
-      const token = getAuthToken();
-      await graphqlRequest(
-        `mutation ConfirmOffer($applicationId: ID!) {
-          confirmProjectOfferByTeam(applicationId: $applicationId) {
-            id
-            status
-            teamConfirmedAt
-          }
-        }`,
-        { applicationId },
-        token
-      );
-      setNotice("Offer confirmed by your team! Waiting for the project owner's final match confirmation.");
-      await fetchDashboardData();
-    } catch (err) {
-      setError(userFacingError(err));
-    }
+  const handleConfirmOffer = (applicationId: string) => {
+    setConfirmAction({
+      title: "Confirm Project Offer",
+      message: "Confirming indicates your team's agreement to match with this project.",
+      confirmLabel: "Confirm Offer",
+      onConfirm: async () => {
+        setNotice(null);
+        setError(null);
+        try {
+          const token = getAuthToken();
+          await graphqlRequest(
+            `mutation ConfirmOffer($applicationId: ID!) {
+              confirmProjectOfferByTeam(applicationId: $applicationId) {
+                id
+                status
+                teamConfirmedAt
+              }
+            }`,
+            { applicationId },
+            token
+          );
+          setNotice("Offer confirmed by your team! Waiting for the project owner's final match confirmation.");
+          await fetchDashboardData();
+        } catch (err) {
+          setError(userFacingError(err));
+        }
+      }
+    });
   };
 
-  const handleWithdrawApplication = async (applicationId: string) => {
-    if (!window.confirm("Are you sure you want to withdraw this project application?")) {
-      return;
-    }
-    setNotice(null);
-    setError(null);
-    try {
-      const token = getAuthToken();
-      await graphqlRequest(
-        `mutation WithdrawApp($applicationId: ID!) {
-          withdrawApplication(applicationId: $applicationId) {
-            id
-            status
-            withdrawnAt
-          }
-        }`,
-        { applicationId },
-        token
-      );
-      setNotice("Application successfully withdrawn.");
-      await fetchDashboardData();
-    } catch (err) {
-      setError(userFacingError(err));
-    }
+  const handleWithdrawApplication = (applicationId: string) => {
+    setConfirmAction({
+      title: "Withdraw Application",
+      message: "Are you sure you want to withdraw this project application?",
+      confirmLabel: "Withdraw Application",
+      variant: "danger",
+      onConfirm: async () => {
+        setNotice(null);
+        setError(null);
+        try {
+          const token = getAuthToken();
+          await graphqlRequest(
+            `mutation WithdrawApp($applicationId: ID!) {
+              withdrawApplication(applicationId: $applicationId) {
+                id
+                status
+                withdrawnAt
+              }
+            }`,
+            { applicationId },
+            token
+          );
+          setNotice("Application successfully withdrawn.");
+          await fetchDashboardData();
+        } catch (err) {
+          setError(userFacingError(err));
+        }
+      }
+    });
   };
 
-  const deadlineDate = deadline ? new Date(deadline.deadlineAt) : null;
   const myRoleOnTeam = team?.members.find((m) => m.user.id === me?.id)?.role;
-  const isLeadOrCoLead = myRoleOnTeam === "LEAD" || myRoleOnTeam === "CO_LEAD";
 
   if (loading) {
     return (
@@ -319,6 +355,16 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 py-4 max-w-5xl mx-auto px-4">
+      <ConfirmDialog
+        isOpen={Boolean(confirmAction)}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={() => void runConfirmedAction()}
+        title={confirmAction?.title || "Confirm Action"}
+        message={confirmAction?.message || ""}
+        confirmLabel={confirmAction?.confirmLabel || "Confirm"}
+        variant={confirmAction?.variant || "primary"}
+        disabled={confirming}
+      />
       {/* Welcome Banner */}
       <div className="panel-wide p-6 space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

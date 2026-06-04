@@ -1,10 +1,18 @@
 "use client";
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
-import { Section, Status, Badge, Modal } from "@/components/ui";
+import { ConfirmDialog, Section, Status, Modal } from "@/components/ui";
 import { getAuthToken, graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { PROJECT_QUERY } from "@/lib/queries";
 import type { Project, ProjectApplication } from "@/types/domain";
+
+type ConfirmAction = {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  variant?: "primary" | "danger";
+  onConfirm: () => Promise<void>;
+};
 
 export default function ProjectApplicationsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -16,6 +24,8 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
   const [offerMessage, setOfferMessage] = useState("We reviewed your team credentials and would like to extend a formal capstone match offer.");
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   const project = data?.project;
 
@@ -53,48 +63,70 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
     }
   };
 
-  const handleReject = async (appId: string) => {
-    if (!window.confirm("Are you sure you want to reject this team's application?")) return;
-    setNotice(null);
+  const runConfirmedAction = async () => {
+    if (!confirmAction) return;
+    setConfirming(true);
     try {
-      const token = getAuthToken();
-      await graphqlRequest(
-        `mutation RejectApp($applicationId: ID!, $message: String) {
-          rejectApplication(applicationId: $applicationId, message: $message) { id status reviewMessage }
-        }`,
-        { applicationId: appId, message: "Declined by project owner." },
-        token
-      );
-      setNotice("Application declined.");
-      await reload();
-    } catch (err) {
-      setNotice(userFacingError(err));
+      await confirmAction.onConfirm();
+      setConfirmAction(null);
+    } finally {
+      setConfirming(false);
     }
   };
 
-  const handleFinalizeMatch = async (appId: string) => {
-    if (!window.confirm("Are you sure you want to finalize this match? Doing so will officially assign this project to the team, and all competing applications for both this project and team will be automatically withdrawn.")) {
-      return;
-    }
-    setNotice(null);
-    try {
-      const token = getAuthToken();
-      await graphqlRequest(
-        `mutation ConfirmOfferByOwner($applicationId: ID!) {
-          confirmProjectOfferByOwner(applicationId: $applicationId) {
-            id
-            status
-            ownerConfirmedAt
-          }
-        }`,
-        { applicationId: appId },
-        token
-      );
-      setNotice("Match finalized successfully! The project is now claimed.");
-      await reload();
-    } catch (err) {
-      setNotice(userFacingError(err));
-    }
+  const handleReject = (appId: string) => {
+    setConfirmAction({
+      title: "Decline Application",
+      message: "Are you sure you want to reject this team's application?",
+      confirmLabel: "Decline Application",
+      variant: "danger",
+      onConfirm: async () => {
+        setNotice(null);
+        try {
+          const token = getAuthToken();
+          await graphqlRequest(
+            `mutation RejectApp($applicationId: ID!, $message: String) {
+              rejectApplication(applicationId: $applicationId, message: $message) { id status reviewMessage }
+            }`,
+            { applicationId: appId, message: "Declined by project owner." },
+            token
+          );
+          setNotice("Application declined.");
+          await reload();
+        } catch (err) {
+          setNotice(userFacingError(err));
+        }
+      }
+    });
+  };
+
+  const handleFinalizeMatch = (appId: string) => {
+    setConfirmAction({
+      title: "Finalize Match",
+      message: "This will officially assign this project to the team, and all competing applications for both this project and team will be automatically withdrawn.",
+      confirmLabel: "Finalize Match",
+      onConfirm: async () => {
+        setNotice(null);
+        try {
+          const token = getAuthToken();
+          await graphqlRequest(
+            `mutation ConfirmOfferByOwner($applicationId: ID!) {
+              confirmProjectOfferByOwner(applicationId: $applicationId) {
+                id
+                status
+                ownerConfirmedAt
+              }
+            }`,
+            { applicationId: appId },
+            token
+          );
+          setNotice("Match finalized successfully! The project is now claimed.");
+          await reload();
+        } catch (err) {
+          setNotice(userFacingError(err));
+        }
+      }
+    });
   };
 
   if (loading) {
@@ -107,6 +139,16 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
 
   return (
     <div className="max-w-5xl mx-auto py-4 space-y-6">
+      <ConfirmDialog
+        isOpen={Boolean(confirmAction)}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={() => void runConfirmedAction()}
+        title={confirmAction?.title || "Confirm Action"}
+        message={confirmAction?.message || ""}
+        confirmLabel={confirmAction?.confirmLabel || "Confirm"}
+        variant={confirmAction?.variant || "primary"}
+        disabled={confirming}
+      />
       <div className="border-b border-[var(--border-subtle)] pb-4 flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">Review Project Claims</h1>

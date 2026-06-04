@@ -121,6 +121,50 @@ export function Modal({ isOpen, onClose, title, children }: { isOpen: boolean; o
   );
 }
 
+export function ConfirmDialog({
+  isOpen,
+  onClose,
+  onConfirm,
+  title,
+  message,
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  variant = "primary",
+  disabled = false,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  variant?: "primary" | "danger";
+  disabled?: boolean;
+}) {
+  const confirmClass = variant === "danger"
+    ? "btn-secondary py-2 px-4 text-xs text-rose-500 border-rose-300 dark:border-rose-900"
+    : "btn-primary py-2 px-4 text-xs";
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+      <div className="space-y-5">
+        <div className="text-sm leading-relaxed text-[var(--text-app)]">
+          {message}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-[var(--border-app)] pt-4">
+          <button type="button" onClick={onClose} className="btn-secondary py-2 px-4 text-xs" disabled={disabled}>
+            {cancelLabel}
+          </button>
+          <button type="button" onClick={onConfirm} className={confirmClass} disabled={disabled}>
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // Reusable Searchable Combobox Component for Tag Selection
 export function Combobox({
   options,

@@ -2,6 +2,7 @@
   "name": "quorum",
   "private": true,
   "version": "0.1.0",
+  "packageManager": "npm@11.11.0",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -11,7 +12,10 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "clear": "npm run clear --workspace=@quorum/web"
+    "clear": "npm run clear --workspace=@quorum/web",
+    "migrate:api": "cd apps/api && go run ./cmd/migrate",
+    "smoke:api": "cd apps/api && go run ./cmd/e2e",
+    "smoke": "npm run smoke:api"
   },
   "devDependencies": {
     "turbo": "^2.0.11"
