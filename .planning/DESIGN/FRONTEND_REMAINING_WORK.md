@@ -379,7 +379,7 @@ mutation ConfirmOfferByTeam($applicationId: ID!) {
 
 ---
 
-## 3.5 Owner Final Match Confirmation
+## 3.5 [x] Owner Final Match Confirmation
 
 ### Current State
 

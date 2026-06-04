@@ -72,6 +72,31 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
     }
   };
 
+  const handleFinalizeMatch = async (appId: string) => {
+    if (!window.confirm("Are you sure you want to finalize this match? Doing so will officially assign this project to the team, and all competing applications for both this project and team will be automatically withdrawn.")) {
+      return;
+    }
+    setNotice(null);
+    try {
+      const token = getAuthToken();
+      await graphqlRequest(
+        `mutation ConfirmOfferByOwner($applicationId: ID!) {
+          confirmProjectOfferByOwner(applicationId: $applicationId) {
+            id
+            status
+            ownerConfirmedAt
+          }
+        }`,
+        { applicationId: appId },
+        token
+      );
+      setNotice("Match finalized successfully! The project is now claimed.");
+      await reload();
+    } catch (err) {
+      setNotice(userFacingError(err));
+    }
+  };
+
   if (loading) {
     return <Section title="Loading"><p className="text-xs text-stone-500 animate-pulse">Loading project applications review dashboard...</p></Section>;
   }
@@ -132,10 +157,15 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
                     <p className="text-xs text-stone-400">Submitted {selectedApp.createdAt}</p>
                   </div>
                   <div className="flex gap-2">
-                    {selectedApp.status !== "OFFER_SENT" && selectedApp.status !== "MATCHED" && (
+                    {selectedApp.status === "TEAM_CONFIRMED" && (
+                      <button onClick={() => handleFinalizeMatch(selectedApp.id)} className="btn-primary py-1 px-3 text-xs bg-emerald-600 border-emerald-500 hover:bg-emerald-700">Finalize Match</button>
+                    )}
+                    {selectedApp.status !== "OFFER_SENT" && selectedApp.status !== "TEAM_CONFIRMED" && selectedApp.status !== "MATCHED" && (
                       <button onClick={() => setIsOfferOpen(true)} className="btn-primary py-1 px-3 text-xs">Send Offer</button>
                     )}
-                    <button onClick={() => handleReject(selectedApp.id)} className="btn-secondary py-1 px-3 text-xs text-rose-500 border-rose-200/40 dark:border-rose-950/40">Decline</button>
+                    {selectedApp.status !== "MATCHED" && (
+                      <button onClick={() => handleReject(selectedApp.id)} className="btn-secondary py-1 px-3 text-xs text-rose-500 border-rose-200/40 dark:border-rose-950/40">Decline</button>
+                    )}
                   </div>
                 </div>
               </div>
