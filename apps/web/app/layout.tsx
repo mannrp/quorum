@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import { AppShell } from "@/components/app-shell";
-import { QuorumStackProvider } from "@/components/stack-auth-provider";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -34,9 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
       <body>
-        <QuorumStackProvider>
-          <AppShell>{children}</AppShell>
-        </QuorumStackProvider>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

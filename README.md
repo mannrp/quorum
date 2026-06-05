@@ -12,7 +12,7 @@ Quorum is a capstone/project matching platform for students, teams, project owne
 
 ## Stack
 
-- `apps/web` - Next.js, React, Tailwind, Stack/Neon Auth
+- `apps/web` - Next.js, React, Tailwind, Neon Auth
 - `apps/api` - Go, gqlgen GraphQL, Postgres, Cloudflare R2
 - Root workspace - npm workspaces and Turborepo
 

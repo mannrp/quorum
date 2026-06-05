@@ -2,15 +2,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useStackApp } from "@stackframe/stack";
 import { Section, Combobox } from "@/components/ui";
 import { graphqlRequest, userFacingError } from "@/lib/graphql";
-import { isStackConfigured, syncStackAccessToken } from "@/lib/stack";
+import { signInWithNeonOAuth, signUpWithNeonEmail } from "@/lib/neon-auth";
 import type { User } from "@/types/domain";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const stackApp = useStackApp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -40,19 +38,7 @@ export default function RegisterPage() {
     }
 
     try {
-      if (!isStackConfigured()) {
-        throw new Error("Stack Auth is not configured. Set NEXT_PUBLIC_STACK_PROJECT_ID and NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY.");
-      }
-      const signUp = await stackApp.signUpWithCredential({
-        email,
-        password,
-        noRedirect: true,
-        noVerificationCallback: true,
-      });
-      if (signUp.status === "error") {
-        throw signUp.error;
-      }
-      const activeToken = await syncStackAccessToken(stackApp);
+      const activeToken = await signUpWithNeonEmail(email, password, fullName);
 
       const result = await graphqlRequest<{ bootstrapProfile: User }>(
         `mutation Bootstrap($input: BootstrapProfileInput!) {
@@ -93,10 +79,10 @@ export default function RegisterPage() {
     setError(null);
     setLoading(true);
     try {
-      if (!isStackConfigured()) {
-        throw new Error("Stack Auth is not configured for OAuth signup.");
+      if (provider !== "google" && provider !== "github") {
+        throw new Error("Unsupported OAuth provider.");
       }
-      await stackApp.signInWithOAuth(provider, { returnTo: "/onboarding" });
+      await signInWithNeonOAuth(provider, "/onboarding");
     } catch (err) {
       setError(userFacingError(err));
       setLoading(false);

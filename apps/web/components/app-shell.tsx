@@ -2,7 +2,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useState, useEffect, useCallback } from "react";
-import { AUTH_TOKEN_KEY, getAuthToken, graphqlRequest, userFacingError } from "@/lib/graphql";
+import { getAuthToken, graphqlRequest, setAuthToken, userFacingError } from "@/lib/graphql";
+import { signOutOfNeonAuth, syncCurrentNeonJwt } from "@/lib/neon-auth";
 import { DASHBOARD_CONTEXT_QUERY, ME_QUERY } from "@/lib/queries";
 import type { User } from "@/types/domain";
 
@@ -34,7 +35,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   const fetchSession = useCallback(async () => {
-    const token = getAuthToken();
+    let token = getAuthToken();
+    if (!token) {
+      token = await syncCurrentNeonJwt().catch(() => "");
+    }
     if (!token) {
       setMe(null);
       setIsAdmin(false);
@@ -72,8 +76,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     void fetchSession();
   }, [pathname, fetchSession]);
 
-  const handleLogout = () => {
-    localStorage.removeItem(AUTH_TOKEN_KEY);
+  const handleLogout = async () => {
+    await signOutOfNeonAuth().catch(() => setAuthToken(""));
     setMe(null);
     setIsAdmin(false);
     router.push("/");

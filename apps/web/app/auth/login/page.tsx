@@ -2,16 +2,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useStackApp } from "@stackframe/stack";
 import { Section } from "@/components/ui";
 import { graphqlRequest, setAuthToken, userFacingError } from "@/lib/graphql";
+import { signInWithNeonEmail, signInWithNeonOAuth } from "@/lib/neon-auth";
 import { ME_QUERY } from "@/lib/queries";
-import { isStackConfigured, syncStackAccessToken } from "@/lib/stack";
 import type { User } from "@/types/domain";
 
 export default function LoginPage() {
   const router = useRouter();
-  const stackApp = useStackApp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [developerToken, setDeveloperToken] = useState("");
@@ -36,14 +34,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      if (!isStackConfigured()) {
-        throw new Error("Stack Auth is not configured. Set NEXT_PUBLIC_STACK_PROJECT_ID and NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY.");
-      }
-      const result = await stackApp.signInWithCredential({ email, password, noRedirect: true });
-      if (result.status === "error") {
-        throw result.error;
-      }
-      const token = await syncStackAccessToken(stackApp);
+      const token = await signInWithNeonEmail(email, password);
       await routeAfterToken(token);
     } catch (err) {
       setAuthToken("");
@@ -72,10 +63,10 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      if (!isStackConfigured()) {
-        throw new Error("Stack Auth is not configured for OAuth sign-in.");
+      if (provider !== "google" && provider !== "github") {
+        throw new Error("Unsupported OAuth provider.");
       }
-      await stackApp.signInWithOAuth(provider, { returnTo: "/dashboard" });
+      await signInWithNeonOAuth(provider, "/dashboard");
     } catch (err) {
       setError(userFacingError(err));
       setLoading(false);
