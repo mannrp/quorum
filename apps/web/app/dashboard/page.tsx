@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, Section, Status } from "@/components/ui";
 import { DeadlineDisplay } from "@/components/deadline-display";
-import { getAuthToken, graphqlRequest, userFacingError } from "@/lib/graphql";
-import { DASHBOARD_CONTEXT_QUERY, ME_QUERY } from "@/lib/queries";
-import type { User, Team, Project, ProjectApplication, Notification } from "@/types/domain";
+import { graphqlRequest, userFacingError } from "@/lib/graphql";
+import { AUTH_STATE_QUERY, DASHBOARD_CONTEXT_QUERY } from "@/lib/queries";
+import type { AuthState, User, Team, Project, ProjectApplication, Notification } from "@/types/domain";
 
 type DashboardInvitation = {
   id: string;
@@ -67,21 +67,18 @@ export default function DashboardPage() {
   const [confirming, setConfirming] = useState(false);
 
   const fetchDashboardData = async () => {
-    const token = getAuthToken();
-    if (!token) {
-      router.push("/auth/login");
-      return;
-    }
-
     try {
       setError(null);
-      // 1. Fetch me info
-      const meResult = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, token);
-      if (!meResult.me) {
+      const authResult = await graphqlRequest<{ authState: AuthState }>(AUTH_STATE_QUERY, {}, { auth: true });
+      if (!authResult.authState.authenticated) {
         router.push("/auth/login");
         return;
       }
-      setMe(meResult.me);
+      if (!authResult.authState.profile || !authResult.authState.profileComplete) {
+        router.push("/onboarding");
+        return;
+      }
+      setMe(authResult.authState.profile);
 
       const dashboardResult = await graphqlRequest<{
         dashboardContext: {
@@ -91,7 +88,7 @@ export default function DashboardPage() {
           universalDeadline: Deadline | null;
         };
         myNotifications: Notification[];
-      }>(DASHBOARD_CONTEXT_QUERY, {}, token);
+      }>(DASHBOARD_CONTEXT_QUERY, {}, { auth: true });
 
       const primaryTeam = dashboardResult.dashboardContext.myTeams[0] || null;
       const primaryProject = dashboardResult.dashboardContext.myProjects[0] || null;
@@ -117,7 +114,7 @@ export default function DashboardPage() {
           }
         }`,
         { status: "ACCEPTED_PENDING_CONFIRMATION" },
-        token
+        { auth: true }
       );
       setMyRequests(requestsResult.myJoinRequests || []);
 
@@ -156,7 +153,7 @@ export default function DashboardPage() {
           }
         }`,
         {},
-        token
+        { auth: true }
       );
 
       if (primaryTeam && projectsRes.projects) {
@@ -212,7 +209,6 @@ export default function DashboardPage() {
         setNotice(null);
         setError(null);
         try {
-          const token = getAuthToken();
           await graphqlRequest(
             `mutation RespondInvitation($invitationId: ID!, $accept: Boolean!) {
               respondToTeamInvitation(invitationId: $invitationId, accept: $accept) {
@@ -221,7 +217,7 @@ export default function DashboardPage() {
               }
             }`,
             { invitationId, accept },
-            token
+            { auth: true }
           );
           setNotice(`Invitation successfully ${accept ? "accepted" : "declined"}.`);
           await fetchDashboardData();
@@ -246,7 +242,6 @@ export default function DashboardPage() {
         setNotice(null);
         setError(null);
         try {
-          const token = getAuthToken();
           await graphqlRequest(
             `mutation ConfirmJoinRequest($requestId: ID!) {
               confirmJoinRequest(requestId: $requestId) {
@@ -255,7 +250,7 @@ export default function DashboardPage() {
               }
             }`,
             { requestId },
-            token
+            { auth: true }
           );
           setNotice("You have successfully confirmed your membership on the team!");
           await fetchDashboardData();
@@ -275,7 +270,6 @@ export default function DashboardPage() {
         setNotice(null);
         setError(null);
         try {
-          const token = getAuthToken();
           await graphqlRequest(
             `mutation ConfirmOffer($applicationId: ID!) {
               confirmProjectOfferByTeam(applicationId: $applicationId) {
@@ -285,7 +279,7 @@ export default function DashboardPage() {
               }
             }`,
             { applicationId },
-            token
+            { auth: true }
           );
           setNotice("Offer confirmed by your team! Waiting for the project owner's final match confirmation.");
           await fetchDashboardData();
@@ -306,7 +300,6 @@ export default function DashboardPage() {
         setNotice(null);
         setError(null);
         try {
-          const token = getAuthToken();
           await graphqlRequest(
             `mutation WithdrawApp($applicationId: ID!) {
               withdrawApplication(applicationId: $applicationId) {
@@ -316,7 +309,7 @@ export default function DashboardPage() {
               }
             }`,
             { applicationId },
-            token
+            { auth: true }
           );
           setNotice("Application successfully withdrawn.");
           await fetchDashboardData();

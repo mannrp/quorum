@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Section, Status, Modal } from "@/components/ui";
-import { getAuthToken, graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
+import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { ADMIN_QUERY } from "@/lib/queries";
 import type { Project, Team, User } from "@/types/domain";
 
@@ -47,14 +47,13 @@ export default function AdminPage() {
 
   const handleExecuteDelete = async () => {
     if (!deleteConfirm) return;
-    const token = getAuthToken();
     try {
       if (deleteConfirm.type === "USER") {
-        await graphqlRequest(`mutation RemoveUser($id: ID!, $reason: String) { removeUser(userId: $id, reason: $reason) }`, { id: deleteConfirm.id, reason }, token);
+        await graphqlRequest(`mutation RemoveUser($id: ID!, $reason: String) { removeUser(userId: $id, reason: $reason) }`, { id: deleteConfirm.id, reason }, { auth: true });
       } else if (deleteConfirm.type === "TEAM") {
-        await graphqlRequest(`mutation RemoveTeam($id: ID!, $reason: String) { removeTeam(teamId: $id, reason: $reason) }`, { id: deleteConfirm.id, reason }, token);
+        await graphqlRequest(`mutation RemoveTeam($id: ID!, $reason: String) { removeTeam(teamId: $id, reason: $reason) }`, { id: deleteConfirm.id, reason }, { auth: true });
       } else if (deleteConfirm.type === "PROJECT") {
-        await graphqlRequest(`mutation RemoveProject($id: ID!, $reason: String) { removeProject(projectId: $id, reason: $reason) }`, { id: deleteConfirm.id, reason }, token);
+        await graphqlRequest(`mutation RemoveProject($id: ID!, $reason: String) { removeProject(projectId: $id, reason: $reason) }`, { id: deleteConfirm.id, reason }, { auth: true });
       }
     } catch (err) {
       setDeadlineNotice(userFacingError(err));
@@ -80,7 +79,7 @@ export default function AdminPage() {
           setUniversalDeadline(deadlineAt: $deadlineAt, reason: $reason) { id deadlineAt updatedAt }
         }`,
         { deadlineAt, reason: deadlineReason },
-        getAuthToken()
+        { auth: true }
       );
       setDeadlineNotice("Universal match deadline saved and propagated.");
       setDeadlineConfirmOpen(false);
@@ -95,7 +94,6 @@ export default function AdminPage() {
     if (!approvalAction) return;
     setApproving(true);
     try {
-      const token = getAuthToken();
       await graphqlRequest(
         `mutation ReviewApproval($projectId: ID!, $state: ProjectApprovalState!, $reason: String) {
           reviewProjectApproval(projectId: $projectId, approvalState: $state, reason: $reason) {
@@ -104,7 +102,7 @@ export default function AdminPage() {
           }
         }`,
         { projectId: approvalAction.id, state: approvalAction.state, reason: approvalReason },
-        token
+        { auth: true }
       );
       setDeadlineNotice(`Project approval updated to ${approvalAction.state}.`);
       setApprovalAction(null);

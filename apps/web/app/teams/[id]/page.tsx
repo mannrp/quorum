@@ -2,7 +2,7 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { ActionButton, Section, Status, Badge, Modal } from "@/components/ui";
-import { getAuthToken, graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
+import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { TEAM_QUERY } from "@/lib/queries";
 import type { Team, TeamRole, User } from "@/types/domain";
 
@@ -21,13 +21,11 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
 
   useEffect(() => {
     const fetchMe = async () => {
-      const token = getAuthToken();
-      if (!token) return;
       try {
         const res = await graphqlRequest<{ me: User | null }>(
           `query meInTeam { me { id username fullName } }`,
           {},
-          token
+          { auth: true }
         );
         if (res.me) setMe(res.me);
       } catch (err) {
@@ -42,11 +40,10 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
     setNotice(null);
     setSubmitting(true);
     try {
-      const token = getAuthToken();
       await graphqlRequest<{ requestJoin: { id: string } }>(
         `mutation RequestJoin($teamId: ID!, $message: String) { requestJoin(teamId: $teamId, message: $message) { id } }`,
         { teamId: id, message: joinMessage },
-        token
+        { auth: true }
       );
       setNotice("Join request successfully submitted!");
       setIsJoinOpen(false);
@@ -60,13 +57,12 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   const promoteMember = async (userId: string, currentRole: TeamRole) => {
     const role: TeamRole = currentRole === "MEMBER" ? "CO_LEAD" : "MEMBER";
     try {
-      const token = getAuthToken();
       await graphqlRequest(
         `mutation Promote($teamId: ID!, $userId: ID!, $role: TeamRole!) {
           promoteMember(teamId: $teamId, userId: $userId, role: $role) { id role }
         }`,
         { teamId: id, userId, role },
-        token
+        { auth: true }
       );
       setConfirmNotice(`Member successfully ${role === "CO_LEAD" ? "promoted to Co-Lead" : "demoted to Member"}.`);
       await reload();

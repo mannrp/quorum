@@ -2,7 +2,7 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { Section, Status, Badge, Modal } from "@/components/ui";
-import { getAuthToken, graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
+import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { PROJECT_QUERY } from "@/lib/queries";
 import type { Project, Team, User } from "@/types/domain";
 
@@ -29,13 +29,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   useEffect(() => {
     const fetchSessionData = async () => {
-      const token = getAuthToken();
-      if (!token) return;
       try {
         const meRes = await graphqlRequest<{ me: User | null }>(
           `query meProjectDetail { me { id username fullName } }`,
           {},
-          token
+          { auth: true }
         );
         if (meRes.me) {
           setMe(meRes.me);
@@ -43,7 +41,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           const teamRes = await graphqlRequest<{ teams: Team[] }>(
             `query myTeamsProject { teams { id name maxSize createdBy { id } members { user { id } role } } }`,
             {},
-            token
+            { auth: true }
           );
           
           const userTeam = teamRes.teams.find((t) =>
@@ -76,13 +74,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     });
 
     try {
-      const token = getAuthToken();
       await graphqlRequest(
         `mutation Apply($input: ApplyToProjectInput!) {
           applyToProjectInput(input: $input) { id status }
         }`,
         { input: { projectId: id, teamId: myTeam.id, message, answers: answerPayload } },
-        token
+        { auth: true }
       );
       setNotice("Application submitted successfully.");
       setIsApplyOpen(false);
@@ -106,7 +103,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     setSubmittingApproval(true);
     setNotice(null);
     try {
-      const token = getAuthToken();
       await graphqlRequest(
         `mutation SubmitApproval($projectId: ID!) {
           submitProjectForApproval(projectId: $projectId) {
@@ -115,7 +111,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           }
         }`,
         { projectId: id },
-        token
+        { auth: true }
       );
       setNotice("Project successfully submitted for professor approval!");
       setIsSubmitApprovalOpen(false);

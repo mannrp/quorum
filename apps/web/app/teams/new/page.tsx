@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Combobox } from "@/components/ui";
-import { getAuthToken, graphqlRequest } from "@/lib/graphql";
+import { graphqlRequest } from "@/lib/graphql";
 
 export default function CreateTeamPage() {
   const router = useRouter();
@@ -28,12 +28,6 @@ export default function CreateTeamPage() {
     setError(null);
     setSaving(true);
 
-    const token = getAuthToken();
-    if (!token) {
-      router.push("/auth/login");
-      return;
-    }
-
     try {
       const result = await graphqlRequest<{ createTeam: { id: string } }>(
         `mutation CreateTeam($input: CreateTeamInput!) {
@@ -52,7 +46,7 @@ export default function CreateTeamPage() {
             recruitingState: "RECRUITING"
           }
         },
-        token
+        { auth: true }
       );
       router.push(`/teams/${result.createTeam.id}`);
     } catch (err) {

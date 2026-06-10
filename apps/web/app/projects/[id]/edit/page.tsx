@@ -3,7 +3,7 @@ import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Section, Combobox } from "@/components/ui";
-import { useGraphQL, getAuthToken, graphqlRequest, userFacingError } from "@/lib/graphql";
+import { useGraphQL, graphqlRequest, userFacingError } from "@/lib/graphql";
 import { PROJECT_QUERY } from "@/lib/queries";
 import type { Project } from "@/types/domain";
 
@@ -43,7 +43,6 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
     setSaving(true);
 
     try {
-      const token = getAuthToken();
       await graphqlRequest(
         `mutation UpdateProjectDetails($id: ID!, $input: UpdateProjectInput!) {
           updateProject(id: $id, input: $input) { id }
@@ -60,7 +59,7 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
             status,
           }
         },
-        token
+        { auth: true }
       );
       setNotice("Project updated successfully. Applicants notified of material changes.");
     } catch (err) {

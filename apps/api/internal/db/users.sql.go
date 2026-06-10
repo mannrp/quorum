@@ -38,20 +38,35 @@ func (q *Queries) ClearUserTags(ctx context.Context, userID pgtype.UUID) error {
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (auth_user_id, username, email, full_name, discipline, university, user_intent, bio)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO users (
+  auth_user_id,
+  username,
+  email,
+  full_name,
+  discipline,
+  university,
+  user_intent,
+  resume_visibility,
+  bio,
+  preferred_project_areas,
+  profile_complete
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING id, auth_user_id, username, email, full_name, bio, discipline, university, linkedin_url, github_url, portfolio_url, resume_url, avatar_url, created_at, updated_at, user_intent, resume_visibility, discord, availability_note, preferred_project_areas, profile_complete, deactivated_at, archived_at
 `
 
 type CreateUserParams struct {
-	AuthUserID string      `json:"auth_user_id"`
-	Username   string      `json:"username"`
-	Email      pgtype.Text `json:"email"`
-	FullName   string      `json:"full_name"`
-	Discipline pgtype.Text `json:"discipline"`
-	University pgtype.Text `json:"university"`
-	UserIntent string      `json:"user_intent"`
-	Bio        pgtype.Text `json:"bio"`
+	AuthUserID            string      `json:"auth_user_id"`
+	Username              string      `json:"username"`
+	Email                 pgtype.Text `json:"email"`
+	FullName              string      `json:"full_name"`
+	Discipline            pgtype.Text `json:"discipline"`
+	University            pgtype.Text `json:"university"`
+	UserIntent            string      `json:"user_intent"`
+	ResumeVisibility      string      `json:"resume_visibility"`
+	Bio                   pgtype.Text `json:"bio"`
+	PreferredProjectAreas []string    `json:"preferred_project_areas"`
+	ProfileComplete       bool        `json:"profile_complete"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -63,7 +78,10 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.Discipline,
 		arg.University,
 		arg.UserIntent,
+		arg.ResumeVisibility,
 		arg.Bio,
+		arg.PreferredProjectAreas,
+		arg.ProfileComplete,
 	)
 	var i User
 	err := row.Scan(

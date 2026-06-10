@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Status, Combobox } from "@/components/ui";
-import { getAuthToken, graphqlRequest, uploadToSignedPost, userFacingError } from "@/lib/graphql";
+import { graphqlRequest, uploadToSignedPost, userFacingError } from "@/lib/graphql";
 import { ME_QUERY } from "@/lib/queries";
 import type { UploadSignature, User } from "@/types/domain";
 
@@ -31,13 +31,8 @@ export default function ProfileSettingsPage() {
 
   useEffect(() => {
     const loadProfile = async () => {
-      const token = getAuthToken();
-      if (!token) {
-        router.push("/auth/login");
-        return;
-      }
       try {
-        const res = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, token);
+        const res = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, { auth: true });
         if (res.me) {
           setUser(res.me);
           setFullName(res.me.fullName || "");
@@ -49,6 +44,8 @@ export default function ProfileSettingsPage() {
           setPortfolioUrl(res.me.portfolioUrl || "");
           setSkills((res.me.tags || []).map((t) => t.name));
           setResumeVisibility(res.me.resumeVisibility || "PUBLIC");
+        } else {
+          router.push("/onboarding");
         }
       } catch (err) {
         setNotice(userFacingError(err));
@@ -65,23 +62,24 @@ export default function ProfileSettingsPage() {
     setSaving(true);
 
     try {
-      const token = getAuthToken();
       let resumeUrl = user?.resumeUrl || "";
 
       if (resumeFile) {
         const result = await graphqlRequest<{ signUpload: UploadSignature }>(
           `mutation Sign($input: SignUploadInput!) { signUpload(input: $input) { url key publicUrl expiresAt fields { name value } } }`,
           { input: { kind: "RESUME", filename: resumeFile.name, contentType: resumeFile.type, size: resumeFile.size } },
-          token
+          { auth: true }
         );
         await uploadToSignedPost(resumeFile, result.signUpload);
         resumeUrl = result.signUpload.publicUrl || result.signUpload.key;
       }
 
       await graphqlRequest(
-        `mutation UpdateProfile($input: UpdateProfileInput!) { updateProfile(input: $input) { id } }`,
+        `mutation UpsertProfile($input: UpsertMyProfileInput!) { upsertMyProfile(input: $input) { id } }`,
         {
           input: {
+            username: user?.username || "",
+            email: user?.email || undefined,
             fullName,
             bio,
             discipline,
@@ -95,7 +93,7 @@ export default function ProfileSettingsPage() {
             tags: skills,
           },
         },
-        token
+        { auth: true }
       );
 
       setNotice("Profile successfully updated.");

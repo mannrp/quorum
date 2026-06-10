@@ -1,6 +1,5 @@
 "use client";
 
-import { setAuthToken } from "./graphql";
 import { authClient } from "./auth/client";
 
 function authErrorMessage(error: unknown) {
@@ -12,22 +11,11 @@ function authErrorMessage(error: unknown) {
   return "Neon Auth request failed.";
 }
 
-export async function syncCurrentNeonJwt() {
-  const result = await authClient.token();
-  if (result.error || !result.data?.token) {
-    throw new Error(authErrorMessage(result.error) || "Neon Auth did not return a session token.");
-  }
-
-  setAuthToken(result.data.token);
-  return result.data.token;
-}
-
 export async function signInWithNeonEmail(email: string, password: string) {
   const result = await authClient.signIn.email({ email, password });
   if (result.error) {
     throw new Error(authErrorMessage(result.error));
   }
-  return syncCurrentNeonJwt();
 }
 
 export async function signUpWithNeonEmail(email: string, password: string, name: string) {
@@ -35,17 +23,28 @@ export async function signUpWithNeonEmail(email: string, password: string, name:
   if (result.error) {
     throw new Error(authErrorMessage(result.error));
   }
-  return syncCurrentNeonJwt();
 }
 
-export async function signInWithNeonOAuth(provider: "google" | "github", callbackURL: string) {
-  const result = await authClient.signIn.social({ provider, callbackURL });
+export async function signInWithNeonOAuth(provider: "google", callbackURL: string) {
+  const result = await authClient.signIn.social({
+    provider,
+    callbackURL,
+    newUserCallbackURL: callbackURL,
+    errorCallbackURL: "/auth/login",
+  });
   if (result.error) {
     throw new Error(authErrorMessage(result.error));
   }
 }
 
+export async function getCurrentNeonUser() {
+  const result = await authClient.getSession();
+  if (result.error) {
+    throw new Error(authErrorMessage(result.error));
+  }
+  return result.data?.user || null;
+}
+
 export async function signOutOfNeonAuth() {
   await authClient.signOut();
-  setAuthToken("");
 }

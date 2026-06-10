@@ -2,10 +2,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useState, useEffect, useCallback } from "react";
-import { getAuthToken, graphqlRequest, setAuthToken, userFacingError } from "@/lib/graphql";
-import { signOutOfNeonAuth, syncCurrentNeonJwt } from "@/lib/neon-auth";
-import { DASHBOARD_CONTEXT_QUERY, ME_QUERY } from "@/lib/queries";
-import type { User } from "@/types/domain";
+import { graphqlRequest, userFacingError } from "@/lib/graphql";
+import { signOutOfNeonAuth } from "@/lib/neon-auth";
+import { AUTH_STATE_QUERY, DASHBOARD_CONTEXT_QUERY } from "@/lib/queries";
+import type { AuthState, User } from "@/types/domain";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -35,37 +35,33 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   const fetchSession = useCallback(async () => {
-    let token = getAuthToken();
-    if (!token) {
-      token = await syncCurrentNeonJwt().catch(() => "");
-    }
-    if (!token) {
-      setMe(null);
-      setIsAdmin(false);
-      setSessionError(null);
-      setLoading(false);
-      return;
-    }
     try {
       setSessionError(null);
-      const res = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, token);
-      if (res.me) {
-        setMe(res.me);
+      const res = await graphqlRequest<{ authState: AuthState }>(AUTH_STATE_QUERY);
+      if (res.authState.profile) {
+        setMe(res.authState.profile);
+      } else {
+        setMe(null);
+        setIsAdmin(false);
+        setUnreadNotif(0);
+        setUnreadMsg(0);
+      }
+
+      if (res.authState.profileComplete) {
         const dashboardRes = await graphqlRequest<{
           dashboardContext: { unreadMessages: number; unreadNotifications: number; isAdmin: boolean };
-        }>(DASHBOARD_CONTEXT_QUERY, {}, token);
+        }>(DASHBOARD_CONTEXT_QUERY, {}, { auth: true });
 
         setUnreadNotif(dashboardRes.dashboardContext.unreadNotifications);
         setUnreadMsg(dashboardRes.dashboardContext.unreadMessages);
         setIsAdmin(dashboardRes.dashboardContext.isAdmin);
-      } else {
-        setMe(null);
-        setIsAdmin(false);
       }
     } catch (err) {
       setSessionError(userFacingError(err));
       setMe(null);
       setIsAdmin(false);
+      setUnreadNotif(0);
+      setUnreadMsg(0);
     } finally {
       setLoading(false);
     }
@@ -77,7 +73,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [pathname, fetchSession]);
 
   const handleLogout = async () => {
-    await signOutOfNeonAuth().catch(() => setAuthToken(""));
+    await signOutOfNeonAuth().catch(() => undefined);
     setMe(null);
     setIsAdmin(false);
     router.push("/");

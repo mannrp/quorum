@@ -24,6 +24,13 @@ type User {
   createdAt: String!
 }
 
+type AuthState {
+  authenticated: Boolean!
+  hasProfile: Boolean!
+  profileComplete: Boolean!
+  profile: User
+}
+
 type Tag {
   id: ID!
   name: String!
@@ -240,6 +247,27 @@ input UpdateProfileInput {
   profileComplete: Boolean
 }
 
+input UpsertMyProfileInput {
+  username: String!
+  email: String
+  fullName: String!
+  bio: String
+  discipline: String
+  university: String
+  linkedinUrl: String
+  githubUrl: String
+  portfolioUrl: String
+  resumeUrl: String
+  avatarUrl: String
+  userIntent: String
+  resumeVisibility: ResumeVisibility
+  discord: String
+  availabilityNote: String
+  preferredProjectAreas: [String!]
+  skills: [String!]
+  tags: [String!]
+}
+
 input BootstrapProfileInput {
   username: String!
   email: String!
@@ -337,6 +365,7 @@ input SignUploadInput {
 }
 
 type Query {
+  authState: AuthState!
   me: User
   dashboardContext: DashboardContext!
   user(username: String!): User
@@ -357,6 +386,7 @@ type Query {
 
 type Mutation {
   bootstrapProfile(input: BootstrapProfileInput!): User!
+  upsertMyProfile(input: UpsertMyProfileInput!): User!
   updateProfile(input: UpdateProfileInput!): User!
   deactivateAccount(reason: String): Boolean!
   createTeam(input: CreateTeamInput!): Team!

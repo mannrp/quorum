@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Combobox } from "@/components/ui";
-import { getAuthToken, graphqlRequest } from "@/lib/graphql";
+import { graphqlRequest } from "@/lib/graphql";
 
 export default function CreateProjectPage() {
   const router = useRouter();
@@ -38,12 +38,6 @@ export default function CreateProjectPage() {
     setError(null);
     setSaving(true);
 
-    const token = getAuthToken();
-    if (!token) {
-      router.push("/auth/login");
-      return;
-    }
-
     try {
       const result = await graphqlRequest<{ createProject: { id: string } }>(
         `mutation CreateProject($input: CreateProjectInput!) {
@@ -65,7 +59,7 @@ export default function CreateProjectPage() {
             applicationQuestions: JSON.stringify(customQuestions)
           }
         },
-        token
+        { auth: true }
       );
       router.push(`/projects/${result.createProject.id}`);
     } catch (err) {

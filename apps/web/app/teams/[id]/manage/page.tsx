@@ -3,7 +3,7 @@ import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Section, Status, Badge, Modal } from "@/components/ui";
-import { getAuthToken, graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
+import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { TEAM_QUERY } from "@/lib/queries";
 import type { Team, TeamMembership, TeamRole } from "@/types/domain";
 
@@ -60,7 +60,6 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
       
       const loadRequests = async () => {
         try {
-          const token = getAuthToken();
           const res = await graphqlRequest<{ teamJoinRequests: JoinRequest[] }>(
             `query GetTeamJoinRequests($teamId: ID!) {
               teamJoinRequests(teamId: $teamId, status: PENDING) {
@@ -77,7 +76,7 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
               }
             }`,
             { teamId: id },
-            token
+            { auth: true }
           );
           setRequests(res.teamJoinRequests || []);
         } catch (err) {
@@ -92,11 +91,10 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
   const handleInviteSearch = async () => {
     if (!inviteSearch.trim()) return;
     try {
-      const token = getAuthToken();
       const res = await graphqlRequest<{ users: { id: string; fullName: string; username: string }[] }>(
         `query searchUsers($q: String) { users(search: $q) { id fullName username } }`,
         { q: inviteSearch },
-        token
+        { auth: true }
       );
       setInviteResults(res.users);
     } catch (err) {
@@ -109,13 +107,12 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
   const sendInvite = async (userId: string) => {
     setInviteNotice(null);
     try {
-      const token = getAuthToken();
       await graphqlRequest(
         `mutation InviteTeamMember($teamId: ID!, $userId: ID!, $message: String) {
           inviteTeamMember(teamId: $teamId, userId: $userId, message: $message) { id status expiresAt }
         }`,
         { teamId: id, userId, message: inviteMessage },
-        token
+        { auth: true }
       );
       setInviteNotice("Invitation sent.");
     } catch (err) {
@@ -128,7 +125,6 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
     setNotice(null);
     setSaving(true);
     try {
-      const token = getAuthToken();
       await graphqlRequest(
         `mutation UpdateTeamDetails($id: ID!, $input: UpdateTeamInput!) { updateTeam(id: $id, input: $input) { id } }`,
         {
@@ -147,7 +143,7 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
             projectInterests: team?.projectInterests || []
           }
         },
-        token
+        { auth: true }
       );
       setNotice("Team specifications successfully updated.");
       await reload();
@@ -167,13 +163,12 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
   const executeRequestAction = async () => {
     if (!actionReqId || !actionType) return;
     try {
-      const token = getAuthToken();
       await graphqlRequest(
         `mutation RespondRequest($requestId: ID!, $accept: Boolean!) {
           respondToJoinRequest(requestId: $requestId, accept: $accept) { id status }
         }`,
         { requestId: actionReqId, accept: actionType === "ACCEPT" },
-        token
+        { auth: true }
       );
       setRequests((prev) => prev.filter((r) => r.id !== actionReqId));
       setNotice(`Request ${actionType === "ACCEPT" ? "approved" : "declined"}.`);
@@ -191,11 +186,10 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
   const executeRemoveMember = async () => {
     if (!memberToRemove) return;
     try {
-      const token = getAuthToken();
       await graphqlRequest(
         `mutation RemoveMem($teamId: ID!, $userId: ID!) { removeMember(teamId: $teamId, userId: $userId) }`,
         { teamId: id, userId: memberToRemove.id },
-        token
+        { auth: true }
       );
       setNotice("Member removed.");
       await reload();

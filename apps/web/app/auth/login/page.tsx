@@ -3,30 +3,16 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Section } from "@/components/ui";
-import { graphqlRequest, setAuthToken, userFacingError } from "@/lib/graphql";
+import { authDestination } from "@/lib/auth-routing";
+import { userFacingError } from "@/lib/graphql";
 import { signInWithNeonEmail, signInWithNeonOAuth } from "@/lib/neon-auth";
-import { ME_QUERY } from "@/lib/queries";
-import type { User } from "@/types/domain";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [developerToken, setDeveloperToken] = useState("");
-  const [showDeveloperInput, setShowDeveloperInput] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [successMe, setSuccessMe] = useState<User | null>(null);
-
-  const routeAfterToken = async (token: string) => {
-    const result = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, token);
-    if (result.me) {
-      setSuccessMe(result.me);
-      router.push("/dashboard");
-    } else {
-      router.push("/onboarding");
-    }
-  };
 
   const handleCredentialsLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -34,25 +20,9 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const token = await signInWithNeonEmail(email, password);
-      await routeAfterToken(token);
+      await signInWithNeonEmail(email, password);
+      router.push(await authDestination());
     } catch (err) {
-      setAuthToken("");
-      setError(userFacingError(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleManualTokenSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError(null);
-    setLoading(true);
-    setAuthToken(developerToken);
-    try {
-      await routeAfterToken(developerToken);
-    } catch (err) {
-      setAuthToken("");
       setError(userFacingError(err));
     } finally {
       setLoading(false);
@@ -63,10 +33,10 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      if (provider !== "google" && provider !== "github") {
+      if (provider !== "google") {
         throw new Error("Unsupported OAuth provider.");
       }
-      await signInWithNeonOAuth(provider, "/dashboard");
+      await signInWithNeonOAuth(provider, "/auth/complete");
     } catch (err) {
       setError(userFacingError(err));
       setLoading(false);
@@ -80,28 +50,12 @@ export default function LoginPage() {
           {/* SSO Integrations */}
           <div className="space-y-2">
             <button
-              onClick={() => setError("Concordia SSO is not configured for beta yet. Use email/password or a QA bearer token.")}
+              onClick={() => void triggerSSO("google")}
               disabled={loading}
-              className="w-full inline-flex items-center justify-center gap-2.5 rounded-none border border-[var(--border-app)] bg-[var(--btn-primary-bg)] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-[var(--btn-primary-hover)] transition cursor-pointer"
+              className="w-full inline-flex items-center justify-center gap-2.5 rounded-none border border-[var(--border-app)] bg-[var(--surface-app)] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-[var(--text-app)] hover:bg-[var(--bg-app)] transition cursor-pointer"
             >
-              <span>Concordia Student Portal</span>
+              <span>Continue with Google</span>
             </button>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => void triggerSSO("google")}
-                disabled={loading}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-none border border-[var(--border-app)] bg-[var(--surface-app)] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-app)] hover:bg-[var(--bg-app)] transition cursor-pointer"
-              >
-                Google SSO
-              </button>
-              <button
-                onClick={() => void triggerSSO("github")}
-                disabled={loading}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-none border border-[var(--border-app)] bg-black dark:bg-[#1e1e24] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white hover:opacity-90 transition cursor-pointer"
-              >
-                GitHub
-              </button>
-            </div>
           </div>
 
           <div className="flex items-center justify-between py-2">
@@ -149,34 +103,6 @@ export default function LoginPage() {
             First time accessing Quorum?{" "}
             <Link href="/auth/register" className="text-[var(--accent-app)] font-bold hover:underline">Create a Profile</Link>
           </p>
-
-          {/* Advanced Developer Panel Toggle */}
-          <div className="pt-4 border-t border-stone-200 dark:border-stone-850">
-            <button
-              onClick={() => setShowDeveloperInput(!showDeveloperInput)}
-              className="text-[10px] font-bold uppercase tracking-wider text-stone-400 hover:text-stone-600 transition outline-none"
-            >
-              {showDeveloperInput ? "[-] Hide developer options" : "[+] Advanced token credentials"}
-            </button>
-
-            {showDeveloperInput && (
-              <form onSubmit={handleManualTokenSubmit} className="space-y-3 mt-3">
-                <div className="space-y-1">
-                  <label className="text-[9px] font-bold uppercase tracking-wider text-stone-400">Manual Bearer Token</label>
-                  <textarea
-                    required
-                    value={developerToken}
-                    onChange={(e) => setDeveloperToken(e.target.value)}
-                    placeholder="Paste a direct Neon Auth JWT bearer token..."
-                    className="input-field min-h-24 text-xs font-mono"
-                  />
-                </div>
-                <button className="btn-secondary w-full py-2 text-xs" type="submit" disabled={loading}>
-                  Inject Token
-                </button>
-              </form>
-            )}
-          </div>
         </div>
       </Section>
     </div>

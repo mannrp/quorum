@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-export const AUTH_TOKEN_KEY = "quorum.neonAuthToken";
-
 type GraphQLResponse<T> = {
   data?: T;
   errors?: { message: string }[];
@@ -30,25 +28,8 @@ export class GraphQLClientError extends Error {
   }
 }
 
-const DEFAULT_GRAPHQL_URL = "http://localhost:8080/graphql";
-
 function graphqlUrl() {
-  return process.env.NEXT_PUBLIC_API_URL || DEFAULT_GRAPHQL_URL;
-}
-
-export function getAuthToken() {
-  if (typeof window === "undefined") return "";
-  return window.localStorage.getItem(AUTH_TOKEN_KEY) || "";
-}
-
-export function setAuthToken(token: string) {
-  if (typeof window === "undefined") return;
-  const trimmed = token.trim();
-  if (trimmed) {
-    window.localStorage.setItem(AUTH_TOKEN_KEY, trimmed);
-  } else {
-    window.localStorage.removeItem(AUTH_TOKEN_KEY);
-  }
+  return process.env.NEXT_PUBLIC_GRAPHQL_PROXY_URL || "/api/graphql";
 }
 
 export function classifyGraphQLError(message: string, status?: number): GraphQLClientErrorKind {
@@ -94,13 +75,13 @@ export function userFacingError(error: unknown): string {
 export async function graphqlRequest<T>(
   query: string,
   variables?: Record<string, unknown>,
-  token = getAuthToken()
+  options?: { auth?: boolean }
 ): Promise<T> {
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     "content-type": "application/json"
   };
-  if (token) {
-    headers.authorization = `Bearer ${token}`;
+  if (options?.auth) {
+    headers["x-quorum-auth-required"] = "true";
   }
 
   let response: Response;
@@ -167,7 +148,7 @@ export function useGraphQL<T>(
     setError(null);
     try {
       const parsedVariables = JSON.parse(variablesKey) as Record<string, unknown>;
-      setData(await graphqlRequest<T>(query, parsedVariables, options?.auth ? getAuthToken() : undefined));
+      setData(await graphqlRequest<T>(query, parsedVariables, { auth: options?.auth }));
     } catch (err) {
       setError(userFacingError(err));
     } finally {
