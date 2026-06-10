@@ -1,0 +1,180 @@
+name: CI/CD
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  NEXT_PUBLIC_API_URL: http://localhost:8080/graphql
+  NEON_AUTH_BASE_URL: https://ci.invalid
+  NEON_AUTH_COOKIE_SECRET: ci-only-cookie-secret-at-least-32-characters
+
+jobs:
+  ci:
+    name: Verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Lint web
+        run: npm run lint
+
+      - name: Typecheck web
+        run: npm run typecheck
+
+      - name: Build web
+        run: npm run build
+
+      - name: Test API
+        working-directory: apps/api
+        run: go test ./...
+
+  smoke:
+    name: Smoke
+    runs-on: ubuntu-latest
+    needs: ci
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    env:
+      QUORUM_TEST_DATABASE_URL: ${{ secrets.QUORUM_TEST_DATABASE_URL }}
+      NEON_AUTH_ISSUER: ${{ secrets.NEON_AUTH_ISSUER }}
+      NEON_AUTH_JWKS_URL: ${{ secrets.NEON_AUTH_JWKS_URL }}
+      NEON_AUTH_AUDIENCE: ${{ secrets.NEON_AUTH_AUDIENCE }}
+      APP_ORIGIN: ${{ vars.APP_ORIGIN || 'http://localhost:3000' }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+      R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+
+    steps:
+      - name: Skip smoke when secrets are missing
+        if: env.QUORUM_TEST_DATABASE_URL == '' || env.NEON_AUTH_ISSUER == '' || env.NEON_AUTH_JWKS_URL == ''
+        run: echo "::notice::Smoke checks skipped because dedicated test database or Neon Auth secrets are not configured."
+
+      - name: Checkout
+        if: env.QUORUM_TEST_DATABASE_URL != '' && env.NEON_AUTH_ISSUER != '' && env.NEON_AUTH_JWKS_URL != ''
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        if: env.QUORUM_TEST_DATABASE_URL != '' && env.NEON_AUTH_ISSUER != '' && env.NEON_AUTH_JWKS_URL != ''
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+
+      - name: Run API migrations against test database
+        if: env.QUORUM_TEST_DATABASE_URL != '' && env.NEON_AUTH_ISSUER != '' && env.NEON_AUTH_JWKS_URL != ''
+        working-directory: apps/api
+        env:
+          DATABASE_URL: ${{ env.QUORUM_TEST_DATABASE_URL }}
+        run: go run ./cmd/migrate
+
+      - name: Run API smoke flow
+        if: env.QUORUM_TEST_DATABASE_URL != '' && env.NEON_AUTH_ISSUER != '' && env.NEON_AUTH_JWKS_URL != ''
+        working-directory: apps/api
+        env:
+          DATABASE_URL: ${{ env.QUORUM_TEST_DATABASE_URL }}
+        run: go run ./cmd/e2e -run-id ci-${{ github.run_id }}-${{ github.run_attempt }}
+
+  deploy-web:
+    name: Deploy Web
+    runs-on: ubuntu-latest
+    needs:
+      - ci
+      - smoke
+    if: github.ref == 'refs/heads/main'
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+    steps:
+      - name: Skip Vercel deploy when secrets are missing
+        if: env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID == ''
+        run: echo "::notice::Vercel deploy skipped because Vercel secrets are not configured."
+
+      - name: Checkout
+        if: env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != ''
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        if: env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install Node dependencies
+        if: env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != ''
+        run: npm ci
+
+      - name: Pull Vercel project settings
+        if: env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != ''
+        run: npx --yes vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build Vercel project
+        if: env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != ''
+        run: npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy Vercel project
+        if: env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != ''
+        run: npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+  deploy-api:
+    name: Deploy API
+    runs-on: ubuntu-latest
+    needs:
+      - ci
+      - smoke
+    if: github.ref == 'refs/heads/main'
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+    steps:
+      - name: Skip Fly deploy when token is missing
+        if: env.FLY_API_TOKEN == ''
+        run: echo "::notice::Fly deploy skipped because FLY_API_TOKEN is not configured."
+
+      - name: Checkout
+        if: env.FLY_API_TOKEN != ''
+        uses: actions/checkout@v4
+
+      - name: Setup flyctl
+        if: env.FLY_API_TOKEN != ''
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy API to Fly
+        if: env.FLY_API_TOKEN != ''
+        run: |
+          if [ -f apps/api/fly.toml ]; then
+            flyctl deploy --config apps/api/fly.toml --remote-only
+          else
+            echo "::notice::apps/api/fly.toml not found; skipping Fly deploy."
+          fi
