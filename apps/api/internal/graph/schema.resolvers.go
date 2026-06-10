@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	pgx "github.com/jackc/pgx/v5"
@@ -22,24 +23,120 @@ import (
 
 // BootstrapProfile is the resolver for the bootstrapProfile field.
 func (r *mutationResolver) BootstrapProfile(ctx context.Context, input model.BootstrapProfileInput) (*model.User, error) {
-	if existing, ok := auth.UserFromContext(ctx); ok {
-		return r.user(ctx, existing)
-	}
+	return r.UpsertMyProfile(ctx, model.UpsertMyProfileInput{
+		Username:   input.Username,
+		Email:      &input.Email,
+		FullName:   input.FullName,
+		Bio:        input.Bio,
+		Discipline: &input.Discipline,
+		University: &input.University,
+		UserIntent: input.UserIntent,
+	})
+}
+
+// UpsertMyProfile is the resolver for the upsertMyProfile field.
+func (r *mutationResolver) UpsertMyProfile(ctx context.Context, input model.UpsertMyProfileInput) (*model.User, error) {
 	subject, ok := auth.SubjectFromContext(ctx)
 	if !ok || subject == "" {
 		return nil, errors.New("verified Neon Auth token required")
 	}
-	user, err := r.Queries.CreateUser(ctx, db.CreateUserParams{
-		AuthUserID: subject,
-		Username:   input.Username,
-		Email:      textString(input.Email),
-		FullName:   input.FullName,
-		Discipline: textString(input.Discipline),
-		University: textString(input.University),
-		UserIntent: derefString(input.UserIntent, "STUDENT"),
-		Bio:        text(input.Bio),
-	})
-	if err != nil {
+
+	username := strings.TrimSpace(input.Username)
+	fullName := strings.TrimSpace(input.FullName)
+	if username == "" {
+		return nil, errors.New("username is required")
+	}
+	if fullName == "" {
+		return nil, errors.New("full name is required")
+	}
+
+	current, hasProfile := auth.UserFromContext(ctx)
+	if !hasProfile {
+		if existing, err := r.Queries.GetUserByAuthID(ctx, subject); err == nil {
+			current = existing
+			hasProfile = true
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, profilePersistenceError(err)
+		}
+	}
+
+	skills, replaceSkills := profileSkillValues(input.Skills, input.Tags)
+	completionSkills := skills
+	if hasProfile && !replaceSkills {
+		var err error
+		completionSkills, err = r.profileTagNames(ctx, current.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	preferredProjectAreas := input.PreferredProjectAreas
+	if preferredProjectAreas == nil {
+		if hasProfile {
+			preferredProjectAreas = current.PreferredProjectAreas
+		} else {
+			preferredProjectAreas = []string{}
+		}
+	}
+
+	profileComplete := profileCompleteValues(fullName, input.Bio, input.Discipline, input.University, completionSkills)
+	var user db.User
+	if err := r.withTx(ctx, func(q *db.Queries) error {
+		var err error
+		if hasProfile {
+			user, err = q.UpdateProfile(ctx, db.UpdateProfileParams{
+				ID:                    current.ID,
+				FullName:              fullName,
+				Bio:                   textOrCurrent(input.Bio, current.Bio),
+				Discipline:            textOrCurrent(input.Discipline, current.Discipline),
+				University:            textOrCurrent(input.University, current.University),
+				LinkedinUrl:           textOrCurrent(input.LinkedinURL, current.LinkedinUrl),
+				GithubUrl:             textOrCurrent(input.GithubURL, current.GithubUrl),
+				PortfolioUrl:          textOrCurrent(input.PortfolioURL, current.PortfolioUrl),
+				ResumeUrl:             textOrCurrent(input.ResumeURL, current.ResumeUrl),
+				AvatarUrl:             textOrCurrent(input.AvatarURL, current.AvatarUrl),
+				UserIntent:            derefString(input.UserIntent, current.UserIntent),
+				ResumeVisibility:      derefResumeVisibility(input.ResumeVisibility, current.ResumeVisibility),
+				Discord:               textOrCurrent(input.Discord, current.Discord),
+				AvailabilityNote:      textOrCurrent(input.AvailabilityNote, current.AvailabilityNote),
+				PreferredProjectAreas: preferredProjectAreas,
+				ProfileComplete:       profileComplete,
+			})
+		} else {
+			user, err = q.CreateUser(ctx, db.CreateUserParams{
+				AuthUserID:            subject,
+				Username:              username,
+				Email:                 text(input.Email),
+				FullName:              fullName,
+				Discipline:            text(input.Discipline),
+				University:            text(input.University),
+				UserIntent:            derefString(input.UserIntent, "STUDENT"),
+				ResumeVisibility:      derefResumeVisibility(input.ResumeVisibility, string(model.ResumeVisibilityPrivate)),
+				Bio:                   text(input.Bio),
+				PreferredProjectAreas: preferredProjectAreas,
+				ProfileComplete:       profileComplete,
+			})
+		}
+		if err != nil {
+			return profilePersistenceError(err)
+		}
+		if !replaceSkills {
+			return nil
+		}
+		if err := q.ClearUserTags(ctx, user.ID); err != nil {
+			return err
+		}
+		for _, skill := range skills {
+			tag, err := q.UpsertTag(ctx, skill)
+			if err != nil {
+				return err
+			}
+			if err := q.AddUserTag(ctx, db.AddUserTagParams{UserID: user.ID, TagID: tag.ID}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 	return r.user(ctx, user)
@@ -52,29 +149,41 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input model.Update
 		return nil, err
 	}
 	skills, replaceSkills := profileSkills(input)
+	completionSkills := skills
+	if !replaceSkills {
+		var err error
+		completionSkills, err = r.profileTagNames(ctx, current.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	preferredProjectAreas := input.PreferredProjectAreas
+	if preferredProjectAreas == nil {
+		preferredProjectAreas = current.PreferredProjectAreas
+	}
 	var user db.User
 	if err := r.withTx(ctx, func(q *db.Queries) error {
 		var err error
 		user, err = q.UpdateProfile(ctx, db.UpdateProfileParams{
 			ID:                    current.ID,
 			FullName:              input.FullName,
-			Bio:                   text(input.Bio),
-			Discipline:            text(input.Discipline),
-			University:            text(input.University),
-			LinkedinUrl:           text(input.LinkedinURL),
-			GithubUrl:             text(input.GithubURL),
-			PortfolioUrl:          text(input.PortfolioURL),
-			ResumeUrl:             text(input.ResumeURL),
-			AvatarUrl:             text(input.AvatarURL),
+			Bio:                   textOrCurrent(input.Bio, current.Bio),
+			Discipline:            textOrCurrent(input.Discipline, current.Discipline),
+			University:            textOrCurrent(input.University, current.University),
+			LinkedinUrl:           textOrCurrent(input.LinkedinURL, current.LinkedinUrl),
+			GithubUrl:             textOrCurrent(input.GithubURL, current.GithubUrl),
+			PortfolioUrl:          textOrCurrent(input.PortfolioURL, current.PortfolioUrl),
+			ResumeUrl:             textOrCurrent(input.ResumeURL, current.ResumeUrl),
+			AvatarUrl:             textOrCurrent(input.AvatarURL, current.AvatarUrl),
 			UserIntent:            derefString(input.UserIntent, current.UserIntent),
 			ResumeVisibility:      derefResumeVisibility(input.ResumeVisibility, current.ResumeVisibility),
-			Discord:               text(input.Discord),
-			AvailabilityNote:      text(input.AvailabilityNote),
-			PreferredProjectAreas: input.PreferredProjectAreas,
-			ProfileComplete:       derefBool(input.ProfileComplete, profileComplete(input, skills, replaceSkills)),
+			Discord:               textOrCurrent(input.Discord, current.Discord),
+			AvailabilityNote:      textOrCurrent(input.AvailabilityNote, current.AvailabilityNote),
+			PreferredProjectAreas: preferredProjectAreas,
+			ProfileComplete:       derefBool(input.ProfileComplete, profileComplete(input, completionSkills, true)),
 		})
 		if err != nil {
-			return err
+			return profilePersistenceError(err)
 		}
 		if !replaceSkills {
 			return nil
@@ -1393,11 +1502,32 @@ func (r *mutationResolver) RemoveProject(ctx context.Context, projectID string, 
 	return true, nil
 }
 
-// Me is the resolver for the me field.
-func (r *queryResolver) Me(ctx context.Context) (*model.User, error) {
-	current, err := requireUser(ctx)
+// AuthState is the resolver for the authState field.
+func (r *queryResolver) AuthState(ctx context.Context) (*model.AuthState, error) {
+	current, ok := auth.UserFromContext(ctx)
+	if !ok {
+		if subject, hasSubject := auth.SubjectFromContext(ctx); !hasSubject || subject == "" {
+			return &model.AuthState{}, nil
+		}
+		return &model.AuthState{Authenticated: true}, nil
+	}
+	profile, err := r.user(ctx, current)
 	if err != nil {
 		return nil, err
+	}
+	return &model.AuthState{
+		Authenticated:   true,
+		HasProfile:      true,
+		ProfileComplete: current.ProfileComplete,
+		Profile:         profile,
+	}, nil
+}
+
+// Me is the resolver for the me field.
+func (r *queryResolver) Me(ctx context.Context) (*model.User, error) {
+	current, ok := auth.UserFromContext(ctx)
+	if !ok {
+		return nil, nil
 	}
 	return r.user(ctx, current)
 }

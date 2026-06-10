@@ -2,7 +2,7 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { ConfirmDialog, Section, Status, Modal } from "@/components/ui";
-import { getAuthToken, graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
+import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { PROJECT_QUERY } from "@/lib/queries";
 import type { Project, ProjectApplication } from "@/types/domain";
 
@@ -44,13 +44,12 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
     setNotice(null);
     setSubmitting(true);
     try {
-      const token = getAuthToken();
       await graphqlRequest(
         `mutation SendOffer($applicationId: ID!, $message: String) {
           sendProjectOffer(applicationId: $applicationId, message: $message) { id status offerMessage expiresAt }
         }`,
         { applicationId: selectedApp.id, message: offerMessage },
-        token
+        { auth: true }
       );
       setNotice(`Offer sent to team "${selectedApp.team.name}".`);
       setIsOfferOpen(false);
@@ -83,13 +82,12 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
       onConfirm: async () => {
         setNotice(null);
         try {
-          const token = getAuthToken();
           await graphqlRequest(
             `mutation RejectApp($applicationId: ID!, $message: String) {
               rejectApplication(applicationId: $applicationId, message: $message) { id status reviewMessage }
             }`,
             { applicationId: appId, message: "Declined by project owner." },
-            token
+            { auth: true }
           );
           setNotice("Application declined.");
           await reload();
@@ -108,7 +106,6 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
       onConfirm: async () => {
         setNotice(null);
         try {
-          const token = getAuthToken();
           await graphqlRequest(
             `mutation ConfirmOfferByOwner($applicationId: ID!) {
               confirmProjectOfferByOwner(applicationId: $applicationId) {
@@ -118,7 +115,7 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
               }
             }`,
             { applicationId: appId },
-            token
+            { auth: true }
           );
           setNotice("Match finalized successfully! The project is now claimed.");
           await reload();

@@ -29,6 +29,13 @@ type AuditLog struct {
 	CreatedAt        string  `json:"createdAt"`
 }
 
+type AuthState struct {
+	Authenticated   bool  `json:"authenticated"`
+	HasProfile      bool  `json:"hasProfile"`
+	ProfileComplete bool  `json:"profileComplete"`
+	Profile         *User `json:"profile,omitempty"`
+}
+
 type BootstrapProfileInput struct {
 	Username   string  `json:"username"`
 	Email      string  `json:"email"`
@@ -312,6 +319,27 @@ type UploadSignature struct {
 	PublicURL *string        `json:"publicUrl,omitempty"`
 	ExpiresAt string         `json:"expiresAt"`
 	Fields    []*UploadField `json:"fields"`
+}
+
+type UpsertMyProfileInput struct {
+	Username              string            `json:"username"`
+	Email                 *string           `json:"email,omitempty"`
+	FullName              string            `json:"fullName"`
+	Bio                   *string           `json:"bio,omitempty"`
+	Discipline            *string           `json:"discipline,omitempty"`
+	University            *string           `json:"university,omitempty"`
+	LinkedinURL           *string           `json:"linkedinUrl,omitempty"`
+	GithubURL             *string           `json:"githubUrl,omitempty"`
+	PortfolioURL          *string           `json:"portfolioUrl,omitempty"`
+	ResumeURL             *string           `json:"resumeUrl,omitempty"`
+	AvatarURL             *string           `json:"avatarUrl,omitempty"`
+	UserIntent            *string           `json:"userIntent,omitempty"`
+	ResumeVisibility      *ResumeVisibility `json:"resumeVisibility,omitempty"`
+	Discord               *string           `json:"discord,omitempty"`
+	AvailabilityNote      *string           `json:"availabilityNote,omitempty"`
+	PreferredProjectAreas []string          `json:"preferredProjectAreas,omitempty"`
+	Skills                []string          `json:"skills,omitempty"`
+	Tags                  []string          `json:"tags,omitempty"`
 }
 
 type User struct {

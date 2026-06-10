@@ -47,8 +47,20 @@ VALUES ($1, $2)
 ON CONFLICT DO NOTHING;
 
 -- name: CreateUser :one
-INSERT INTO users (auth_user_id, username, email, full_name, discipline, university, user_intent, bio)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO users (
+  auth_user_id,
+  username,
+  email,
+  full_name,
+  discipline,
+  university,
+  user_intent,
+  resume_visibility,
+  bio,
+  preferred_project_areas,
+  profile_complete
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: UpdateProfile :one

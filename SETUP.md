@@ -43,9 +43,12 @@ Do not commit real env files. `.gitignore` keeps them private.
 ## Frontend Variables
 
 - `NEXT_PUBLIC_API_URL`: Go GraphQL endpoint, usually `http://localhost:8080/graphql`.
-- `NEXT_PUBLIC_STACK_PROJECT_ID`: Neon Auth/Stack project ID.
-- `NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY`: browser-safe auth key.
-- `STACK_SECRET_SERVER_KEY`: server-side auth key. Keep private.
+- `NEON_AUTH_BASE_URL`: Neon Auth URL for the current branch. This is the Auth URL from Neon, not the Data API REST URL.
+- `NEON_AUTH_COOKIE_SECRET`: at least 32 characters, used by the Next.js auth proxy to sign cached session cookies. Generate with `openssl rand -base64 32`.
+
+The Next.js app owns browser sign-in with the official Neon Auth SDK and exposes `/api/auth/[...path]` as the auth proxy. It stores Neon session state in signed httpOnly cookies, then requests a Neon JWT and sends that token to the Go GraphQL API as a bearer token. The Go API should not perform login/signup; it validates bearer tokens with `NEON_AUTH_ISSUER` and `NEON_AUTH_JWKS_URL`, then applies Quorum authorization rules.
+
+Local development does not get auth values automatically from `DATABASE_URL` or the Neon Data API REST URL. Copy `NEON_AUTH_BASE_URL` into `apps/web/.env.local` and `NEON_AUTH_ISSUER`/`NEON_AUTH_JWKS_URL` into `apps/api/.env` from the same Neon Auth branch configuration.
 
 ## Open Source Safety
 

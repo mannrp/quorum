@@ -2,15 +2,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useStackApp } from "@stackframe/stack";
 import { Section, Combobox } from "@/components/ui";
+import { authDestination } from "@/lib/auth-routing";
 import { graphqlRequest, userFacingError } from "@/lib/graphql";
-import { isStackConfigured, syncStackAccessToken } from "@/lib/stack";
+import { signInWithNeonOAuth, signUpWithNeonEmail } from "@/lib/neon-auth";
 import type { User } from "@/types/domain";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const stackApp = useStackApp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -40,46 +39,30 @@ export default function RegisterPage() {
     }
 
     try {
-      if (!isStackConfigured()) {
-        throw new Error("Stack Auth is not configured. Set NEXT_PUBLIC_STACK_PROJECT_ID and NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY.");
-      }
-      const signUp = await stackApp.signUpWithCredential({
-        email,
-        password,
-        noRedirect: true,
-        noVerificationCallback: true,
-      });
-      if (signUp.status === "error") {
-        throw signUp.error;
-      }
-      const activeToken = await syncStackAccessToken(stackApp);
+      await signUpWithNeonEmail(email, password, fullName);
 
-      const result = await graphqlRequest<{ bootstrapProfile: User }>(
-        `mutation Bootstrap($input: BootstrapProfileInput!) {
-          bootstrapProfile(input: $input) { id username fullName discipline university }
-        }`,
-        { input: { username, email, fullName, discipline: discipline || "SOEN", university: university || "Concordia" } },
-        activeToken
-      );
-
-      await graphqlRequest(
-        `mutation UpdateSkills($input: UpdateProfileInput!) {
-          updateProfile(input: $input) { id }
+      const result = await graphqlRequest<{ upsertMyProfile: User }>(
+        `mutation UpsertProfile($input: UpsertMyProfileInput!) {
+          upsertMyProfile(input: $input) { id username fullName discipline university profileComplete }
         }`,
         {
           input: {
-            fullName: result.bootstrapProfile.fullName,
-            discipline: result.bootstrapProfile.discipline,
-            university: result.bootstrapProfile.university,
+            username,
+            email,
+            fullName,
+            discipline: discipline || "SOEN",
+            university: university || "Concordia",
             bio: "Academically driven student looking to build a strong capstone foundation.",
+            skills,
+            tags: skills,
           }
         },
-        activeToken
+        { auth: true }
       );
 
-      setSuccessProfile(result.bootstrapProfile);
+      setSuccessProfile(result.upsertMyProfile);
       setTimeout(() => {
-        router.push("/dashboard");
+        void authDestination().then((destination) => router.push(destination));
       }, 1500);
 
     } catch (err) {
@@ -93,10 +76,10 @@ export default function RegisterPage() {
     setError(null);
     setLoading(true);
     try {
-      if (!isStackConfigured()) {
-        throw new Error("Stack Auth is not configured for OAuth signup.");
+      if (provider !== "google") {
+        throw new Error("Unsupported OAuth provider.");
       }
-      await stackApp.signInWithOAuth(provider, { returnTo: "/onboarding" });
+      await signInWithNeonOAuth(provider, "/auth/complete");
     } catch (err) {
       setError(userFacingError(err));
       setLoading(false);
@@ -113,30 +96,12 @@ export default function RegisterPage() {
             <div className="col-span-full space-y-2">
               <button
                 type="button"
-                onClick={() => setError("Concordia SSO is not configured for beta yet. Use email/password registration.")}
+                onClick={() => void handleSSORegister("google")}
                 disabled={loading}
-                className="w-full inline-flex items-center justify-center gap-2.5 rounded-none border border-[var(--border-app)] bg-[var(--btn-primary-bg)] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-[var(--btn-primary-hover)] transition cursor-pointer"
+                className="w-full inline-flex items-center justify-center gap-2.5 rounded-none border border-[var(--border-app)] bg-[var(--surface-app)] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-[var(--text-app)] hover:bg-[var(--bg-app)] transition cursor-pointer"
               >
-                Concordia SSO Signup
+                Continue with Google
               </button>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => void handleSSORegister("google")}
-                  disabled={loading}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-none border border-[var(--border-app)] bg-[var(--surface-app)] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-app)] hover:bg-[var(--bg-app)] transition cursor-pointer"
-                >
-                  Google Signup
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleSSORegister("github")}
-                  disabled={loading}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-none border border-[var(--border-app)] bg-black dark:bg-[#1e1e24] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white hover:opacity-90 transition cursor-pointer"
-                >
-                  GitHub Signup
-                </button>
-              </div>
             </div>
 
             <div className="col-span-full flex items-center justify-between py-1">

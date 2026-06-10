@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/local/quorum/apps/api/internal/auth"
 	"github.com/local/quorum/apps/api/internal/db"
@@ -734,11 +735,15 @@ func bytesOrCurrent(value *string, fallback []byte) []byte {
 }
 
 func profileSkills(input model.UpdateProfileInput) ([]string, bool) {
-	if input.Skills != nil {
-		return normalizeSkillNames(input.Skills), true
+	return profileSkillValues(input.Skills, input.Tags)
+}
+
+func profileSkillValues(skills []string, tags []string) ([]string, bool) {
+	if skills != nil {
+		return normalizeSkillNames(skills), true
 	}
-	if input.Tags != nil {
-		return normalizeSkillNames(input.Tags), true
+	if tags != nil {
+		return normalizeSkillNames(tags), true
 	}
 	return nil, false
 }
@@ -762,12 +767,53 @@ func normalizeSkillNames(values []string) []string {
 }
 
 func profileComplete(input model.UpdateProfileInput, skills []string, replaceSkills bool) bool {
-	hasSkills := !replaceSkills || len(skills) >= 3
-	return input.FullName != "" &&
-		input.Bio != nil && *input.Bio != "" &&
-		input.Discipline != nil && *input.Discipline != "" &&
-		input.University != nil && *input.University != "" &&
-		hasSkills
+	return profileCompleteValues(input.FullName, input.Bio, input.Discipline, input.University, skills)
+}
+
+func profileCompleteValues(fullName string, bio *string, discipline *string, university *string, skills []string) bool {
+	return strings.TrimSpace(fullName) != "" &&
+		bio != nil && strings.TrimSpace(*bio) != "" &&
+		discipline != nil && strings.TrimSpace(*discipline) != "" &&
+		university != nil && strings.TrimSpace(*university) != "" &&
+		len(skills) >= 3
+}
+
+func (r *Resolver) profileTagNames(ctx context.Context, userID pgtype.UUID) ([]string, error) {
+	tags, err := r.Queries.ListUserTags(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		names = append(names, tag.Name)
+	}
+	return normalizeSkillNames(names), nil
+}
+
+func profilePersistenceError(err error) error {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return err
+	}
+	switch pgErr.Code {
+	case "23505":
+		switch pgErr.ConstraintName {
+		case "users_username_key":
+			return errors.New("username is already taken")
+		case "users_email_key":
+			return errors.New("email is already registered")
+		case "users_auth_user_id_key":
+			return errors.New("a profile already exists for this signed-in account")
+		default:
+			return errors.New("profile already exists")
+		}
+	case "23502":
+		if pgErr.ColumnName != "" {
+			return fmt.Errorf("profile is missing required field: %s", pgErr.ColumnName)
+		}
+		return errors.New("profile is missing required data")
+	}
+	return err
 }
 
 func timeString(value pgtype.Timestamptz) string {

@@ -294,6 +294,120 @@ func TestProjectWorkflowsRequireCompleteProfile(t *testing.T) {
 	}
 }
 
+func TestAuthStateDistinguishesSessionAndProfileStates(t *testing.T) {
+	ctx, r, cleanup := workflowTestResolver(t)
+	defer cleanup()
+
+	query := &queryResolver{r}
+	state, err := query.AuthState(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Authenticated || state.HasProfile || state.ProfileComplete || state.Profile != nil {
+		t.Fatalf("unauthenticated state = %+v, want all false and nil profile", state)
+	}
+
+	subject := workflowPrefix(ctx) + "authstate_subject"
+	state, err = query.AuthState(auth.WithSubject(ctx, subject))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !state.Authenticated || state.HasProfile || state.ProfileComplete || state.Profile != nil {
+		t.Fatalf("no-profile state = %+v, want authenticated only", state)
+	}
+
+	incomplete := createWorkflowUser(t, ctx, r.Queries, "authstate_incomplete", false)
+	state, err = query.AuthState(auth.WithUser(auth.WithSubject(ctx, incomplete.AuthUserID), incomplete))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !state.Authenticated || !state.HasProfile || state.ProfileComplete || state.Profile == nil {
+		t.Fatalf("incomplete state = %+v, want authenticated profile incomplete", state)
+	}
+
+	complete := createWorkflowUser(t, ctx, r.Queries, "authstate_complete", true)
+	state, err = query.AuthState(auth.WithUser(auth.WithSubject(ctx, complete.AuthUserID), complete))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !state.Authenticated || !state.HasProfile || !state.ProfileComplete || state.Profile == nil {
+		t.Fatalf("complete state = %+v, want authenticated complete profile", state)
+	}
+}
+
+func TestUpsertMyProfileCreatesAndUpdatesByAuthSubject(t *testing.T) {
+	ctx, r, cleanup := workflowTestResolver(t)
+	defer cleanup()
+
+	mutation := &mutationResolver{r}
+	subject := workflowPrefix(ctx) + "upsert_subject"
+	username := workflowPrefix(ctx) + "upsert_user"
+	created, err := mutation.UpsertMyProfile(auth.WithSubject(ctx, subject), model.UpsertMyProfileInput{
+		Username:   username,
+		Email:      textStringPointer(username + "@example.com"),
+		FullName:   "Upsert User",
+		Bio:        textStringPointer("Still choosing skills."),
+		Discipline: textStringPointer("SOEN"),
+		University: textStringPointer("Concordia"),
+		Skills:     []string{"Go", "React"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.ProfileComplete {
+		t.Fatal("profileComplete = true, want false with fewer than three skills")
+	}
+	if created.PreferredProjectAreas == nil || len(created.PreferredProjectAreas) != 0 {
+		t.Fatalf("preferredProjectAreas = %v, want empty non-nil list", created.PreferredProjectAreas)
+	}
+
+	row, err := r.Queries.GetUserByAuthID(ctx, subject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := mutation.UpsertMyProfile(auth.WithUser(auth.WithSubject(ctx, subject), row), model.UpsertMyProfileInput{
+		Username:   username,
+		Email:      textStringPointer(username + "@example.com"),
+		FullName:   "Upsert User Updated",
+		Bio:        textStringPointer("Ready for project matching."),
+		Discipline: textStringPointer("SOEN"),
+		University: textStringPointer("Concordia"),
+		Skills:     []string{"Go", " React ", "go", "Postgres"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ID != created.ID {
+		t.Fatalf("updated ID = %s, want same ID %s", updated.ID, created.ID)
+	}
+	if !updated.ProfileComplete {
+		t.Fatal("profileComplete = false, want true with required fields and three unique skills")
+	}
+	if tagNames(updated.Tags) != "Go,Postgres,React" {
+		t.Fatalf("tags = %s, want normalized unique skills", tagNames(updated.Tags))
+	}
+}
+
+func TestUpsertMyProfileMapsDuplicateUsername(t *testing.T) {
+	ctx, r, cleanup := workflowTestResolver(t)
+	defer cleanup()
+
+	existing := createWorkflowUser(t, ctx, r.Queries, "duplicate_source", false)
+	_, err := (&mutationResolver{r}).UpsertMyProfile(
+		auth.WithSubject(ctx, workflowPrefix(ctx)+"duplicate_subject"),
+		model.UpsertMyProfileInput{
+			Username:   existing.Username,
+			Email:      textStringPointer("duplicate@example.com"),
+			FullName:   "Duplicate User",
+			Bio:        textStringPointer("Trying a duplicate username."),
+			Discipline: textStringPointer("SOEN"),
+			University: textStringPointer("Concordia"),
+			Skills:     []string{"Go", "React", "Postgres"},
+		},
+	)
+	assertErrorContains(t, err, "username is already taken")
+}
+
 func TestUpdateProfilePersistsSkillsAndComputesCompletion(t *testing.T) {
 	ctx, r, cleanup := workflowTestResolver(t)
 	defer cleanup()
@@ -650,14 +764,17 @@ func createWorkflowUser(t *testing.T, ctx context.Context, q *db.Queries, label 
 	t.Helper()
 	username := workflowPrefix(ctx) + label
 	user, err := q.CreateUser(ctx, db.CreateUserParams{
-		AuthUserID: username + "_auth",
-		Username:   username,
-		Email:      textString(username + "@example.com"),
-		FullName:   "Workflow " + label,
-		Discipline: textString("SOEN"),
-		University: textString("Concordia"),
-		Bio:        textString("Workflow test user."),
-		UserIntent: "STUDENT",
+		AuthUserID:            username + "_auth",
+		Username:              username,
+		Email:                 textString(username + "@example.com"),
+		FullName:              "Workflow " + label,
+		Discipline:            textString("SOEN"),
+		University:            textString("Concordia"),
+		UserIntent:            "STUDENT",
+		ResumeVisibility:      string(model.ResumeVisibilityPrivate),
+		Bio:                   textString("Workflow test user."),
+		PreferredProjectAreas: []string{},
+		ProfileComplete:       false,
 	})
 	if err != nil {
 		t.Fatal(err)

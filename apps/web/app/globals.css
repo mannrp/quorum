@@ -3,6 +3,10 @@
 @tailwind utilities;
 
 :root {
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-mono: "Courier New", Courier, monospace;
+
   /* Color Palette - Light Mode (Institutional Ink & Paper) */
   --bg-app: #f9f9f8;                  /* Warm alabaster/paper */
   --surface-app: #ffffff;             /* Crisp white panels */

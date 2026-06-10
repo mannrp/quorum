@@ -2,12 +2,15 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Combobox } from "@/components/ui";
-import { getAuthToken, graphqlRequest, uploadToSignedPost, userFacingError } from "@/lib/graphql";
-import { ME_QUERY } from "@/lib/queries";
-import type { UploadSignature, User } from "@/types/domain";
+import { authDestination } from "@/lib/auth-routing";
+import { graphqlRequest, uploadToSignedPost, userFacingError } from "@/lib/graphql";
+import { getCurrentNeonUser } from "@/lib/neon-auth";
+import { AUTH_STATE_QUERY } from "@/lib/queries";
+import type { AuthState, UploadSignature } from "@/types/domain";
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [discipline, setDiscipline] = useState("");
@@ -28,20 +31,31 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     const checkUser = async () => {
-      const token = getAuthToken();
-      if (!token) {
-        router.push("/auth/login");
-        return;
-      }
       try {
-        const res = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, token);
-        if (res.me) {
-          setFullName(res.me.fullName || "");
-          setUsername(res.me.username || "");
-          setDiscipline(res.me.discipline || "");
-          setUniversity(res.me.university || "Concordia");
-          setBio(res.me.bio || "");
-          setSkills((res.me.tags || []).map((t) => t.name));
+        const [stateRes, neonUser] = await Promise.all([
+          graphqlRequest<{ authState: AuthState }>(AUTH_STATE_QUERY, {}, { auth: true }),
+          getCurrentNeonUser().catch(() => null),
+        ]);
+        const state = stateRes.authState;
+        if (!state.authenticated) {
+          router.push("/auth/login");
+          return;
+        }
+        if (state.profileComplete) {
+          router.push("/dashboard");
+          return;
+        }
+        if (state.profile) {
+          setEmail(state.profile.email || "");
+          setFullName(state.profile.fullName || "");
+          setUsername(state.profile.username || "");
+          setDiscipline(state.profile.discipline || "");
+          setUniversity(state.profile.university || "Concordia");
+          setBio(state.profile.bio || "");
+          setSkills((state.profile.tags || []).map((t) => t.name));
+        } else if (neonUser) {
+          setEmail(neonUser.email || "");
+          setFullName(neonUser.name || "");
         }
       } catch (err) {
         setNotice(userFacingError(err));
@@ -64,40 +78,47 @@ export default function OnboardingPage() {
     setUploading(true);
 
     try {
-      const token = getAuthToken();
       let resumeUrl = "";
+
+      const input = {
+        username,
+        email: email || undefined,
+        fullName,
+        bio,
+        discipline,
+        university,
+        userIntent: intent,
+        skills,
+        tags: skills,
+      };
+
+      await graphqlRequest(
+        `mutation UpsertProfile($input: UpsertMyProfileInput!) { upsertMyProfile(input: $input) { id } }`,
+        { input },
+        { auth: true }
+      );
 
       if (resumeFile) {
         const result = await graphqlRequest<{ signUpload: UploadSignature }>(
           `mutation Sign($input: SignUploadInput!) { signUpload(input: $input) { url key publicUrl expiresAt fields { name value } } }`,
           { input: { kind: "RESUME", filename: resumeFile.name, contentType: resumeFile.type, size: resumeFile.size } },
-          token
+          { auth: true }
         );
         await uploadToSignedPost(resumeFile, result.signUpload);
         resumeUrl = result.signUpload.publicUrl || result.signUpload.key;
       }
 
-      await graphqlRequest(
-        `mutation UpdateProfile($input: UpdateProfileInput!) { updateProfile(input: $input) { id } }`,
-        {
-          input: {
-            fullName,
-            bio,
-            discipline,
-            university,
-            resumeUrl: resumeUrl || undefined,
-            linkedinUrl: "",
-            githubUrl: "",
-            portfolioUrl: "",
-            avatarUrl: "",
-          },
-        },
-        token
-      );
+      if (resumeUrl) {
+        await graphqlRequest(
+          `mutation UpsertProfile($input: UpsertMyProfileInput!) { upsertMyProfile(input: $input) { id } }`,
+          { input: { ...input, resumeUrl } },
+          { auth: true }
+        );
+      }
 
       setNotice("Profile setup complete!");
       setTimeout(() => {
-        router.push("/dashboard");
+        void authDestination().then((destination) => router.push(destination));
       }, 1000);
 
     } catch (err) {

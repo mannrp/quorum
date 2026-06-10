@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Section, Status, Badge } from "@/components/ui";
-import { getAuthToken, graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
+import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { INBOX_QUERY, MESSAGES_QUERY } from "@/lib/queries";
 import type { Message, User } from "@/types/domain";
 
@@ -40,11 +40,10 @@ function InboxInner() {
         // Fetch new target user profile details to start message
         const fetchTarget = async () => {
           try {
-            const token = getAuthToken();
             const res = await graphqlRequest<{ users: User[] }>(
               `query inboxTargetQuery { users { id username fullName discipline } }`,
               {},
-              token
+              { auth: true }
             );
             
             const target = res.users.find((u) => u.id === queryUserId);
@@ -66,8 +65,7 @@ function InboxInner() {
   // 2. Fetch thread messages
   useEffect(() => {
     if (!activeUser) return;
-    const token = getAuthToken();
-    graphqlRequest<{ myMessages: Message[] }>(MESSAGES_QUERY, { withUser: activeUser }, token)
+    graphqlRequest<{ myMessages: Message[] }>(MESSAGES_QUERY, { withUser: activeUser }, { auth: true })
       .then((result) => setMessages(result.myMessages))
       .catch((err) => setNotice(userFacingError(err)));
   }, [activeUser, activeUserData, me]);
@@ -76,11 +74,10 @@ function InboxInner() {
     event.preventDefault();
     if (!text.trim() || !activeUser) return;
     try {
-      const token = getAuthToken();
       const result = await graphqlRequest<{ sendMessage: Message }>(
         `mutation Send($receiverId: ID!, $body: String!) { sendMessage(receiverId: $receiverId, body: $body) { id body read createdAt sender { id username fullName } receiver { id username fullName } } }`,
         { receiverId: activeUser, body: text.trim() },
-        token
+        { auth: true }
       );
       setMessages((prev) => [...prev, result.sendMessage]);
       setText("");
@@ -91,11 +88,10 @@ function InboxInner() {
 
   const markAllRead = async () => {
     try {
-      const token = getAuthToken();
       const unread = messages.filter((message) => message.receiver.id === me?.id && !message.read);
       await Promise.all(
         unread.map((message) =>
-          graphqlRequest(`mutation MarkRead($id: ID!) { markRead(messageId: $id) }`, { id: message.id }, token)
+          graphqlRequest(`mutation MarkRead($id: ID!) { markRead(messageId: $id) }`, { id: message.id }, { auth: true })
         )
       );
       setMessages((prev) =>

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Status } from "@/components/ui";
-import { getAuthToken, graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
+import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { NOTIFICATIONS_QUERY } from "@/lib/queries";
 import type { Notification } from "@/types/domain";
 
@@ -16,8 +16,7 @@ export default function NotificationsPage() {
     event.stopPropagation(); // Avoid triggering route navigation
     try {
       setActionError(null);
-      const token = getAuthToken();
-      await graphqlRequest(`mutation MarkNotification($id: ID!) { markNotificationRead(notificationId: $id) }`, { id }, token);
+      await graphqlRequest(`mutation MarkNotification($id: ID!) { markNotificationRead(notificationId: $id) }`, { id }, { auth: true });
       await reload();
     } catch (err) {
       setActionError(userFacingError(err));

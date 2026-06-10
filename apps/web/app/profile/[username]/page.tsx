@@ -1,54 +1,16 @@
 "use client";
 
-import { use, useState } from "react";
+import { use } from "react";
 import Link from "next/link";
 import { Section, Status, Badge } from "@/components/ui";
-import { graphqlRequest, uploadToSignedPost, useGraphQL } from "@/lib/graphql";
+import { useGraphQL } from "@/lib/graphql";
 import { PROFILE_QUERY } from "@/lib/queries";
-import type { UploadSignature, User } from "@/types/domain";
+import type { User } from "@/types/domain";
 
 export default function ProfilePage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = use(params);
-  const { data, error, loading, reload } = useGraphQL<{ user: User | null }>(PROFILE_QUERY, { username });
-  const [uploading, setUploading] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const { data, error, loading } = useGraphQL<{ user: User | null }>(PROFILE_QUERY, { username });
   const user = data?.user;
-
-  const handleResumeUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !user) return;
-    setUploading(true);
-    setNotice(null);
-    try {
-      const result = await graphqlRequest<{ signUpload: UploadSignature }>(
-        `mutation Sign($input: SignUploadInput!) { signUpload(input: $input) { url key publicUrl expiresAt fields { name value } } }`,
-        { input: { kind: "RESUME", filename: file.name, contentType: file.type, size: file.size } },
-      );
-      await uploadToSignedPost(file, result.signUpload);
-      await graphqlRequest(
-        `mutation UpdateProfile($input: UpdateProfileInput!) { updateProfile(input: $input) { id resumeUrl } }`,
-        {
-          input: {
-            fullName: user.fullName,
-            bio: user.bio,
-            discipline: user.discipline,
-            university: user.university,
-            linkedinUrl: user.linkedinUrl,
-            githubUrl: user.githubUrl,
-            portfolioUrl: user.portfolioUrl,
-            resumeUrl: result.signUpload.publicUrl || result.signUpload.key,
-            avatarUrl: user.avatarUrl,
-          },
-        },
-      );
-      setNotice("Resume uploaded and profile updated.");
-      await reload();
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
-    }
-  };
 
   if (loading) {
     return <Section title="Loading"><p className="text-slate-400">Loading profile from GraphQL...</p></Section>;
@@ -101,15 +63,9 @@ export default function ProfilePage({ params }: { params: Promise<{ username: st
 
           <Section title="Resume Document">
             <div className="space-y-4">
-              <p className="text-xs text-stone-500 leading-relaxed font-sans">Direct uploads use GraphQL-signed R2 POST credentials and then update the profile with the stored asset URL.</p>
               <div className="flex flex-wrap items-center gap-4">
-                <label className="btn-secondary text-xs px-3 py-2 cursor-pointer relative overflow-hidden">
-                  <span>{uploading ? "Uploading..." : "Upload Resume File"}</span>
-                  <input type="file" accept=".pdf,.docx" onChange={handleResumeUpload} className="absolute inset-0 opacity-0 cursor-pointer" disabled={uploading} />
-                </label>
                 {user.resumeUrl ? <a href={user.resumeUrl} className="text-xs text-[var(--accent-app)] hover:underline font-bold">Current resume</a> : <span className="text-xs text-stone-500 italic font-mono">No resume uploaded.</span>}
               </div>
-              {notice && <p className="text-xs text-stone-500 font-mono">{notice}</p>}
             </div>
           </Section>
         </div>

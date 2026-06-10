@@ -2,14 +2,13 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Modal } from "@/components/ui";
-import { AUTH_TOKEN_KEY, getAuthToken, graphqlRequest, userFacingError } from "@/lib/graphql";
+import { graphqlRequest, userFacingError } from "@/lib/graphql";
 import { ME_QUERY } from "@/lib/queries";
 import type { User } from "@/types/domain";
 
 export default function AccountSettingsPage() {
   const router = useRouter();
   const [me, setMe] = useState<User | null>(null);
-  const [token, setToken] = useState("");
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -17,14 +16,12 @@ export default function AccountSettingsPage() {
 
   useEffect(() => {
     const checkUser = async () => {
-      const activeToken = getAuthToken();
-      if (!activeToken) {
-        router.push("/auth/login");
-        return;
-      }
-      setToken(activeToken);
       try {
-        const res = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, activeToken);
+        const res = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, { auth: true });
+        if (!res.me) {
+          router.push("/onboarding");
+          return;
+        }
         setMe(res.me);
       } catch (err) {
         setNotice(userFacingError(err));
@@ -39,13 +36,11 @@ export default function AccountSettingsPage() {
     setDeleting(true);
     setNotice(null);
     try {
-      const activeToken = getAuthToken();
       await graphqlRequest(
         `mutation DeactivateAccount($reason: String) { deactivateAccount(reason: $reason) }`,
         { reason: "Self-service deactivation from settings" },
-        activeToken
+        { auth: true }
       );
-      localStorage.removeItem(AUTH_TOKEN_KEY);
       router.push("/");
     } catch (err) {
       setNotice(userFacingError(err));
@@ -63,7 +58,7 @@ export default function AccountSettingsPage() {
     <div className="max-w-2xl mx-auto py-4 space-y-6">
       <div className="border-b border-[var(--border-subtle)] pb-4">
         <h1 className="text-3xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">Account Security</h1>
-        <p className="text-sm text-stone-500">Manage active auth tokens, dev credentials, and account deactivation options.</p>
+        <p className="text-sm text-stone-500">Manage your active session and account deactivation options.</p>
       </div>
 
       <Section title="Active Neon Auth Session">
@@ -74,15 +69,17 @@ export default function AccountSettingsPage() {
         )}
         <div className="space-y-3">
           <p className="text-xs text-stone-500 leading-relaxed">
-            Your active browser session utilizes the Neon Auth bearer JWT listed below to validate operations with the GraphQL service.
+            You are signed in through Neon Auth. Quorum forwards session credentials server-side when protected GraphQL operations are required.
           </p>
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Bearer Token</label>
-            <textarea
-              readOnly
-              value={token}
-              className="input-field min-h-24 font-mono text-xs bg-[var(--bg-app)] border border-[var(--border-app)] text-stone-600 dark:text-stone-400 select-all cursor-text"
-            />
+          <div className="grid gap-2 text-xs font-mono text-stone-500">
+            <div className="flex justify-between border border-[var(--border-subtle)] px-3 py-2">
+              <span>Profile</span>
+              <span className="font-bold text-[var(--text-app)]">{me?.username ? `@${me.username}` : "Not linked"}</span>
+            </div>
+            <div className="flex justify-between border border-[var(--border-subtle)] px-3 py-2">
+              <span>Email</span>
+              <span className="font-bold text-[var(--text-app)]">{me?.email || "Not provided"}</span>
+            </div>
           </div>
         </div>
       </Section>

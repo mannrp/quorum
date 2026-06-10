@@ -209,6 +209,7 @@ mutation CompleteProfile($input: UpdateProfileInput!) {
 				"discipline":            "SOEN",
 				"university":            "Concordia",
 				"preferredProjectAreas": []string{"Distributed systems", "Product engineering"},
+				"skills":                []string{"Go", "React", "PostgreSQL"},
 			}})
 			if err != nil {
 				return err

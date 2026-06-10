@@ -24,6 +24,17 @@ export const USER_FIELDS = `
   tags { id name isPredefined }
 `;
 
+export const AUTH_STATE_QUERY = `
+  query AuthState {
+    authState {
+      authenticated
+      hasProfile
+      profileComplete
+      profile { ${USER_FIELDS} }
+    }
+  }
+`;
+
 export const TEAM_CARD_FIELDS = `
   id
   name

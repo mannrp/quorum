@@ -49,6 +49,13 @@ export type User = {
   createdAt?: string;
 };
 
+export type AuthState = {
+  authenticated: boolean;
+  hasProfile: boolean;
+  profileComplete: boolean;
+  profile?: User | null;
+};
+
 export type TeamMembership = {
   id: string;
   user: User;

@@ -49,6 +49,13 @@ type ComplexityRoot struct {
 		TargetEntityType func(childComplexity int) int
 	}
 
+	AuthState struct {
+		Authenticated   func(childComplexity int) int
+		HasProfile      func(childComplexity int) int
+		Profile         func(childComplexity int) int
+		ProfileComplete func(childComplexity int) int
+	}
+
 	DashboardContext struct {
 		IsAdmin             func(childComplexity int) int
 		MyInvitations       func(childComplexity int) int
@@ -113,6 +120,7 @@ type ComplexityRoot struct {
 		UpdateProfile              func(childComplexity int, input model.UpdateProfileInput) int
 		UpdateProject              func(childComplexity int, id string, input model.UpdateProjectInput) int
 		UpdateTeam                 func(childComplexity int, id string, input model.UpdateTeamInput) int
+		UpsertMyProfile            func(childComplexity int, input model.UpsertMyProfileInput) int
 		WithdrawApplication        func(childComplexity int, applicationID string) int
 	}
 
@@ -181,6 +189,7 @@ type ComplexityRoot struct {
 
 	Query struct {
 		AuditLogs         func(childComplexity int, limit *int) int
+		AuthState         func(childComplexity int) int
 		DashboardContext  func(childComplexity int) int
 		Me                func(childComplexity int) int
 		MyInbox           func(childComplexity int) int
@@ -308,6 +317,7 @@ type ComplexityRoot struct {
 
 type MutationResolver interface {
 	BootstrapProfile(ctx context.Context, input model.BootstrapProfileInput) (*model.User, error)
+	UpsertMyProfile(ctx context.Context, input model.UpsertMyProfileInput) (*model.User, error)
 	UpdateProfile(ctx context.Context, input model.UpdateProfileInput) (*model.User, error)
 	DeactivateAccount(ctx context.Context, reason *string) (bool, error)
 	CreateTeam(ctx context.Context, input model.CreateTeamInput) (*model.Team, error)
@@ -347,6 +357,7 @@ type MutationResolver interface {
 	RemoveProject(ctx context.Context, projectID string, reason *string) (bool, error)
 }
 type QueryResolver interface {
+	AuthState(ctx context.Context) (*model.AuthState, error)
 	Me(ctx context.Context) (*model.User, error)
 	DashboardContext(ctx context.Context) (*model.DashboardContext, error)
 	User(ctx context.Context, username string) (*model.User, error)
@@ -439,6 +450,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AuditLog.TargetEntityType(childComplexity), true
+
+	case "AuthState.authenticated":
+		if e.ComplexityRoot.AuthState.Authenticated == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AuthState.Authenticated(childComplexity), true
+	case "AuthState.hasProfile":
+		if e.ComplexityRoot.AuthState.HasProfile == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AuthState.HasProfile(childComplexity), true
+	case "AuthState.profile":
+		if e.ComplexityRoot.AuthState.Profile == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AuthState.Profile(childComplexity), true
+	case "AuthState.profileComplete":
+		if e.ComplexityRoot.AuthState.ProfileComplete == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AuthState.ProfileComplete(childComplexity), true
 
 	case "DashboardContext.isAdmin":
 		if e.ComplexityRoot.DashboardContext.IsAdmin == nil {
@@ -952,6 +988,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateTeam(childComplexity, args["id"].(string), args["input"].(model.UpdateTeamInput)), true
+	case "Mutation.upsertMyProfile":
+		if e.ComplexityRoot.Mutation.UpsertMyProfile == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_upsertMyProfile_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpsertMyProfile(childComplexity, args["input"].(model.UpsertMyProfileInput)), true
 	case "Mutation.withdrawApplication":
 		if e.ComplexityRoot.Mutation.WithdrawApplication == nil {
 			break
@@ -1285,6 +1332,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AuditLogs(childComplexity, args["limit"].(*int)), true
+	case "Query.authState":
+		if e.ComplexityRoot.Query.AuthState == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.AuthState(childComplexity), true
 	case "Query.dashboardContext":
 		if e.ComplexityRoot.Query.DashboardContext == nil {
 			break
@@ -1927,6 +1980,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputUpdateProfileInput,
 		ec.unmarshalInputUpdateProjectInput,
 		ec.unmarshalInputUpdateTeamInput,
+		ec.unmarshalInputUpsertMyProfileInput,
 	)
 	first := true
 
@@ -2026,6 +2080,13 @@ var sources = []*ast.Source{
   archivedAt: String
   tags: [Tag!]!
   createdAt: String!
+}
+
+type AuthState {
+  authenticated: Boolean!
+  hasProfile: Boolean!
+  profileComplete: Boolean!
+  profile: User
 }
 
 type Tag {
@@ -2244,6 +2305,27 @@ input UpdateProfileInput {
   profileComplete: Boolean
 }
 
+input UpsertMyProfileInput {
+  username: String!
+  email: String
+  fullName: String!
+  bio: String
+  discipline: String
+  university: String
+  linkedinUrl: String
+  githubUrl: String
+  portfolioUrl: String
+  resumeUrl: String
+  avatarUrl: String
+  userIntent: String
+  resumeVisibility: ResumeVisibility
+  discord: String
+  availabilityNote: String
+  preferredProjectAreas: [String!]
+  skills: [String!]
+  tags: [String!]
+}
+
 input BootstrapProfileInput {
   username: String!
   email: String!
@@ -2341,6 +2423,7 @@ input SignUploadInput {
 }
 
 type Query {
+  authState: AuthState!
   me: User
   dashboardContext: DashboardContext!
   user(username: String!): User
@@ -2361,6 +2444,7 @@ type Query {
 
 type Mutation {
   bootstrapProfile(input: BootstrapProfileInput!): User!
+  upsertMyProfile(input: UpsertMyProfileInput!): User!
   updateProfile(input: UpdateProfileInput!): User!
   deactivateAccount(reason: String): Boolean!
   createTeam(input: CreateTeamInput!): Team!
@@ -2431,6 +2515,20 @@ func (ec *executionContext) childFields_AuditLog(ctx context.Context, field grap
 		return ec.fieldContext_AuditLog_createdAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type AuditLog", field.Name)
+}
+
+func (ec *executionContext) childFields_AuthState(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "authenticated":
+		return ec.fieldContext_AuthState_authenticated(ctx, field)
+	case "hasProfile":
+		return ec.fieldContext_AuthState_hasProfile(ctx, field)
+	case "profileComplete":
+		return ec.fieldContext_AuthState_profileComplete(ctx, field)
+	case "profile":
+		return ec.fieldContext_AuthState_profile(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AuthState", field.Name)
 }
 
 func (ec *executionContext) childFields_DashboardContext(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -3659,6 +3757,20 @@ func (ec *executionContext) field_Mutation_updateTeam_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_upsertMyProfile_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (model.UpsertMyProfileInput, error) {
+			return ec.unmarshalNUpsertMyProfileInput2githubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUpsertMyProfileInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_withdrawApplication_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -4194,6 +4306,107 @@ func (ec *executionContext) fieldContext_AuditLog_createdAt(_ context.Context, f
 	return graphql.NewScalarFieldContext("AuditLog", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _AuthState_authenticated(ctx context.Context, field graphql.CollectedField, obj *model.AuthState) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AuthState_authenticated(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Authenticated, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AuthState_authenticated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AuthState", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _AuthState_hasProfile(ctx context.Context, field graphql.CollectedField, obj *model.AuthState) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AuthState_hasProfile(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HasProfile, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AuthState_hasProfile(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AuthState", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _AuthState_profileComplete(ctx context.Context, field graphql.CollectedField, obj *model.AuthState) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AuthState_profileComplete(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ProfileComplete, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AuthState_profileComplete(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AuthState", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _AuthState_profile(ctx context.Context, field graphql.CollectedField, obj *model.AuthState) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AuthState_profile(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Profile, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.User) graphql.Marshaler {
+			return ec.marshalOUser2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUser(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AuthState_profile(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AuthState",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_User(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _DashboardContext_myTeams(ctx context.Context, field graphql.CollectedField, obj *model.DashboardContext) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -4686,6 +4899,50 @@ func (ec *executionContext) fieldContext_Mutation_bootstrapProfile(ctx context.C
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_bootstrapProfile_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_upsertMyProfile(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_upsertMyProfile(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpsertMyProfile(ctx, fc.Args["input"].(model.UpsertMyProfileInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.User) graphql.Marshaler {
+			return ec.marshalNUser2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUser(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_upsertMyProfile(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_User(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_upsertMyProfile_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -7554,6 +7811,38 @@ func (ec *executionContext) _ProjectPermissions_canArchive(ctx context.Context, 
 }
 func (ec *executionContext) fieldContext_ProjectPermissions_canArchive(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ProjectPermissions", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _Query_authState(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_authState(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().AuthState(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.AuthState) graphql.Marshaler {
+			return ec.marshalNAuthState2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐAuthState(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_authState(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AuthState(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Query_me(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -12169,6 +12458,155 @@ func (ec *executionContext) unmarshalInputUpdateTeamInput(ctx context.Context, o
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputUpsertMyProfileInput(ctx context.Context, obj any) (model.UpsertMyProfileInput, error) {
+	var it model.UpsertMyProfileInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"username", "email", "fullName", "bio", "discipline", "university", "linkedinUrl", "githubUrl", "portfolioUrl", "resumeUrl", "avatarUrl", "userIntent", "resumeVisibility", "discord", "availabilityNote", "preferredProjectAreas", "skills", "tags"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "username":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("username"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Username = data
+		case "email":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("email"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Email = data
+		case "fullName":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("fullName"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.FullName = data
+		case "bio":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("bio"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Bio = data
+		case "discipline":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("discipline"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Discipline = data
+		case "university":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("university"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.University = data
+		case "linkedinUrl":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("linkedinUrl"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.LinkedinURL = data
+		case "githubUrl":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("githubUrl"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.GithubURL = data
+		case "portfolioUrl":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("portfolioUrl"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PortfolioURL = data
+		case "resumeUrl":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("resumeUrl"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ResumeURL = data
+		case "avatarUrl":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("avatarUrl"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AvatarURL = data
+		case "userIntent":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("userIntent"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.UserIntent = data
+		case "resumeVisibility":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("resumeVisibility"))
+			data, err := ec.unmarshalOResumeVisibility2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐResumeVisibility(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ResumeVisibility = data
+		case "discord":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("discord"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Discord = data
+		case "availabilityNote":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("availabilityNote"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AvailabilityNote = data
+		case "preferredProjectAreas":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("preferredProjectAreas"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PreferredProjectAreas = data
+		case "skills":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("skills"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Skills = data
+		case "tags":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("tags"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Tags = data
+		}
+	}
+	return it, nil
+}
+
 // endregion **************************** input.gotpl *****************************
 
 // region    ************************** interface.gotpl ***************************
@@ -12223,6 +12661,57 @@ func (ec *executionContext) _AuditLog(ctx context.Context, sel ast.SelectionSet,
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var authStateImplementors = []string{"AuthState"}
+
+func (ec *executionContext) _AuthState(ctx context.Context, sel ast.SelectionSet, obj *model.AuthState) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, authStateImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AuthState")
+		case "authenticated":
+			out.Values[i] = ec._AuthState_authenticated(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hasProfile":
+			out.Values[i] = ec._AuthState_hasProfile(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "profileComplete":
+			out.Values[i] = ec._AuthState_profileComplete(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "profile":
+			out.Values[i] = ec._AuthState_profile(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -12449,6 +12938,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "bootstrapProfile":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_bootstrapProfile(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "upsertMyProfile":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_upsertMyProfile(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -13094,6 +13590,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Query")
+		case "authState":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_authState(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "me":
 			field := field
 
@@ -14469,6 +14987,20 @@ func (ec *executionContext) marshalNAuditLog2ᚖgithubᚗcomᚋlocalᚋquorumᚋ
 	return ec._AuditLog(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNAuthState2githubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐAuthState(ctx context.Context, sel ast.SelectionSet, v model.AuthState) graphql.Marshaler {
+	return ec._AuthState(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAuthState2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐAuthState(ctx context.Context, sel ast.SelectionSet, v *model.AuthState) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AuthState(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v any) (bool, error) {
 	res, err := graphql.UnmarshalBoolean(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -15056,6 +15588,11 @@ func (ec *executionContext) marshalNUploadSignature2ᚖgithubᚗcomᚋlocalᚋqu
 		return graphql.Null
 	}
 	return ec._UploadSignature(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNUpsertMyProfileInput2githubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUpsertMyProfileInput(ctx context.Context, v any) (model.UpsertMyProfileInput, error) {
+	res, err := ec.unmarshalInputUpsertMyProfileInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalNUser2githubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUser(ctx context.Context, sel ast.SelectionSet, v model.User) graphql.Marshaler {
