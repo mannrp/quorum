@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Section, Combobox } from "@/components/ui";
 import { useGraphQL, graphqlRequest, userFacingError } from "@/lib/graphql";
+import { DISCIPLINE_OPTIONS, PROJECT_TEAM_SIZE_MAX, PROJECT_TEAM_SIZE_MIN } from "@/lib/policy";
 import { PROJECT_QUERY } from "@/lib/queries";
 import type { Project } from "@/types/domain";
 
@@ -15,23 +16,16 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [constraints, setConstraints] = useState("");
-  const [minSize, setMinSize] = useState(3);
-  const [maxSize, setMaxSize] = useState(5);
   const [disciplines, setDisciplines] = useState<string[]>([]);
   const [status, setStatus] = useState("OPEN");
   
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-
-  const predefinedDisciplines = ["SOEN", "COEN", "MECH", "ELEC", "CIVI", "INDY"];
-
   useEffect(() => {
     if (data?.project) {
       setTitle(data.project.title);
       setDescription(data.project.description);
       setConstraints(data.project.constraints || "");
-      setMinSize(data.project.teamSizeMin);
-      setMaxSize(data.project.teamSizeMax);
       setDisciplines(data.project.disciplines);
       setStatus(data.project.status);
     }
@@ -54,8 +48,8 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
             description,
             constraints,
             disciplines,
-            teamSizeMin: Number(minSize),
-            teamSizeMax: Number(maxSize),
+            teamSizeMin: data?.project?.teamSizeMin ?? PROJECT_TEAM_SIZE_MIN,
+            teamSizeMax: data?.project?.teamSizeMax ?? PROJECT_TEAM_SIZE_MAX,
             status,
           }
         },
@@ -97,7 +91,7 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
       <div className="p-4 border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-950/10 text-xs leading-relaxed space-y-1">
         <strong className="text-amber-800 dark:text-amber-400 block font-bold uppercase tracking-wider text-[9px]">⚠️ Warning: Material Scope Modification</strong>
         <p className="text-stone-600 dark:text-slate-350">
-          Updating the description, constraints, target sizes, or disciplines after teams have submitted claims will automatically notify those groups and prompt their leads to review the changes.
+          Updating the description, constraints, or disciplines after teams have submitted claims will automatically notify those groups and prompt their leads to review the changes.
         </p>
       </div>
 
@@ -131,19 +125,11 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
           </div>
         </Section>
 
-        <Section title="Requirements & Sizes">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Minimum Size</label>
-              <input required type="number" min={2} max={6} value={minSize} onChange={(e) => setMinSize(Number(e.target.value))} className="input-field" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Maximum Size</label>
-              <input required type="number" min={2} max={6} value={maxSize} onChange={(e) => setMaxSize(Number(e.target.value))} className="input-field" />
-            </div>
-            <div className="col-span-2 space-y-1.5">
+        <Section title="Requirements">
+          <div className="grid gap-4">
+            <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Disciplines</label>
-              <Combobox options={predefinedDisciplines} selected={disciplines} onChange={setDisciplines} />
+              <Combobox options={DISCIPLINE_OPTIONS} selected={disciplines} onChange={setDisciplines} allowCustom={false} />
             </div>
           </div>
         </Section>

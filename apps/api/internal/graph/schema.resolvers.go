@@ -111,7 +111,7 @@ func (r *mutationResolver) UpsertMyProfile(ctx context.Context, input model.Upse
 				Discipline:            text(input.Discipline),
 				University:            text(input.University),
 				UserIntent:            derefString(input.UserIntent, "STUDENT"),
-				ResumeVisibility:      derefResumeVisibility(input.ResumeVisibility, string(model.ResumeVisibilityPrivate)),
+				ResumeVisibility:      derefResumeVisibility(input.ResumeVisibility, string(model.ResumeVisibilityPublic)),
 				Bio:                   text(input.Bio),
 				PreferredProjectAreas: preferredProjectAreas,
 				ProfileComplete:       profileComplete,

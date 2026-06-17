@@ -22,6 +22,14 @@ type AuditLog = {
   actor?: Pick<User, "id" | "username" | "email" | "fullName"> | null;
 };
 
+function defaultDeadlineInput() {
+  const now = new Date();
+  const year = now.getMonth() > 8 || (now.getMonth() === 8 && now.getDate() >= 15)
+    ? now.getFullYear() + 1
+    : now.getFullYear();
+  return `${year}-09-15T00:00`;
+}
+
 export default function AdminPage() {
   const { data, error, loading, reload } = useGraphQL<{ users: User[]; teams: Team[]; projects: Project[]; auditLogs: AuditLog[] }>(ADMIN_QUERY, {}, { auth: true });
   const users = data?.users || [];
@@ -32,7 +40,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<"ACCOUNTS" | "TEAMS" | "PROJECTS" | "DEADLINES" | "AUDIT">("ACCOUNTS");
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteAction | null>(null);
   const [reason, setReason] = useState("");
-  const [deadline, setDeadline] = useState("2026-06-15T23:59");
+  const [deadline, setDeadline] = useState(defaultDeadlineInput);
   const [deadlineNotice, setDeadlineNotice] = useState<string | null>(null);
   const [deadlineConfirmOpen, setDeadlineConfirmOpen] = useState(false);
   const [deadlineReason, setDeadlineReason] = useState("");

@@ -172,12 +172,14 @@ export function Combobox({
   onChange,
   placeholder = "Search and select tags...",
   maxItems = 3,
+  allowCustom = true,
 }: {
   options: string[];
   selected: string[];
   onChange: (selected: string[]) => void;
   placeholder?: string;
   maxItems?: number;
+  allowCustom?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -196,6 +198,11 @@ export function Combobox({
   const filtered = query === ""
     ? options
     : options.filter((opt) => opt.toLowerCase().includes(query.toLowerCase()));
+  const trimmedQuery = query.trim();
+  const canAddCustom = allowCustom &&
+    trimmedQuery !== "" &&
+    !selected.some((item) => item.toLowerCase() === trimmedQuery.toLowerCase()) &&
+    !options.some((item) => item.toLowerCase() === trimmedQuery.toLowerCase());
 
   const handleSelect = (item: string) => {
     if (selected.includes(item)) {
@@ -204,6 +211,13 @@ export function Combobox({
       onChange([...selected, item]);
     }
     setQuery("");
+  };
+
+  const handleAddCustom = () => {
+    if (!canAddCustom) return;
+    onChange([...selected, trimmedQuery]);
+    setQuery("");
+    setIsOpen(false);
   };
 
   return (
@@ -221,14 +235,32 @@ export function Combobox({
             setQuery(e.target.value);
             setIsOpen(true);
           }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && canAddCustom) {
+              e.preventDefault();
+              handleAddCustom();
+            }
+          }}
           onFocus={() => setIsOpen(true)}
           placeholder={selected.length === 0 ? placeholder : ""}
           className="flex-1 min-w-[120px] bg-transparent outline-none text-sm text-[var(--text-app)] placeholder-stone-400 dark:placeholder-stone-600 font-sans"
         />
       </div>
 
-      {isOpen && filtered.length > 0 && (
+      {isOpen && (filtered.length > 0 || canAddCustom) && (
         <ul className="absolute z-50 w-full mt-1 max-h-48 overflow-y-auto bg-[var(--surface-app)] border border-[var(--border-app)] rounded-none divide-y divide-[var(--border-subtle)]">
+          {canAddCustom && (
+            <li>
+              <button
+                type="button"
+                onClick={handleAddCustom}
+                className="w-full px-4 py-2 text-left text-xs font-mono transition-colors flex items-center justify-between text-[var(--accent-app)] hover:bg-[var(--bg-app)] font-bold"
+              >
+                <span>Add &quot;{trimmedQuery}&quot;</span>
+                <span>+</span>
+              </button>
+            </li>
+          )}
           {filtered.map((opt) => {
             const isSel = selected.includes(opt);
             return (

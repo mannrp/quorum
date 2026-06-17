@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Combobox } from "@/components/ui";
 import { graphqlRequest } from "@/lib/graphql";
+import { DISCIPLINE_OPTIONS, PROJECT_TEAM_SIZE_MAX, PROJECT_TEAM_SIZE_MIN } from "@/lib/policy";
 
 export default function CreateProjectPage() {
   const router = useRouter();
@@ -10,8 +11,6 @@ export default function CreateProjectPage() {
   const [summary, setSummary] = useState("");
   const [description, setDescription] = useState("");
   const [constraints, setConstraints] = useState("");
-  const [minSize, setMinSize] = useState(3);
-  const [maxSize, setMaxSize] = useState(5);
   const [disciplines, setDisciplines] = useState<string[]>([]);
   const [fileUrl, setFileUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
@@ -19,9 +18,6 @@ export default function CreateProjectPage() {
   const [customQuestions, setCustomQuestions] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const predefinedDisciplines = ["SOEN", "COEN", "MECH", "ELEC", "CIVI", "INDY"];
-
   const handleAddQuestion = () => {
     if (customQuestion.trim()) {
       setCustomQuestions([...customQuestions, customQuestion.trim()]);
@@ -50,8 +46,8 @@ export default function CreateProjectPage() {
             description,
             constraints,
             disciplines,
-            teamSizeMin: Number(minSize),
-            teamSizeMax: Number(maxSize),
+            teamSizeMin: PROJECT_TEAM_SIZE_MIN,
+            teamSizeMax: PROJECT_TEAM_SIZE_MAX,
             fileUrl,
             videoUrl,
             lifecycleState: "OPEN",
@@ -96,19 +92,11 @@ export default function CreateProjectPage() {
           </div>
         </Section>
 
-        <Section title="Target Disciplines & Sizes">
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-1 md:col-span-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Min Size</label>
-              <input required type="number" min={2} max={6} value={minSize} onChange={(e) => setMinSize(Number(e.target.value))} className="input-field" />
-            </div>
-            <div className="space-y-1 md:col-span-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Max Size</label>
-              <input required type="number" min={2} max={6} value={maxSize} onChange={(e) => setMaxSize(Number(e.target.value))} className="input-field" />
-            </div>
-            <div className="space-y-1.5 md:col-span-3">
+        <Section title="Target Disciplines">
+          <div className="grid gap-4">
+            <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Target Disciplines</label>
-              <Combobox options={predefinedDisciplines} selected={disciplines} onChange={setDisciplines} placeholder="Add disciplines..." />
+              <Combobox options={DISCIPLINE_OPTIONS} selected={disciplines} onChange={setDisciplines} placeholder="Add disciplines..." allowCustom={false} />
             </div>
           </div>
         </Section>

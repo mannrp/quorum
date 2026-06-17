@@ -6,6 +6,7 @@ import { Section, Combobox } from "@/components/ui";
 import { authDestination } from "@/lib/auth-routing";
 import { graphqlRequest, userFacingError } from "@/lib/graphql";
 import { signInWithNeonOAuth, signUpWithNeonEmail } from "@/lib/neon-auth";
+import { DISCIPLINE_OPTIONS, SKILL_OPTIONS } from "@/lib/policy";
 import type { User } from "@/types/domain";
 
 export default function RegisterPage() {
@@ -14,19 +15,12 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
-  const [discipline, setDiscipline] = useState("");
+  const [discipline, setDiscipline] = useState(DISCIPLINE_OPTIONS[0]);
   const [university, setUniversity] = useState("Concordia");
   const [skills, setSkills] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [successProfile, setSuccessProfile] = useState<User | null>(null);
-
-  const predefinedSkills = [
-    "TypeScript", "React", "Next.js", "Go", "GraphQL", "Python",
-    "PostgreSQL", "C++", "Docker", "Svelte", "Node.js", "Tailwind CSS",
-    "Agile", "UI/UX Design", "Machine Learning", "Cloud Architecture"
-  ];
-
   const handleRegisterSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
@@ -50,7 +44,7 @@ export default function RegisterPage() {
             username,
             email,
             fullName,
-            discipline: discipline || "SOEN",
+            discipline,
             university: university || "Concordia",
             bio: "Academically driven student looking to build a strong capstone foundation.",
             skills,
@@ -132,7 +126,11 @@ export default function RegisterPage() {
 
             <div className="space-y-1">
               <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Academic Discipline</label>
-              <input required value={discipline} onChange={(e) => setDiscipline(e.target.value)} placeholder="SOEN" className="input-field" />
+              <select required value={discipline} onChange={(e) => setDiscipline(e.target.value)} className="input-field py-2 text-xs bg-[var(--surface-app)]">
+                {DISCIPLINE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-1">
@@ -144,7 +142,7 @@ export default function RegisterPage() {
             <div className="col-span-full space-y-1">
               <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Choose At Least 3 Skills / Tags</label>
               <Combobox
-                options={predefinedSkills}
+                options={SKILL_OPTIONS}
                 selected={skills}
                 onChange={setSkills}
                 placeholder="Select skills..."

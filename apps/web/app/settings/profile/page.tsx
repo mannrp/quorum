@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Status, Combobox } from "@/components/ui";
 import { graphqlRequest, uploadToSignedPost, userFacingError } from "@/lib/graphql";
+import { DISCIPLINE_OPTIONS, RESUME_VISIBILITY_OPTIONS, SKILL_OPTIONS } from "@/lib/policy";
 import { ME_QUERY } from "@/lib/queries";
 import type { UploadSignature, User } from "@/types/domain";
 
@@ -22,13 +23,6 @@ export default function ProfileSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-
-  const predefinedSkills = [
-    "TypeScript", "React", "Next.js", "Go", "GraphQL", "Python",
-    "PostgreSQL", "C++", "Docker", "Svelte", "Node.js", "Tailwind CSS",
-    "Agile", "UI/UX Design", "Machine Learning", "Cloud Architecture"
-  ];
-
   useEffect(() => {
     const loadProfile = async () => {
       try {
@@ -37,7 +31,7 @@ export default function ProfileSettingsPage() {
           setUser(res.me);
           setFullName(res.me.fullName || "");
           setBio(res.me.bio || "");
-          setDiscipline(res.me.discipline || "");
+          setDiscipline(res.me.discipline || DISCIPLINE_OPTIONS[0]);
           setUniversity(res.me.university || "Concordia");
           setLinkedinUrl(res.me.linkedinUrl || "");
           setGithubUrl(res.me.githubUrl || "");
@@ -135,7 +129,11 @@ export default function ProfileSettingsPage() {
             </div>
             <div className="space-y-1">
               <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Discipline</label>
-              <input required value={discipline} onChange={(e) => setDiscipline(e.target.value)} className="input-field" />
+              <select required value={discipline} onChange={(e) => setDiscipline(e.target.value)} className="input-field py-2 text-xs bg-[var(--surface-app)]">
+                {DISCIPLINE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
             </div>
             <div className="space-y-1">
               <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">University</label>
@@ -152,7 +150,7 @@ export default function ProfileSettingsPage() {
         <Section title="Acquired Skills & Tags">
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Manage Core Skills (Minimum 3)</label>
-            <Combobox options={predefinedSkills} selected={skills} onChange={setSkills} />
+            <Combobox options={SKILL_OPTIONS} selected={skills} onChange={setSkills} />
           </div>
         </Section>
 
@@ -188,16 +186,18 @@ export default function ProfileSettingsPage() {
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Upload New Resume (PDF / DOCX)</label>
+              <p className="text-[11px] text-stone-500">
+                Resume access defaults to public visibility. Choose a narrower access level before saving if this document should be limited.
+              </p>
               <input type="file" accept=".pdf,.docx" onChange={(e) => setResumeFile(e.target.files?.[0] || null)} className="block text-xs text-stone-500 border border-[var(--border-app)] p-2 rounded-none bg-[var(--bg-app)] w-full font-mono" />
             </div>
 
             <div className="space-y-1">
               <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Document Access Level</label>
               <select value={resumeVisibility} onChange={(e) => setResumeVisibility(e.target.value)} className="input-field py-2 text-xs bg-[var(--surface-app)]">
-                <option value="PUBLIC">Visible to all Quorum Members</option>
-                <option value="TEAM_LEADS">Visible only to Team Leads during applications</option>
-                <option value="PROJECT_OWNERS">Visible only to project sponsors</option>
-                <option value="PRIVATE">Keep Private</option>
+                {RESUME_VISIBILITY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </select>
             </div>
           </div>

@@ -5,6 +5,7 @@ import { Section, Combobox } from "@/components/ui";
 import { authDestination } from "@/lib/auth-routing";
 import { graphqlRequest, uploadToSignedPost, userFacingError } from "@/lib/graphql";
 import { getCurrentNeonUser } from "@/lib/neon-auth";
+import { DISCIPLINE_OPTIONS, SKILL_OPTIONS } from "@/lib/policy";
 import { AUTH_STATE_QUERY } from "@/lib/queries";
 import type { AuthState, UploadSignature } from "@/types/domain";
 
@@ -13,7 +14,7 @@ export default function OnboardingPage() {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
-  const [discipline, setDiscipline] = useState("");
+  const [discipline, setDiscipline] = useState(DISCIPLINE_OPTIONS[0]);
   const [university, setUniversity] = useState("Concordia");
   const [bio, setBio] = useState("");
   const [intent, setIntent] = useState("STUDENT_FIND_TEAM");
@@ -22,13 +23,6 @@ export default function OnboardingPage() {
   const [uploading, setUploading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const predefinedSkills = [
-    "TypeScript", "React", "Next.js", "Go", "GraphQL", "Python",
-    "PostgreSQL", "C++", "Docker", "Svelte", "Node.js", "Tailwind CSS",
-    "Agile", "UI/UX Design", "Machine Learning", "Cloud Architecture"
-  ];
-
   useEffect(() => {
     const checkUser = async () => {
       try {
@@ -49,7 +43,7 @@ export default function OnboardingPage() {
           setEmail(state.profile.email || "");
           setFullName(state.profile.fullName || "");
           setUsername(state.profile.username || "");
-          setDiscipline(state.profile.discipline || "");
+          setDiscipline(state.profile.discipline || DISCIPLINE_OPTIONS[0]);
           setUniversity(state.profile.university || "Concordia");
           setBio(state.profile.bio || "");
           setSkills((state.profile.tags || []).map((t) => t.name));
@@ -160,7 +154,11 @@ export default function OnboardingPage() {
 
             <div className="space-y-1">
               <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Academic Discipline</label>
-              <input required value={discipline} onChange={(e) => setDiscipline(e.target.value)} placeholder="SOEN, COEN, MECH..." className="input-field" />
+              <select required value={discipline} onChange={(e) => setDiscipline(e.target.value)} className="input-field py-2 text-xs bg-[var(--surface-app)]">
+                {DISCIPLINE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-1">
@@ -196,7 +194,7 @@ export default function OnboardingPage() {
               Select Academic Skills / Core Competencies (Min 3)
             </label>
             <Combobox
-              options={predefinedSkills}
+              options={SKILL_OPTIONS}
               selected={skills}
               onChange={setSkills}
               placeholder="Search and add disciplines..."

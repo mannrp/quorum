@@ -3,26 +3,19 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Combobox } from "@/components/ui";
 import { graphqlRequest } from "@/lib/graphql";
+import { DISCIPLINE_OPTIONS, SKILL_OPTIONS, TEAM_FINAL_SIZE } from "@/lib/policy";
 
 export default function CreateTeamPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [maxSize, setMaxSize] = useState(4);
-  const [discipline, setDiscipline] = useState("");
+  const [discipline, setDiscipline] = useState(DISCIPLINE_OPTIONS[0]);
   const [discordUrl, setDiscordUrl] = useState("");
   const [visibility, setVisibility] = useState("PUBLIC");
   const [neededSkills, setNeededSkills] = useState<string[]>([]);
   const [existingSkills, setExistingSkills] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const predefinedSkills = [
-    "TypeScript", "React", "Next.js", "Go", "GraphQL", "Python",
-    "PostgreSQL", "C++", "Docker", "Svelte", "Node.js", "Tailwind CSS",
-    "Agile", "UI/UX Design", "Machine Learning", "Cloud Architecture"
-  ];
-
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
@@ -37,8 +30,8 @@ export default function CreateTeamPage() {
           input: {
             name,
             description,
-            maxSize: Number(maxSize),
-            discipline: discipline || "SOEN",
+            maxSize: TEAM_FINAL_SIZE,
+            discipline,
             visibility: visibility === "HIDDEN" ? "HIDDEN" : "VISIBLE",
             discordLink: discordUrl || null,
             existingSkills,
@@ -77,26 +70,17 @@ export default function CreateTeamPage() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[9px] font-mono font-bold uppercase tracking-wider text-stone-400">Target Size (Students)</label>
-              <input
-                required
-                type="number"
-                min={2}
-                max={6}
-                value={maxSize}
-                onChange={(e) => setMaxSize(Number(e.target.value))}
-                className="input-field font-mono"
-              />
-            </div>
-            <div className="space-y-1">
               <label className="text-[9px] font-mono font-bold uppercase tracking-wider text-stone-400">Focus Discipline</label>
-              <input
+              <select
                 required
                 value={discipline}
                 onChange={(e) => setDiscipline(e.target.value)}
-                placeholder="SOEN / COEN / Cross"
-                className="input-field"
-              />
+                className="input-field py-2 text-xs bg-[var(--surface-app)] font-mono"
+              >
+                {DISCIPLINE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
             </div>
             <div className="space-y-1">
               <label className="text-[9px] font-mono font-bold uppercase tracking-wider text-stone-400">Group Visibility</label>
@@ -138,11 +122,11 @@ export default function CreateTeamPage() {
           <div className="grid gap-6">
             <div className="space-y-1.5">
               <label className="text-[9px] font-mono font-bold uppercase tracking-wider text-stone-400">Existing Skills In Group</label>
-              <Combobox options={predefinedSkills} selected={existingSkills} onChange={setExistingSkills} />
+              <Combobox options={SKILL_OPTIONS} selected={existingSkills} onChange={setExistingSkills} />
             </div>
             <div className="space-y-1.5">
               <label className="text-[9px] font-mono font-bold uppercase tracking-wider text-[var(--accent-app)]">Desired Skills Needed From Recruits</label>
-              <Combobox options={predefinedSkills} selected={neededSkills} onChange={setNeededSkills} />
+              <Combobox options={SKILL_OPTIONS} selected={neededSkills} onChange={setNeededSkills} />
             </div>
           </div>
         </Section>
