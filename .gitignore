@@ -3,6 +3,7 @@ node_modules
 .next
 .gocache/
 .playwright-mcp/
+.codex/
 dist
 *.log
 *.tsbuildinfo

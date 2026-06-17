@@ -10,13 +10,21 @@ The local `users` table is the Quorum profile table. It stores `auth_user_id`, w
 
 - Neon project for Postgres.
 - Neon Auth enabled for the project.
-- Cloudflare R2 bucket for resumes, portfolios, and project files.
+- Cloudflare R2 bucket for resumes, avatars, portfolios, project files, and videos.
 - Fly.io app for the Go backend when deployment begins.
 - Vercel project for the Next.js frontend when deployment begins.
 
 Email verification is handled by Neon Auth, so Quorum does not need app-owned SMTP credentials for MVP.
 
 ## Local Env Files
+
+Prerequisites for local development:
+
+- Node.js 22 with npm 11.
+- Go 1.25, matching `apps/api/go.mod`.
+- Postgres locally or a Neon Postgres branch.
+- Neon Auth values from the same Neon branch.
+- Cloudflare R2 credentials for signed upload flows.
 
 Create local env files from the committed examples:
 
@@ -43,10 +51,12 @@ Do not commit real env files. `.gitignore` keeps them private.
 ## Frontend Variables
 
 - `NEXT_PUBLIC_API_URL`: Go GraphQL endpoint, usually `http://localhost:8080/graphql`.
+- `API_URL`: optional server-side override for the GraphQL endpoint used by the Next.js proxy.
+- `NEXT_PUBLIC_GRAPHQL_PROXY_URL`: optional browser-facing GraphQL proxy override. Defaults to `/api/graphql`.
 - `NEON_AUTH_BASE_URL`: Neon Auth URL for the current branch. This is the Auth URL from Neon, not the Data API REST URL.
 - `NEON_AUTH_COOKIE_SECRET`: at least 32 characters, used by the Next.js auth proxy to sign cached session cookies. Generate with `openssl rand -base64 32`.
 
-The Next.js app owns browser sign-in with the official Neon Auth SDK and exposes `/api/auth/[...path]` as the auth proxy. It stores Neon session state in signed httpOnly cookies, then requests a Neon JWT and sends that token to the Go GraphQL API as a bearer token. The Go API should not perform login/signup; it validates bearer tokens with `NEON_AUTH_ISSUER` and `NEON_AUTH_JWKS_URL`, then applies Quorum authorization rules.
+The Next.js app owns browser sign-in with the official Neon Auth SDK and exposes `/api/auth/[...path]` as the auth proxy. It stores Neon session state in signed httpOnly cookies, then requests a Neon JWT and sends that token to the Go GraphQL API as a bearer token. Browser GraphQL calls go to `/api/graphql` by default; that proxy forwards to `API_URL`, `NEXT_PUBLIC_API_URL`, or `http://localhost:8080/graphql` in that order. The Go API should not perform login/signup; it validates bearer tokens with `NEON_AUTH_ISSUER` and `NEON_AUTH_JWKS_URL`, then applies Quorum authorization rules.
 
 Local development does not get auth values automatically from `DATABASE_URL` or the Neon Data API REST URL. Copy `NEON_AUTH_BASE_URL` into `apps/web/.env.local` and `NEON_AUTH_ISSUER`/`NEON_AUTH_JWKS_URL` into `apps/api/.env` from the same Neon Auth branch configuration.
 

@@ -1,14 +1,20 @@
 # Quorum
 
-Quorum is a capstone/project matching platform for students, teams, project owners, and admins.
+Quorum is a capstone matching workspace for students, teams, project owners, and admins.
 
-## What It Does
+Students use Quorum to build a profile around their skills, discipline, availability, links, and resume; find teammates; request to join teams; and apply to real capstone-style projects. Project owners publish opportunities, review applicants, send offers, and manage project assets. Admins review project submissions, keep the marketplace healthy, set deadlines, and audit important actions.
 
-- Student profiles with skills, disciplines, resumes, links, and availability.
-- Team creation, member management, join requests, and invitations.
-- Project listings with approval workflow, applications, offers, and matching.
-- Messaging, notifications, dashboard context, admin review, and audit logs.
-- File upload signing for resumes, avatars, project files, and videos.
+The product is built around the full matching workflow: profiles make students discoverable, teams make collaboration explicit, projects create demand, and applications, offers, messaging, and notifications keep the process moving.
+
+## What You Can Do
+
+- Create student profiles with skills, disciplines, resumes, portfolio links, and availability.
+- Form teams, manage members, recruit for missing skills, request to join teams, and send invitations.
+- Publish project listings with discipline fit, team-size requirements, supporting files, and application questions.
+- Apply to projects as a team, review applications as a project owner, send offers, and finalize matches.
+- Use dashboards, messaging, notifications, and deadline-aware workflow states to keep matching work moving.
+- Review project approvals, marketplace activity, admin actions, and audit logs.
+- Generate signed uploads for resumes, avatars, project files, and videos through Cloudflare R2.
 
 ## Stack
 
@@ -18,54 +24,49 @@ Quorum is a capstone/project matching platform for students, teams, project owne
 
 ## Setup
 
-Prerequisites: Node.js/npm, Go, and a Postgres database.
+Prerequisites:
 
-Install dependencies:
+- Node.js 22 and npm 11
+- Go 1.25
+- Postgres or Neon Postgres
+- Neon Auth
+- Cloudflare R2 for upload signing
+
+Install dependencies and create local env files:
 
 ```sh
 npm install
-```
-
-Create local env files:
-
-```sh
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
 ```
 
-Fill in Postgres, auth, and R2 values. See `SETUP.md` for the full variable list.
+Fill in the copied env files with your Postgres, Neon Auth, and R2 values. See `SETUP.md` for the full variable list and service notes.
 
 Run API migrations:
 
 ```sh
-cd apps/api
-go run ./cmd/migrate
+npm run migrate:api
 ```
-
-## Running Locally
 
 Start the API:
 
 ```sh
-cd apps/api
-go run ./cmd/server
+npm run dev:api
 ```
-
-The GraphQL API runs at `http://localhost:8080/graphql` by default.
 
 Start the web app in another terminal:
 
 ```sh
-npm run dev --workspace=@quorum/web
+npm run dev:web
 ```
 
-The web app runs at `http://localhost:3000`.
+The web app runs at `http://localhost:3000`. The GraphQL API runs at `http://localhost:8080/graphql`, and the frontend proxies GraphQL requests through `/api/graphql`.
 
 ## Useful Commands
 
 ```sh
 npm run build
 npm run typecheck
-cd apps/api
+npm run lint
 go test ./...
 ```
