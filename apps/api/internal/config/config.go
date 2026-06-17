@@ -22,6 +22,8 @@ type Config struct {
 	R2BucketName      string
 	R2PublicURL       string
 	Port              string
+	DemoModeEnabled   bool
+	DemoResetEnabled  bool
 }
 
 func Load() (Config, error) {
@@ -45,6 +47,8 @@ func Load() (Config, error) {
 		R2BucketName:      os.Getenv("R2_BUCKET_NAME"),
 		R2PublicURL:       strings.TrimRight(os.Getenv("R2_PUBLIC_URL"), "/"),
 		Port:              env("PORT", "8080"),
+		DemoModeEnabled:   boolEnv("ENABLE_DEMO_MODE"),
+		DemoResetEnabled:  boolEnv("DEMO_RESET_ENABLED"),
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -86,6 +90,15 @@ func env(key, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func boolEnv(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func loadEnv(path string) error {

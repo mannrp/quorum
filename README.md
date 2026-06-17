@@ -62,6 +62,17 @@ npm run dev:web
 
 The web app runs at `http://localhost:3000`. The GraphQL API runs at `http://localhost:8080/graphql`, and the frontend proxies GraphQL requests through `/api/graphql`.
 
+## Demo Mode
+
+Quorum includes a login-free demo mode with three seeded personas: student/team lead, project owner, and admin/professor. Use it only with a separate demo database or Neon branch.
+
+```sh
+cd apps/api
+go run ./cmd/demo-seed --reset
+```
+
+Set `ENABLE_DEMO_MODE=true` and `DEMO_RESET_ENABLED=true` for the API, and `NEXT_PUBLIC_ENABLE_DEMO_MODE=true` plus `NEXT_PUBLIC_DEMO_RESET_ENABLED=true` for the web app. Then open `http://localhost:3000/demo`.
+
 ## Useful Commands
 
 ```sh

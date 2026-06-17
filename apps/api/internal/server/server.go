@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -13,6 +14,7 @@ import (
 	"github.com/local/quorum/apps/api/internal/auth"
 	"github.com/local/quorum/apps/api/internal/config"
 	"github.com/local/quorum/apps/api/internal/db"
+	"github.com/local/quorum/apps/api/internal/demo"
 	"github.com/local/quorum/apps/api/internal/graph"
 	"github.com/local/quorum/apps/api/internal/graph/generated"
 	"github.com/local/quorum/apps/api/internal/storage"
@@ -22,16 +24,55 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) http
 	queries := db.New(pool)
 	resolver := &graph.Resolver{Pool: pool, Queries: queries, Storage: storage.NewR2Signer(cfg)}
 	gql := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: resolver}))
-	authMiddleware := auth.NewMiddleware(queries, auth.NewVerifier(cfg.NeonAuthIssuer, cfg.NeonAuthJWKSURL, cfg.NeonAuthAudience))
+	authMiddleware := auth.NewMiddleware(queries, auth.NewVerifier(cfg.NeonAuthIssuer, cfg.NeonAuthJWKSURL, cfg.NeonAuthAudience), cfg.DemoModeEnabled)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthHandler(pool))
+	mux.HandleFunc("/demo/reset", demoResetHandler(cfg, pool, queries))
 	mux.Handle("/graphql", maxBytes(1<<20, authMiddleware.Wrap(gql)))
 	if cfg.AppEnv == "development" {
 		mux.Handle("/", playground.Handler("Quorum GraphQL", "/graphql"))
 	}
 
 	return logging(logger, cors(cfg.AppOrigin, mux))
+}
+
+func demoResetHandler(cfg config.Config, pool *pgxpool.Pool, queries *db.Queries) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if !cfg.DemoModeEnabled || !cfg.DemoResetEnabled {
+			http.Error(w, "demo reset is disabled", http.StatusNotFound)
+			return
+		}
+		authID, ok := demo.AuthIDForPersona(strings.TrimSpace(r.Header.Get(demo.HeaderPersona)))
+		if !ok {
+			http.Error(w, "invalid demo persona", http.StatusUnauthorized)
+			return
+		}
+		user, err := queries.GetUserByAuthID(r.Context(), authID)
+		if err != nil {
+			http.Error(w, "demo persona is not seeded", http.StatusUnauthorized)
+			return
+		}
+		isAdmin, err := queries.IsAdmin(r.Context(), user.ID)
+		if err != nil {
+			http.Error(w, "admin lookup failed", http.StatusInternalServerError)
+			return
+		}
+		if !isAdmin {
+			http.Error(w, "admin access required", http.StatusForbidden)
+			return
+		}
+		if err := demo.Seed(r.Context(), pool, true); err != nil {
+			http.Error(w, "demo reset failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "reset"})
+	}
 }
 
 func NewHTTPServer(cfg config.Config, handler http.Handler) *http.Server {
@@ -90,7 +131,7 @@ func cors(origin string, next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 		}
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, "+demo.HeaderPersona)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		if r.Method == http.MethodOptions {

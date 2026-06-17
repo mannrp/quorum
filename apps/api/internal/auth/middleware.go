@@ -7,19 +7,40 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/local/quorum/apps/api/internal/db"
+	"github.com/local/quorum/apps/api/internal/demo"
 )
 
 type Middleware struct {
 	queries  *db.Queries
 	verifier *Verifier
+	demoMode bool
 }
 
-func NewMiddleware(queries *db.Queries, verifier *Verifier) *Middleware {
-	return &Middleware{queries: queries, verifier: verifier}
+func NewMiddleware(queries *db.Queries, verifier *Verifier, demoMode bool) *Middleware {
+	return &Middleware{queries: queries, verifier: verifier, demoMode: demoMode}
 }
 
 func (m *Middleware) Wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if m.demoMode {
+			persona := strings.TrimSpace(r.Header.Get(demo.HeaderPersona))
+			if persona != "" {
+				authID, ok := demo.AuthIDForPersona(persona)
+				if !ok {
+					http.Error(w, "invalid demo persona", http.StatusUnauthorized)
+					return
+				}
+				user, err := m.queries.GetUserByAuthID(r.Context(), authID)
+				if err != nil {
+					http.Error(w, "demo persona is not seeded", http.StatusUnauthorized)
+					return
+				}
+				ctx := WithSubject(r.Context(), authID)
+				next.ServeHTTP(w, r.WithContext(WithUser(ctx, user)))
+				return
+			}
+		}
+
 		header := strings.TrimSpace(r.Header.Get("Authorization"))
 		if header == "" {
 			next.ServeHTTP(w, r)
