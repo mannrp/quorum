@@ -346,8 +346,13 @@ export default function DashboardPage() {
     );
   }
 
+  const teamApplicationCount = teamApps.length;
+  const pendingOfferCount = teamApps.filter((app) => app.status === "OFFER_SENT").length;
+  const memberCount = team?.members.length || 0;
+  const maxMembers = team?.maxSize || 0;
+
   return (
-    <div className="space-y-6 py-4 max-w-5xl mx-auto px-4">
+    <div className="dashboard-stage space-y-8 py-4 max-w-6xl mx-auto px-4">
       <ConfirmDialog
         isOpen={Boolean(confirmAction)}
         onClose={() => setConfirmAction(null)}
@@ -358,8 +363,45 @@ export default function DashboardPage() {
         variant={confirmAction?.variant || "primary"}
         disabled={confirming}
       />
+      <section className="dashboard-hero">
+        <div className="relative z-10 grid gap-6 lg:grid-cols-[1.3fr_0.7fr] lg:items-end">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border-subtle)] bg-[var(--accent-soft)] px-3 py-1 text-[10px] font-bold text-[var(--accent-app)]">
+              <span className="activity-dot" />
+              Workspace
+            </div>
+            <div className="space-y-2">
+              <h1 className="max-w-3xl text-3xl font-bold leading-tight tracking-normal text-[var(--text-app)] md:text-5xl">
+                Good to see you, {me?.fullName?.split(" ")[0] || me?.username}
+              </h1>
+              <p className="max-w-2xl text-sm leading-6 text-[var(--muted-app)]">
+                A focused view of your team, applications, offers, and deadline-sensitive work.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-[10px] font-semibold text-[var(--muted-app)]">
+              <span className="rounded-full border border-[var(--border-subtle)] bg-[var(--surface-raised)] px-3 py-1">@{me?.username}</span>
+              <span className="rounded-full border border-[var(--border-subtle)] bg-[var(--surface-raised)] px-3 py-1">Concordia University</span>
+              <span className="rounded-full border border-[var(--border-subtle)] bg-[var(--surface-raised)] px-3 py-1">{me?.discipline || "SOEN"}</span>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            <div className="metric-tile">
+              <p className="text-[10px] font-semibold text-[var(--muted-app)]">Team seats</p>
+              <p className="mt-2 text-3xl font-bold text-[var(--text-app)]">{memberCount}/{maxMembers || "-"}</p>
+            </div>
+            <div className="metric-tile">
+              <p className="text-[10px] font-semibold text-[var(--muted-app)]">Applications</p>
+              <p className="mt-2 text-3xl font-bold text-[var(--text-app)]">{teamApplicationCount}</p>
+            </div>
+            <div className="metric-tile">
+              <p className="text-[10px] font-semibold text-[var(--muted-app)]">Offers</p>
+              <p className="mt-2 text-3xl font-bold text-[var(--text-app)]">{pendingOfferCount}</p>
+            </div>
+          </div>
+        </div>
+      </section>
       {/* Welcome Banner */}
-      <div className="panel-wide p-6 space-y-4">
+      {false && (
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-[var(--accent-app)]">
@@ -376,23 +418,23 @@ export default function DashboardPage() {
             <Link href="/settings/profile" className="btn-secondary py-2 px-3.5 text-xs">Edit Settings</Link>
           </div>
         </div>
-      </div>
+      )}
 
       {notice && (
-        <div className="p-3 bg-[var(--color-success-bg)] border border-[var(--color-success)] rounded-none text-xs font-mono font-bold uppercase tracking-wider text-[var(--color-success)]">
+        <div className="rounded-lg border border-[var(--color-success)] bg-[var(--color-success-bg)] p-3 text-xs font-bold uppercase tracking-wider text-[var(--color-success)]">
           {notice}
         </div>
       )}
 
       {error && (
-        <div className="p-3 bg-[var(--color-danger-bg)] border border-[var(--color-danger)] rounded-none text-xs font-mono font-bold uppercase tracking-wider text-[var(--color-danger)]">
+        <div className="rounded-lg border border-[var(--color-danger)] bg-[var(--color-danger-bg)] p-3 text-xs font-bold uppercase tracking-wider text-[var(--color-danger)]">
           {error}
         </div>
       )}
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.7fr]">
         {/* Left Column: Alerts, Invites, and Profile */}
-        <div className="space-y-6 md:col-span-1">
+        <div className="space-y-5">
           {/* Deadlines */}
           <Section title="Academic Deadlines" variant="tall">
             {deadline ? (
@@ -409,14 +451,14 @@ export default function DashboardPage() {
           {/* Pending Invitations */}
           <Section title="Team Invitations" variant="tall">
             {invitations.length > 0 ? (
-              <div className="space-y-3">
+              <div className="stagger-in space-y-3">
                 {invitations.map((inv) => (
-                  <div key={inv.id} className="p-4 border border-[var(--border-subtle)] rounded-none space-y-3 bg-[var(--surface-app)]">
+                  <div key={inv.id} className="signal-card space-y-3">
                     <div className="space-y-1.5">
                       <div className="flex justify-between items-start">
-                        <span className="text-xs font-bold text-[var(--text-app)] uppercase font-serif tracking-tight">{inv.team.name}</span>
+                        <span className="font-serif text-lg font-bold text-[var(--text-app)]">{inv.team.name}</span>
                       </div>
-                      <p className="text-[10px] text-stone-500 font-sans">
+                      <p className="text-xs leading-5 text-[var(--muted-app)]">
                         Invited by <strong className="text-[var(--text-app)]">{inv.invitedBy.fullName}</strong>: &quot;{inv.message || "No message"}&quot;
                       </p>
                       <DeadlineDisplay deadlineAt={inv.expiresAt} label="Expiration" />
@@ -429,21 +471,21 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-stone-500 font-mono italic">No pending team invitations.</p>
+              <p className="text-xs text-[var(--muted-app)]">No pending team invitations.</p>
             )}
           </Section>
 
           {/* Accepted Join Requests */}
           <Section title="Accepted Join Requests" variant="tall">
             {myRequests.length > 0 ? (
-              <div className="space-y-3">
+              <div className="stagger-in space-y-3">
                 {myRequests.map((req) => (
-                  <div key={req.id} className="p-4 border border-[var(--color-warning)] rounded-none space-y-3 bg-[var(--color-warning-bg)]">
+                  <div key={req.id} className="signal-card space-y-3 border-[var(--color-warning)] bg-[var(--color-warning-bg)]">
                     <div className="space-y-1.5">
                       <div className="flex justify-between items-start">
-                        <span className="text-xs font-bold text-[var(--text-app)] uppercase font-serif tracking-tight">{req.team.name}</span>
+                        <span className="font-serif text-lg font-bold text-[var(--text-app)]">{req.team.name}</span>
                       </div>
-                      <p className="text-[10px] text-stone-600 dark:text-stone-400 font-sans">
+                      <p className="text-xs leading-5 text-[var(--muted-app)]">
                         Your request to join this team was accepted. Please confirm your membership.
                       </p>
                       {req.expiresAt && (
@@ -457,38 +499,38 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-stone-500 font-mono italic">No accepted join requests.</p>
+              <p className="text-xs text-[var(--muted-app)]">No accepted join requests.</p>
             )}
           </Section>
         </div>
 
         {/* Center / Right Columns: Teams and Project Postings */}
-        <div className="space-y-6 md:col-span-2">
+        <div className="space-y-5">
           {/* My Team Section */}
           <Section title="My Capstone Team">
             {team ? (
               <div className="space-y-4">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div className="space-y-1">
-                    <Link href={`/teams/${team.id}`} className="text-lg font-bold text-[var(--text-app)] hover:text-[var(--accent-app)] font-serif uppercase tracking-tight">
+                    <Link href={`/teams/${team.id}`} className="subtle-link font-serif text-3xl font-black leading-tight text-[var(--text-app)] hover:text-[var(--accent-app)]">
                       {team.name}
                     </Link>
-                    <p className="text-xs text-stone-500 font-sans line-clamp-2">{team.description}</p>
+                    <p className="max-w-xl text-sm leading-6 text-[var(--muted-app)]">{team.description}</p>
                   </div>
-                  <div className="flex flex-col gap-1 items-end">
+                  <div className="flex flex-row items-center gap-2 md:flex-col md:items-end">
                     <Status value={team.isComplete ? "COMPLETE" : "RECRUITING"} />
-                    <span className="text-[9px] font-mono text-stone-400 font-bold uppercase tracking-wider">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-app)]">
                       {team.members.length}/{team.maxSize} Members
                     </span>
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-[var(--border-subtle)] flex flex-wrap gap-2 items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-mono font-bold text-stone-400 uppercase tracking-wider">Roster Preview:</span>
-                    <div className="flex -space-x-1">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border-subtle)] pt-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-app)]">Roster</span>
+                    <div className="flex -space-x-2">
                       {team.members.slice(0, 4).map((m) => (
-                        <div key={m.id} title={m.user.fullName} className="h-6 w-6 rounded-none bg-[var(--bg-app)] border border-[var(--border-app)] flex items-center justify-center text-[9px] font-mono font-bold text-[var(--text-app)] uppercase">
+                        <div key={m.id} title={m.user.fullName} className="avatar-chip">
                           {m.user.fullName.charAt(0)}
                         </div>
                       ))}
@@ -500,30 +542,30 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Team Applications & Offers Sub-section */}
-                <div className="pt-4 border-t border-[var(--border-subtle)] space-y-3">
-                  <h4 className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">Project Applications & Offers</h4>
+                <div className="space-y-3 border-t border-[var(--border-subtle)] pt-4">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-app)]">Project Applications & Offers</h4>
                   {teamApps.length > 0 ? (
-                    <div className="space-y-3">
+                    <div className="stagger-in space-y-3">
                       {teamApps.map((app) => {
                         const hasOffer = app.status === "OFFER_SENT";
                         const isLeadOrCoLead = myRoleOnTeam === "LEAD" || myRoleOnTeam === "CO_LEAD";
                         return (
-                          <div key={app.id} className={`p-4 border rounded-none space-y-3 ${hasOffer ? "bg-[var(--color-warning-bg)] border-[var(--color-warning)]" : "bg-[var(--surface-app)] border-[var(--border-subtle)]"}`}>
+                          <div key={app.id} className={`signal-card space-y-3 ${hasOffer ? "border-[var(--color-warning)] bg-[var(--color-warning-bg)]" : ""}`}>
                             <div className="flex justify-between items-start">
                               <div>
-                                <h5 className="text-xs font-bold text-[var(--text-app)] uppercase font-serif tracking-tight">{app.project?.title}</h5>
-                                <p className="text-[9px] font-mono text-stone-500 uppercase tracking-wider">Sponsored by {app.project?.owner.fullName}</p>
+                                <h5 className="font-serif text-lg font-bold text-[var(--text-app)]">{app.project?.title}</h5>
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-app)]">Sponsored by {app.project?.owner.fullName}</p>
                               </div>
                               <Status value={app.status} />
                             </div>
 
                             {hasOffer && app.offerMessage && (
-                              <div className="text-xs text-stone-750 dark:text-stone-300 bg-[var(--bg-app)] p-3 border border-[var(--border-subtle)] italic font-mono">
+                              <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-app)] p-3 text-xs italic text-[var(--text-app)]">
                                 &quot;{app.offerMessage}&quot;
                               </div>
                             )}
 
-                            <div className="space-y-1 font-mono text-[9px] text-stone-500">
+                            <div className="space-y-1 text-[10px] font-bold uppercase tracking-wider text-[var(--muted-app)]">
                               <div>
                                 Applied: {new Date(app.createdAt).toLocaleDateString()}
                               </div>
@@ -562,13 +604,16 @@ export default function DashboardPage() {
                       })}
                     </div>
                   ) : (
-                    <p className="text-xs text-stone-500 font-mono italic">No project applications submitted yet.</p>
+                    <div className="rounded-lg border border-dashed border-[var(--border-subtle)] bg-[var(--surface-raised)] p-5">
+                      <p className="text-sm text-[var(--muted-app)]">No project applications submitted yet.</p>
+                      <Link href="/projects" className="subtle-link mt-3 text-xs uppercase tracking-wider">Browse projects</Link>
+                    </div>
                   )}
                 </div>
               </div>
             ) : (
-              <div className="text-center py-8 space-y-4 border border-dashed border-[var(--border-app)] p-6">
-                <p className="text-xs text-stone-500 font-mono">You are not currently associated with a capstone team.</p>
+              <div className="rounded-lg border border-dashed border-[var(--border-app)] bg-[var(--surface-raised)] p-8 text-center space-y-4">
+                <p className="text-sm text-[var(--muted-app)]">You are not currently associated with a capstone team.</p>
                 <div className="flex gap-2 justify-center">
                   <Link href="/teams/new" className="btn-primary py-2 px-4 text-xs">Create a Team</Link>
                   <Link href="/teams" className="btn-secondary py-2 px-4 text-xs">Join Existing Group</Link>

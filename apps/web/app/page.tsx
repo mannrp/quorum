@@ -11,37 +11,38 @@ export default function HomePage() {
   const projects = data?.projects || [];
 
   return (
-    <div className="space-y-8 py-4 max-w-5xl mx-auto px-4">
-      <div className="panel-wide p-6 space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-stone-500">
-              [-] Institutional Console
+    <div className="dashboard-stage space-y-8 py-4 max-w-6xl mx-auto px-4">
+      <section className="workspace-hero">
+        <div className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr] lg:items-end">
+          <div className="space-y-4">
+            <span className="page-kicker">
+              <span className="activity-dot" />
+              Capstone matching
             </span>
-            <h1 className="text-2xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">
-              Capstone Matching & Claims
-            </h1>
+            <div className="space-y-2">
+              <h1 className="page-title">Find the right team, project, and next step.</h1>
+              <p className="page-subtitle">
+                Quorum helps students form capable teams and connect with sponsor challenges without turning the capstone process into a spreadsheet chase.
+              </p>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Link href="/teams" className="btn-primary py-2 px-4">Browse Groups</Link>
-            <Link href="/projects" className="btn-secondary py-2 px-4">Browse Postings</Link>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+            <Link href="/teams" className="btn-primary py-3 px-4">Browse teams</Link>
+            <Link href="/projects" className="btn-secondary py-3 px-4">Browse projects</Link>
           </div>
         </div>
-        <p className="text-sm text-stone-600 dark:text-stone-400 max-w-3xl leading-relaxed font-sans">
-          Select a portal option below to assemble student project teams, recruit members with specific skill tags, or evaluate claim applications on active capstone challenges.
-        </p>
-      </div>
+      </section>
 
-      <div className="grid gap-6 md:grid-cols-3">
-        <div className="space-y-6 md:col-span-1">
+      <div className="grid gap-6 lg:grid-cols-[0.85fr_1.65fr]">
+        <div className="space-y-5">
           <Section title="Quick Access Operations" variant="tall">
             <div className="space-y-2">
               {[
-                ["/auth/register", "[+] Setup Profile"],
-                ["/teams", "[+] Recruit Members"],
-                ["/projects", "[+] Claim Project"],
+                ["/auth/register", "Set up profile"],
+                ["/teams", "Recruit members"],
+                ["/projects", "Claim project"],
               ].map(([href, label]) => (
-                <Link key={href} href={href} className="w-full flex items-center justify-between p-3 border border-[var(--border-app)] hover:bg-[var(--bg-app)] text-xs font-mono font-bold uppercase tracking-wider text-[var(--text-app)] transition rounded-none">
+                <Link key={href} href={href} className="action-row">
                   <span>{label}</span>
                   <span>-&gt;</span>
                 </Link>
@@ -50,16 +51,16 @@ export default function HomePage() {
           </Section>
         </div>
 
-        <div className="space-y-6 md:col-span-2">
+        <div className="space-y-5">
           <Section title="Active Project Postings Summary">
-            {loading && <p className="text-xs text-stone-500 font-mono animate-pulse uppercase tracking-wider">Loading live project registry...</p>}
-            {error && <p className="text-xs text-rose-500 font-mono font-bold uppercase tracking-wider">{error}</p>}
-            {!loading && !error && projects.length === 0 && <p className="text-xs text-stone-500 font-mono italic">No project postings are available yet.</p>}
-            <div className="divide-y divide-[var(--border-subtle)]">
+            {loading && <p className="text-xs text-[var(--muted-app)] animate-pulse">Loading live project registry...</p>}
+            {error && <p className="text-xs font-semibold text-rose-500">{error}</p>}
+            {!loading && !error && projects.length === 0 && <p className="text-xs text-[var(--muted-app)]">No project postings are available yet.</p>}
+            <div className="stagger-in divide-y divide-[var(--border-subtle)]">
               {projects.slice(0, 3).map((project) => (
-                <div key={project.id} className="py-4 first:pt-0 last:pb-0 flex items-start justify-between gap-4">
+                <div key={project.id} className="group flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0">
                   <div className="space-y-1">
-                    <Link href={`/projects/${project.id}`} className="font-bold text-[var(--text-app)] hover:text-[var(--accent-app)] transition text-sm font-serif uppercase tracking-tight">
+                    <Link href={`/projects/${project.id}`} className="card-title text-sm group-hover:text-[var(--accent-app)]">
                       {project.title}
                     </Link>
                     <div className="flex flex-wrap gap-1.5 pt-1">

@@ -5,9 +5,9 @@ export function Section({ title, children, className = "", variant = "wide" }: {
   const panelClass = variant === "tall" ? "panel-tall" : "panel-wide";
   return (
     <section className={`${panelClass} space-y-4 transition-all ${className}`}>
-      <div className="flex items-center justify-between border-b border-[var(--border-app)] pb-2">
-        <h2 className="font-mono text-xs font-bold uppercase tracking-widest text-[var(--accent-app)]">{title}</h2>
-        <span className="font-mono text-xs text-[var(--accent-app)] font-bold">[-]</span>
+      <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
+        <h2 className="text-sm font-semibold text-[var(--text-app)]">{title}</h2>
+        <span className="h-2 w-2 rounded-full bg-[var(--action-app)]" />
       </div>
       <div className="space-y-3 text-stone-700 dark:text-stone-300 font-normal leading-relaxed text-sm">{children}</div>
     </section>
@@ -42,7 +42,7 @@ export function Status({ value }: { value: string }) {
   };
 
   return (
-    <span className={`inline-flex items-center rounded-none px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider border ${getStyle(value)}`}>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold border ${getStyle(value)}`}>
       {value}
     </span>
   );
@@ -56,7 +56,7 @@ export function Badge({ label, type = "tag" }: { label: string; type?: "discipli
   };
 
   return (
-    <span className={`inline-flex items-center rounded-none px-2 py-0.5 border ${styles[type]}`}>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-1 border ${styles[type]}`}>
       {label}
     </span>
   );
