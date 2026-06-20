@@ -289,6 +289,11 @@
     color: var(--text-app);
     background: var(--surface-raised);
     border-color: var(--border-subtle);
+    font-size: 0;
+  }
+
+  .action-row > span {
+    font-size: 0.875rem;
   }
 
   .action-row:hover {

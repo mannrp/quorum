@@ -272,11 +272,15 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <div className="space-y-2">
                   {project.fileUrl && (
                     <a href={project.fileUrl} target="_blank" rel="noreferrer" className="action-row">
+                      <span>Specifications sheet</span>
+                      <span>-&gt;</span>
                       📄 Specifications Sheet.pdf
                     </a>
                   )}
                   {project.videoUrl && (
                     <a href={project.videoUrl} target="_blank" rel="noreferrer" className="action-row">
+                      <span>Video brief</span>
+                      <span>-&gt;</span>
                       🎬 Video Brief / Requirements
                     </a>
                   )}
