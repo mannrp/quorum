@@ -73,9 +73,9 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto py-12 px-4">
+      <div className="mx-auto max-w-5xl px-4 py-12">
         <Section title="Loading">
-          <p className="text-xs text-stone-500 font-mono animate-pulse uppercase tracking-wider">Syncing team registry...</p>
+          <p className="text-xs text-[var(--muted-app)] animate-pulse">Syncing team registry...</p>
         </Section>
       </div>
     );
@@ -85,7 +85,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
     return (
       <div className="max-w-2xl mx-auto py-12 px-4">
         <Section title="Error Notice">
-          <p className="text-stone-400 text-xs font-mono">{error || "The requested team profile does not exist."}</p>
+          <p className="text-xs text-[var(--muted-app)]">{error || "The requested team profile does not exist."}</p>
           <Link href="/teams" className="btn-secondary mt-4 inline-block">Back to Groups Registry</Link>
         </Section>
       </div>
@@ -99,18 +99,19 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   const isMember = !!userMembership;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto py-4 px-4">
+    <div className="dashboard-stage mx-auto max-w-6xl space-y-8 px-4 py-4">
       {/* Team Header */}
-      <div className="panel flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-3">
+      <div className="workspace-hero flex flex-col justify-between gap-6 md:flex-row md:items-center">
+        <div className="space-y-4">
+          <span className="page-kicker">Team profile</span>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">{team.name}</h1>
+            <h1 className="max-w-3xl text-3xl font-bold leading-tight tracking-normal text-[var(--text-app)] md:text-5xl">{team.name}</h1>
             <Status value={team.isComplete ? "COMPLETE" : "RECRUITING"} />
             <Badge label={team.discipline || "CROSS-DISCIPLINARY"} type="discipline" />
           </div>
-          <p className="text-stone-500 leading-relaxed max-w-2xl text-xs font-sans">{team.description || "A student-led team coordinating Concordia Capstone achievements."}</p>
-          {notice && <p className="text-xs text-emerald-600 font-mono font-bold uppercase tracking-wider">{notice}</p>}
-          {confirmNotice && <p className="text-xs text-indigo-600 font-mono font-bold uppercase tracking-wider">{confirmNotice}</p>}
+          <p className="max-w-2xl text-sm leading-6 text-[var(--muted-app)]">{team.description || "A student-led team coordinating Concordia Capstone achievements."}</p>
+          {notice && <p className="rounded-lg border border-[var(--color-success)] bg-[var(--color-success-bg)] px-3 py-2 text-xs font-semibold text-[var(--color-success)]">{notice}</p>}
+          {confirmNotice && <p className="rounded-lg border border-[var(--accent-app)] bg-[var(--accent-soft)] px-3 py-2 text-xs font-semibold text-[var(--accent-app)]">{confirmNotice}</p>}
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2 shrink-0">
@@ -135,15 +136,15 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-[1.55fr_0.8fr]">
         {/* Left main content column */}
-        <div className="md:col-span-2 space-y-6">
+        <div className="space-y-5">
           <Section title="Team Roster Ranks">
-            <div className="divide-y divide-[var(--border-subtle)]">
+            <div className="stagger-in space-y-3">
               {team.members.map((member) => (
-                <div key={member.id} className="flex items-center justify-between py-4 first:pt-0 last:pb-0">
+                <div key={member.id} className="signal-card flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-none bg-[var(--bg-app)] border border-[var(--border-app)] flex items-center justify-center font-mono font-bold text-[var(--text-app)] uppercase">
+                    <div className="avatar-chip">
                       {member.user.fullName.charAt(0)}
                     </div>
                     <div>
@@ -160,7 +161,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                         label={member.role === "MEMBER" ? "Promote" : "Demote"}
                         variant="secondary"
                         onClick={() => void promoteMember(member.user.id, member.role)}
-                        className="py-1 px-2.5 text-[9px] rounded-none font-mono"
+                        className="py-1 px-2.5 text-[9px]"
                       />
                     )}
                   </div>
@@ -171,7 +172,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
         </div>
 
         {/* Sidebar details */}
-        <div className="space-y-6">
+        <div className="space-y-5">
           <Section title="Group Specifications">
             <div className="space-y-4 text-xs font-mono">
               <div className="flex justify-between py-2 border-b border-[var(--border-subtle)]">
