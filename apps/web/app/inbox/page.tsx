@@ -106,10 +106,10 @@ function InboxInner() {
   };
 
   return (
-    <div className="grid gap-6 md:grid-cols-3 h-[550px] px-4">
+    <div className="grid min-h-[580px] gap-5 lg:grid-cols-[0.82fr_1.68fr]">
       {/* Left Conversations List */}
-      <div className="panel p-4 flex flex-col space-y-4 md:col-span-1 overflow-y-auto bg-[var(--bg-app)] border-[var(--border-app)] rounded-none">
-        <h4 className="text-[10px] font-mono font-bold uppercase tracking-widest text-stone-500 px-2">Active Conversations</h4>
+      <div className="panel flex flex-col space-y-4 overflow-y-auto p-4">
+        <h4 className="px-2 text-sm font-semibold text-[var(--text-app)]">Active conversations</h4>
         <div className="space-y-1">
           {users.map((user) => {
             const isActive = activeUser === user.id;
@@ -117,36 +117,36 @@ function InboxInner() {
               <button
                 key={user.id}
                 onClick={() => setActiveUser(user.id)}
-                className={`w-full flex items-center justify-between p-3 rounded-none text-left transition border ${
+                className={`w-full flex items-center justify-between rounded-lg border p-3 text-left transition-all duration-200 ${
                   isActive
-                    ? "bg-[var(--surface-app)] border-[var(--border-app)] text-[var(--text-app)]"
-                    : "bg-transparent border-transparent hover:bg-[var(--surface-app)]/50 text-stone-600 dark:text-stone-400"
+                    ? "border-[var(--accent-app)] bg-[var(--accent-soft)] text-[var(--text-app)]"
+                    : "border-transparent bg-transparent text-[var(--muted-app)] hover:translate-x-1 hover:border-[var(--border-subtle)] hover:bg-[var(--surface-raised)] hover:text-[var(--text-app)]"
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-none bg-[var(--bg-app)] border border-[var(--border-app)] flex items-center justify-center font-mono font-bold text-[var(--text-app)] text-sm uppercase">
+                  <div className="avatar-chip">
                     {user.fullName.charAt(0)}
                   </div>
                   <div className="space-y-0.5">
                     <span className="font-semibold text-xs text-[var(--text-app)]">{user.fullName}</span>
-                    <p className="text-[10px] text-stone-400 max-w-[125px] truncate font-mono">@{user.username}</p>
+                    <p className="text-[10px] text-[var(--muted-app)] max-w-[125px] truncate">@{user.username}</p>
                   </div>
                 </div>
               </button>
             );
           })}
-          {!loading && users.length === 0 && <p className="px-2 text-xs text-stone-400 font-mono italic">No conversations.</p>}
+          {!loading && users.length === 0 && <p className="px-2 text-xs text-[var(--muted-app)]">No conversations.</p>}
         </div>
       </div>
 
       {/* Right Messages Thread */}
-      <div className="panel p-0 md:col-span-2 flex flex-col justify-between overflow-hidden border-[var(--border-app)] rounded-none">
-        <div className="px-6 py-4 border-b border-[var(--border-app)] flex items-center justify-between bg-[var(--bg-app)]">
+      <div className="panel flex flex-col justify-between overflow-hidden p-0">
+        <div className="flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-app)] px-6 py-4">
           <div>
-            <span className="font-bold text-[var(--text-app)] font-serif text-sm uppercase tracking-tight">
+            <span className="text-sm font-bold text-[var(--text-app)]">
               {activeUserData?.fullName || "Select conversation"}
             </span>
-            <p className="text-[10px] text-stone-400 font-mono">
+            <p className="text-[10px] text-[var(--muted-app)]">
               {activeUserData ? `@${activeUserData.username} • ${activeUserData.discipline || "SOEN"}` : "Roster chats load after selection."}
             </p>
           </div>
@@ -155,9 +155,9 @@ function InboxInner() {
           )}
         </div>
 
-        <div className="flex-1 p-6 overflow-y-auto space-y-4 bg-[var(--surface-app)]">
+        <div className="flex-1 space-y-4 overflow-y-auto bg-[var(--surface-app)] p-6">
           {notice && (
-            <div className="rounded-none border border-[var(--color-danger)] bg-[var(--color-danger-bg)] px-3 py-2 text-xs font-mono font-bold uppercase tracking-wider text-[var(--color-danger)]">
+            <div className="rounded-lg border border-[var(--color-danger)] bg-[var(--color-danger-bg)] px-3 py-2 text-xs font-semibold text-[var(--color-danger)]">
               {notice}
             </div>
           )}
@@ -166,26 +166,26 @@ function InboxInner() {
             return (
               <div key={message.id} className={`flex ${isSelf ? "justify-end" : "justify-start"}`}>
                 <div
-                  className={`max-w-md rounded-none px-4 py-2.5 text-xs border leading-relaxed ${
+                  className={`max-w-md rounded-lg border px-4 py-2.5 text-xs leading-relaxed transition-all duration-200 hover:-translate-y-0.5 ${
                     isSelf
                       ? "bg-[var(--accent-app)] border-[var(--accent-app)] text-white font-medium"
                       : "bg-[var(--bg-app)] border-[var(--border-subtle)] text-[var(--text-app)]"
                   }`}
                 >
                   <p className="font-sans">{message.body}</p>
-                  <div className="text-[8px] font-mono mt-1 text-right opacity-60">{message.createdAt}</div>
+                  <div className="mt-1 text-right text-[8px] opacity-60">{message.createdAt}</div>
                 </div>
               </div>
             );
           })}
           {messages.length === 0 && (
             <div className="text-center py-20">
-              <p className="text-stone-400 text-xs font-mono italic">No conversation history. Send a greeting to start.</p>
+              <p className="text-xs text-[var(--muted-app)]">No conversation history. Send a greeting to start.</p>
             </div>
           )}
         </div>
 
-        <form onSubmit={(e) => void handleSend(e)} className="p-4 border-t border-[var(--border-app)] bg-[var(--bg-app)] flex gap-2">
+        <form onSubmit={(e) => void handleSend(e)} className="flex gap-2 border-t border-[var(--border-subtle)] bg-[var(--bg-app)] p-4">
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -202,13 +202,18 @@ function InboxInner() {
 
 export default function InboxPage() {
   return (
-    <div className="space-y-6 max-w-5xl mx-auto py-4 px-4">
-      <div className="border-b border-[var(--border-app)] pb-4">
-        <h1 className="text-3xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">Direct Messages</h1>
-        <p className="text-sm text-stone-500 font-sans">Communicate with capstone team leads, professors, and project sponsors.</p>
-      </div>
+    <div className="dashboard-stage mx-auto max-w-6xl space-y-8 px-4 py-4">
+      <section className="workspace-hero">
+        <div className="space-y-3">
+          <span className="page-kicker">Messages</span>
+          <div className="space-y-2">
+            <h1 className="page-title">Direct messages</h1>
+            <p className="page-subtitle">Communicate with capstone team leads, professors, and project sponsors.</p>
+          </div>
+        </div>
+      </section>
 
-      <Suspense fallback={<p className="text-xs text-stone-500 font-mono animate-pulse uppercase tracking-wider">Initializing inbox query params...</p>}>
+      <Suspense fallback={<p className="text-xs text-[var(--muted-app)] animate-pulse">Initializing inbox query params...</p>}>
         <InboxInner />
       </Suspense>
     </div>
