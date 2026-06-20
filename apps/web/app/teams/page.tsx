@@ -12,48 +12,53 @@ export default function TeamsPage() {
   const teams = data?.teams || [];
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto py-4 px-4">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--border-app)] pb-4">
-        <div>
-          <h1 className="text-3xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">Capstone Groups</h1>
-          <p className="text-sm text-stone-500 font-sans">Discover active student project teams, check open slots, or apply to join.</p>
+    <div className="dashboard-stage space-y-8 max-w-6xl mx-auto py-4 px-4">
+      <section className="workspace-hero">
+        <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-3">
+            <span className="page-kicker">Team directory</span>
+            <div className="space-y-2">
+              <h1 className="page-title">Capstone teams</h1>
+              <p className="page-subtitle">Find active student groups, compare open slots, and spot teams that match your discipline.</p>
+            </div>
+          </div>
+          <div className="flex gap-3 w-full md:w-auto">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search teams..."
+              className="input-field py-3 flex-1 md:w-72"
+            />
+            <Link href="/teams/new" className="btn-primary shrink-0 flex items-center justify-center">
+              Create team
+            </Link>
+          </div>
         </div>
-        <div className="flex gap-3 w-full md:w-auto">
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search groups..."
-            className="input-field py-2 flex-1 md:w-64"
-          />
-          <Link href="/teams/new" className="btn-primary text-xs shrink-0 flex items-center justify-center">
-            Create Team
-          </Link>
-        </div>
-      </div>
+      </section>
 
-      {loading && <Section title="Loading"><p className="text-xs text-stone-500 font-mono animate-pulse uppercase tracking-wider">Loading active teams...</p></Section>}
-      {error && <Section title="GraphQL Error"><p className="text-xs text-rose-500 font-mono font-bold uppercase tracking-wider">{error}</p></Section>}
+      {loading && <Section title="Loading"><p className="text-xs text-[var(--muted-app)] animate-pulse">Loading active teams...</p></Section>}
+      {error && <Section title="GraphQL Error"><p className="text-xs font-semibold text-rose-500">{error}</p></Section>}
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="stagger-in grid gap-5 md:grid-cols-2">
         {!loading && !error && teams.map((team) => {
           const openings = team.maxSize - team.members.length;
           return (
-            <div key={team.id} className="panel-interactive flex flex-col justify-between space-y-4">
+            <div key={team.id} className="directory-card">
               <div className="space-y-2">
                 <div className="flex items-start justify-between gap-2">
-                  <Link href={`/teams/${team.id}`} className="text-lg font-bold font-serif text-[var(--text-app)] hover:text-[var(--accent-app)] uppercase tracking-tight">
+                  <Link href={`/teams/${team.id}`} className="card-title">
                     {team.name}
                   </Link>
                   <Status value={team.isComplete ? "COMPLETE" : "RECRUITING"} />
                 </div>
-                <p className="text-xs text-stone-500 leading-relaxed font-sans line-clamp-2">{team.description || "No description provided."}</p>
+                <p className="text-sm leading-6 text-[var(--muted-app)] line-clamp-2">{team.description || "No description provided."}</p>
               </div>
 
-              <div className="flex items-center justify-between border-t border-[var(--border-subtle)] pt-3 text-[11px] text-stone-500 font-mono">
+              <div className="flex items-center justify-between gap-3 border-t border-[var(--border-subtle)] pt-3 text-xs text-[var(--muted-app)]">
                 <Badge label={team.discipline || "CROSS-DISCIPLINARY"} type="discipline" />
-                <div className="flex items-center gap-1 font-semibold text-stone-600 dark:text-slate-350">
+                <div className="flex items-center gap-1 font-semibold">
                   <span>Openings:</span>
-                  <span className={`font-bold ${openings > 0 ? "text-[var(--accent-app)]" : "text-stone-400"}`}>{openings} slots ({team.members.length}/{team.maxSize})</span>
+                  <span className={`font-bold ${openings > 0 ? "text-[var(--accent-app)]" : "text-[var(--muted-app)]"}`}>{openings} slots ({team.members.length}/{team.maxSize})</span>
                 </div>
               </div>
             </div>
@@ -61,9 +66,9 @@ export default function TeamsPage() {
         })}
 
         {!loading && !error && teams.length === 0 && (
-          <div className="col-span-full panel text-center py-16 space-y-2 border-dashed border-[var(--border-app)]">
-            <p className="text-stone-400 text-lg font-mono">No capstone groups found matching your query.</p>
-            <p className="text-xs text-stone-500 font-mono">Try adjusting your filters or search tags.</p>
+          <div className="col-span-full panel text-center py-16 space-y-2 border-dashed border-[var(--border-subtle)]">
+            <p className="text-lg font-semibold text-[var(--text-app)]">No capstone groups found matching your query.</p>
+            <p className="text-xs text-[var(--muted-app)]">Try adjusting your filters or search tags.</p>
           </div>
         )}
       </div>

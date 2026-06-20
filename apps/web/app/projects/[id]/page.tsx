@@ -126,9 +126,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto py-12">
+      <div className="mx-auto max-w-5xl px-4 py-12">
         <Section title="Loading">
-          <p className="text-xs text-stone-500 animate-pulse uppercase tracking-wider">Syncing project records...</p>
+          <p className="text-xs text-[var(--muted-app)] animate-pulse">Syncing project records...</p>
         </Section>
       </div>
     );
@@ -136,9 +136,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   if (error || !project) {
     return (
-      <div className="max-w-2xl mx-auto py-12">
+      <div className="mx-auto max-w-2xl px-4 py-12">
         <Section title="Error Notice">
-          <p className="text-stone-400 text-xs">{error || "The requested capstone project does not exist."}</p>
+          <p className="text-xs text-[var(--muted-app)]">{error || "The requested capstone project does not exist."}</p>
           <Link href="/projects" className="btn-secondary mt-4 inline-block text-xs">Back to Projects Registry</Link>
         </Section>
       </div>
@@ -150,12 +150,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const isEligibleToApply = myTeam && (myRole === "LEAD" || myRole === "CO_LEAD");
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto py-4">
+    <div className="dashboard-stage mx-auto max-w-6xl space-y-8 px-4 py-4">
       {/* Project Header */}
-      <div className="panel flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-3">
+      <div className="workspace-hero flex flex-col justify-between gap-6 md:flex-row md:items-center">
+        <div className="space-y-4">
+          <span className="page-kicker">Project brief</span>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">{project.title}</h1>
+            <h1 className="max-w-3xl text-3xl font-bold leading-tight tracking-normal text-[var(--text-app)] md:text-5xl">{project.title}</h1>
             <Status value={project.status} />
             <Status value={project.approvalState || "UNVERIFIED"} />
           </div>
@@ -164,7 +165,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <Badge key={discipline} label={discipline} type="discipline" />
             ))}
           </div>
-          {notice && <p className="text-xs text-emerald-600 font-bold">{notice}</p>}
+          {notice && <p className="rounded-lg border border-[var(--color-success)] bg-[var(--color-success-bg)] px-3 py-2 text-xs font-semibold text-[var(--color-success)]">{notice}</p>}
         </div>
 
         {me && me.id !== project.owner.id ? (
@@ -200,15 +201,15 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         )}
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-[1.55fr_0.8fr]">
         {/* Scope and Application Lists */}
-        <div className="md:col-span-2 space-y-6">
+        <div className="space-y-5">
           <Section title="Capstone Scope & Objectives">
-            <p className="leading-relaxed text-stone-600 dark:text-slate-350 text-xs">{project.description}</p>
+            <p className="text-sm leading-6 text-[var(--muted-app)]">{project.description}</p>
             {project.constraints && (
-              <div className="mt-4 space-y-2 pt-4 border-t border-stone-200 dark:border-stone-850">
-                <h4 className="text-xs font-bold text-stone-800 dark:text-slate-200">Licensing & Hardware Constraints:</h4>
-                <p className="text-xs text-stone-500 leading-relaxed">{project.constraints}</p>
+              <div className="mt-4 space-y-2 border-t border-[var(--border-subtle)] pt-4">
+                <h4 className="text-xs font-bold text-[var(--text-app)]">Licensing & hardware constraints</h4>
+                <p className="text-xs leading-relaxed text-[var(--muted-app)]">{project.constraints}</p>
               </div>
             )}
           </Section>
@@ -216,15 +217,15 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           {/* Received applications */}
           <Section title="Received Roster Claims">
             {project.applications.length > 0 ? (
-              <div className="space-y-4 divide-y divide-[var(--border-subtle)]">
+              <div className="stagger-in space-y-3">
                 {project.applications.map((application) => (
-                  <div key={application.id} className="pt-4 first:pt-0 flex items-start justify-between gap-4">
+                  <div key={application.id} className="signal-card flex items-start justify-between gap-4">
                     <div className="space-y-1">
-                      <Link href={`/teams/${application.team.id}`} className="font-bold text-[var(--accent-app)] hover:underline text-xs">
+                      <Link href={`/teams/${application.team.id}`} className="card-title text-sm">
                         {application.team.name}
                       </Link>
                       {application.message && (
-                        <p className="text-[11px] text-stone-400 italic line-clamp-2">&quot;{application.message}&quot;</p>
+                        <p className="text-xs italic text-[var(--muted-app)] line-clamp-2">&quot;{application.message}&quot;</p>
                       )}
                     </div>
                     <Status value={application.status} />
@@ -232,25 +233,25 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-stone-500 italic text-center py-4">No applications received yet.</p>
+              <p className="py-4 text-center text-xs text-[var(--muted-app)]">No applications received yet.</p>
             )}
           </Section>
         </div>
 
         {/* Sidebar Specifications */}
-        <div className="space-y-6">
+        <div className="space-y-5">
           <Section title="Target Criteria">
-            <div className="space-y-4 text-xs">
+            <div className="space-y-3 text-xs">
               <div className="flex justify-between py-2 border-b border-[var(--border-subtle)]">
-                <span className="text-stone-500">Min Team Size:</span>
-                <span className="font-semibold text-stone-850 dark:text-slate-200">{project.teamSizeMin} Students</span>
+                <span className="text-[var(--muted-app)]">Min team size</span>
+                <span className="font-semibold text-[var(--text-app)]">{project.teamSizeMin} students</span>
               </div>
               <div className="flex justify-between py-2 border-b border-[var(--border-subtle)]">
-                <span className="text-stone-500">Max Team Size:</span>
-                <span className="font-semibold text-stone-850 dark:text-slate-200">{project.teamSizeMax} Students</span>
+                <span className="text-[var(--muted-app)]">Max team size</span>
+                <span className="font-semibold text-[var(--text-app)]">{project.teamSizeMax} students</span>
               </div>
               <div className="flex justify-between py-2 border-b border-[var(--border-subtle)]">
-                <span className="text-stone-500">Sponsor Owner:</span>
+                <span className="text-[var(--muted-app)]">Sponsor owner</span>
                 <Link href={`/profile/${project.owner.username}`} className="font-semibold text-[var(--accent-app)]">
                   {project.owner.fullName}
                 </Link>
@@ -270,18 +271,22 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               {project.fileUrl || project.videoUrl ? (
                 <div className="space-y-2">
                   {project.fileUrl && (
-                    <a href={project.fileUrl} target="_blank" rel="noreferrer" className="block text-xs text-[var(--accent-app)] hover:underline font-semibold">
+                    <a href={project.fileUrl} target="_blank" rel="noreferrer" className="action-row">
+                      <span>Specifications sheet</span>
+                      <span>-&gt;</span>
                       📄 Specifications Sheet.pdf
                     </a>
                   )}
                   {project.videoUrl && (
-                    <a href={project.videoUrl} target="_blank" rel="noreferrer" className="block text-xs text-[var(--accent-app)] hover:underline font-semibold">
+                    <a href={project.videoUrl} target="_blank" rel="noreferrer" className="action-row">
+                      <span>Video brief</span>
+                      <span>-&gt;</span>
                       🎬 Video Brief / Requirements
                     </a>
                   )}
                 </div>
               ) : (
-                <p className="text-xs text-stone-500 italic">No attachments attached.</p>
+                <p className="text-xs text-[var(--muted-app)]">No attachments attached.</p>
               )}
             </div>
           </Section>

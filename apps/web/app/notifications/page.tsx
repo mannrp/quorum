@@ -64,47 +64,50 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto py-4">
-      <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-4">
-        <div>
-          <h1 className="text-3xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">Updates & Inbox Notices</h1>
-          <p className="text-sm text-stone-500">Track notifications, matching confirmations, and sponsor claims.</p>
+    <div className="dashboard-stage mx-auto max-w-5xl space-y-8 px-4 py-4">
+      <section className="workspace-hero">
+        <div className="space-y-3">
+          <span className="page-kicker">Updates</span>
+          <div className="space-y-2">
+            <h1 className="page-title">Inbox notices</h1>
+            <p className="page-subtitle">Track notifications, matching confirmations, and sponsor claims.</p>
+          </div>
         </div>
-      </div>
+      </section>
 
-      {loading && <Section title="Loading"><p className="text-xs text-stone-500 animate-pulse font-mono uppercase tracking-wider">Syncing notices...</p></Section>}
-      {error && <Section title="GraphQL Error"><p className="text-xs text-rose-500 font-mono font-bold uppercase tracking-wider">{error}</p></Section>}
-      {actionError && <Section title="Action Failed"><p className="text-xs text-rose-500 font-mono font-bold uppercase tracking-wider">{actionError}</p></Section>}
+      {loading && <Section title="Loading"><p className="text-xs text-[var(--muted-app)] animate-pulse">Syncing notices...</p></Section>}
+      {error && <Section title="GraphQL Error"><p className="text-xs font-semibold text-rose-500">{error}</p></Section>}
+      {actionError && <Section title="Action Failed"><p className="text-xs font-semibold text-rose-500">{actionError}</p></Section>}
 
-      <div className="space-y-3">
+      <div className="stagger-in space-y-3">
         {!loading && !error && notifications.map((notification) => (
           <div
             key={notification.id}
             onClick={() => handleNotifClick(notification)}
-            className={`flex items-center justify-between gap-4 p-4 cursor-pointer transition duration-150 border bg-[var(--surface-app)] rounded-none ${
+            className={`flex cursor-pointer items-center justify-between gap-4 rounded-lg border bg-[var(--surface-app)] p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--accent-app)] ${
               notification.read
-                ? "border-[var(--border-subtle)] opacity-60"
-                : "border-[var(--border-app)] border-l-4 border-l-[var(--accent-app)]"
-            } hover:border-[var(--accent-app)]`}
+                ? "border-[var(--border-subtle)] opacity-65"
+                : "border-[var(--accent-app)] border-l-4 border-l-[var(--accent-app)]"
+            }`}
           >
             <div className="flex items-center gap-4">
-              <div className="h-8 w-8 rounded-none bg-[var(--bg-app)] border border-[var(--border-app)] flex items-center justify-center text-xs font-mono font-bold text-[var(--accent-app)]">
-                i
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--accent-soft)] text-xs font-bold text-[var(--accent-app)]">
+                {notification.read ? "✓" : "!"}
               </div>
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-[9px] font-mono uppercase tracking-wider text-[var(--accent-app)]">
+                  <span className="text-[10px] font-bold text-[var(--accent-app)]">
                     {notification.type}
                   </span>
-                  <span className="text-[9px] font-mono text-stone-400">{notification.createdAt}</span>
+                  <span className="text-[10px] text-[var(--muted-app)]">{notification.createdAt}</span>
                 </div>
-                <p className="text-xs font-semibold text-[var(--text-app)]">{getNotifText(notification)}</p>
+                <p className="text-sm font-semibold text-[var(--text-app)]">{getNotifText(notification)}</p>
               </div>
             </div>
             {!notification.read && (
               <button
                 onClick={(e) => void markRead(notification.id, e)}
-                className="rounded-none px-2.5 py-1 text-[10px] font-bold border transition bg-[var(--bg-app)] hover:bg-[var(--accent-app)] hover:text-white border-[var(--border-app)] text-[var(--text-app)] uppercase tracking-wider font-mono"
+                className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-app)] px-2.5 py-1 text-[10px] font-bold text-[var(--text-app)] transition hover:border-[var(--accent-app)] hover:bg-[var(--accent-app)] hover:text-white"
               >
                 Mark Read
               </button>
@@ -114,8 +117,8 @@ export default function NotificationsPage() {
 
         {!loading && !error && notifications.length === 0 && (
           <div className="panel text-center py-16 space-y-2">
-            <p className="text-stone-400 text-lg">Inbox Zero</p>
-            <p className="text-xs text-stone-500">You do not have any notifications at this time.</p>
+            <p className="text-lg font-semibold text-[var(--text-app)]">Inbox zero</p>
+            <p className="text-xs text-[var(--muted-app)]">You do not have any notifications at this time.</p>
           </div>
         )}
       </div>

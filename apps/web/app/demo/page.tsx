@@ -39,14 +39,18 @@ export default function DemoPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 py-4">
-      <div className="border-b border-[var(--border-subtle)] pb-5">
-        <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-[var(--accent-app)]">Login-free demos</p>
-        <h1 className="mt-2 font-serif text-4xl font-black uppercase tracking-tight text-[var(--text-app)]">Explore Quorum as a real user</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-relaxed text-stone-600 dark:text-stone-300">
-          Choose a seeded persona to use the real product workflows without Neon Auth. Demo mode should point at a separate demo database or Neon branch.
-        </p>
-      </div>
+    <div className="dashboard-stage mx-auto max-w-6xl space-y-8 px-4 py-4">
+      <section className="workspace-hero">
+        <div className="space-y-3">
+          <span className="page-kicker">Login-free demos</span>
+          <div className="space-y-2">
+            <h1 className="page-title">Explore Quorum as a real user</h1>
+            <p className="page-subtitle">
+              Choose a seeded persona to test the real workflows without Neon Auth. Use a separate demo database or Neon branch for this mode.
+            </p>
+          </div>
+        </div>
+      </section>
 
       {!enabled && (
         <Section title="Demo Mode Disabled">
@@ -57,20 +61,20 @@ export default function DemoPage() {
       )}
 
       {error && (
-        <div className="border border-[var(--color-danger)] bg-[var(--color-danger-bg)] px-4 py-3 text-xs font-mono font-bold uppercase tracking-wider text-[var(--color-danger)]">
+        <div className="rounded-lg border border-[var(--color-danger)] bg-[var(--color-danger-bg)] px-4 py-3 text-xs font-semibold text-[var(--color-danger)]">
           {error}
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="stagger-in grid gap-5 md:grid-cols-3">
         {DEMO_PERSONAS.map((persona) => (
-          <section key={persona.id} className="panel flex min-h-64 flex-col justify-between gap-6">
+          <section key={persona.id} className="directory-card min-h-64">
             <div className="space-y-4">
               <div>
-                <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-[var(--accent-app)]">{persona.label}</p>
-                <h2 className="mt-2 font-serif text-2xl font-black uppercase tracking-tight text-[var(--text-app)]">{persona.role}</h2>
+                <p className="text-xs font-semibold text-[var(--accent-app)]">{persona.label}</p>
+                <h2 className="mt-2 text-2xl font-bold tracking-normal text-[var(--text-app)]">{persona.role}</h2>
               </div>
-              <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-300">{persona.description}</p>
+              <p className="text-sm leading-6 text-[var(--muted-app)]">{persona.description}</p>
             </div>
             <button
               type="button"

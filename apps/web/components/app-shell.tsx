@@ -156,11 +156,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen pb-12 transition-colors duration-150">
       <header className="w-full max-w-6xl mx-auto px-4 pt-4">
-        <nav className="glass-nav flex items-center justify-between gap-4 border border-[var(--border-app)] px-6 py-4 bg-[var(--surface-app)]">
+        <nav className="glass-nav flex items-center justify-between gap-4 border border-[var(--border-subtle)] px-6 py-4 bg-[var(--surface-app)]">
           <div className="flex items-center gap-6">
-            <Link className="text-xl font-serif font-black tracking-tight text-[var(--text-app)] flex items-center gap-2 group uppercase" href={me ? "/dashboard" : "/"}>
-              <span className="text-[var(--accent-app)] group-hover:scale-105 transition-transform duration-150">[-]</span>
-              <span className="group-hover:opacity-90 transition">Quorum</span>
+            <Link className="group flex items-center gap-2 border-0 text-xl font-bold tracking-tight text-[var(--text-app)]" href={me ? "/dashboard" : "/"}>
+              <span className="h-2.5 w-2.5 rounded-full bg-[var(--action-app)] transition-transform duration-200 group-hover:scale-125" />
+              <span className="transition-colors group-hover:text-[var(--accent-app)]">Quorum</span>
             </Link>
             
             <div className="hidden md:flex items-center gap-1.5">
@@ -170,15 +170,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <Link
                     key={link.href}
                     href={link.href}
-                    className={`relative rounded-none px-3 py-1.5 text-[9px] font-mono font-bold uppercase tracking-wider transition-all duration-100 border ${
+                    className={`relative rounded-md border px-3 py-1.5 text-xs font-semibold transition-all duration-200 ${
                       isActive
-                        ? "bg-[var(--bg-app)] text-[var(--accent-app)] border-[var(--border-app)]"
-                        : "text-stone-500 border-transparent hover:text-[var(--text-app)] hover:bg-[var(--bg-app)]"
+                        ? "border-[var(--border-subtle)] bg-[var(--accent-soft)] text-[var(--accent-app)]"
+                        : "border-transparent text-[var(--muted-app)] hover:bg-[var(--bg-app)] hover:text-[var(--text-app)]"
                     }`}
                   >
                     {link.name}
                     {!!link.badge && (
-                      <span className="absolute -top-1.5 -right-1.5 px-1 py-0.5 rounded-none text-[8px] bg-[var(--accent-app)] text-white font-mono animate-pulse">
+                      <span className="absolute -top-1.5 -right-1.5 rounded-full bg-[var(--accent-app)] px-1.5 py-0.5 text-[8px] font-bold text-white">
                         {link.badge}
                       </span>
                     )}
@@ -191,10 +191,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-3">
             <button
               onClick={toggleTheme}
-              className="btn-secondary px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider"
+              className="btn-secondary px-3 py-1.5 text-xs"
               aria-label="Toggle Theme"
             >
-              {isDark ? "[-] Light" : "[*] Dark"}
+              {isDark ? "Light" : "Dark"}
             </button>
 
             {loading ? (
