@@ -46,7 +46,7 @@ export default function DemoPage() {
           <div className="space-y-2">
             <h1 className="page-title">Explore Quorum as a real user</h1>
             <p className="page-subtitle">
-              Choose a seeded persona to test the real workflows without Neon Auth. Use a separate demo database or Neon branch for this mode.
+              Choose a seeded persona to test the real workflows. While active, demo persona mode overrides any signed-in Neon session for GraphQL requests.
             </p>
           </div>
         </div>

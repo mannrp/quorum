@@ -64,7 +64,7 @@ The Next.js app owns browser sign-in with the official Neon Auth SDK and exposes
 
 ## Login-Free Demo Mode
 
-Demo mode is intended for a separate demo database or Neon branch, never the production database. It keeps product flows real by using the normal GraphQL API and authorization checks, but resolves one of three seeded personas from a demo-only header.
+Demo mode is intended for a separate demo database or Neon branch, never the production database. It keeps product flows real by using the normal GraphQL API and authorization checks, but resolves one of three seeded personas from a demo-only header. When a valid demo persona cookie is active, the Next.js GraphQL proxy forwards that header even if the browser also has a signed-in Neon session; the Go API gives the demo persona precedence while `ENABLE_DEMO_MODE=true`.
 
 Recommended shared demo setup:
 
@@ -87,7 +87,7 @@ cd apps/api
 go run ./cmd/demo-seed --reset
 ```
 
-The web app exposes `/demo` with Student Lead, Project Owner, and Admin Professor personas. The persona cookie is sent only through the Next.js GraphQL proxy and the API accepts it only when `ENABLE_DEMO_MODE=true`. The admin persona can reset demo records from the UI when `DEMO_RESET_ENABLED=true`; the reset command and endpoint delete only records whose seeded users use reserved `demo_%` auth IDs.
+The web app exposes `/demo` with Student Lead, Project Owner, and Admin Professor personas. The persona cookie is sent only through the Next.js GraphQL proxy and overrides any signed-in Neon identity for proxied GraphQL calls; the API accepts it only when `ENABLE_DEMO_MODE=true`. The admin persona can reset demo records from the UI when `DEMO_RESET_ENABLED=true`; the reset command and endpoint delete only records whose seeded users use reserved `demo_%` auth IDs.
 
 Local development does not get auth values automatically from `DATABASE_URL` or the Neon Data API REST URL. Copy `NEON_AUTH_BASE_URL` into `apps/web/.env.local` and `NEON_AUTH_ISSUER`/`NEON_AUTH_JWKS_URL` into `apps/api/.env` from the same Neon Auth branch configuration.
 
