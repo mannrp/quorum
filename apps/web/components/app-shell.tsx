@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useState, useEffect, useCallback } from "react";
 import { graphqlRequest, userFacingError } from "@/lib/graphql";
 import { signOutOfNeonAuth } from "@/lib/neon-auth";
+import { DEMO_PERSONAS, DemoPersona, demoModeEnabled, demoResetEnabled } from "@/lib/demo";
 import { AUTH_STATE_QUERY, DASHBOARD_CONTEXT_QUERY } from "@/lib/queries";
 import type { AuthState, User } from "@/types/domain";
 
@@ -15,8 +16,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [unreadMsg, setUnreadMsg] = useState(0);
   const [unreadNotif, setUnreadNotif] = useState(0);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminAccess, setAdminAccess] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [demoBusy, setDemoBusy] = useState<string | null>(null);
+  const demoEnabled = demoModeEnabled();
+  const demoResetAvailable = demoResetEnabled();
 
   // Initialize theme from document class
   useEffect(() => {
@@ -42,7 +46,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         setMe(res.authState.profile);
       } else {
         setMe(null);
-        setIsAdmin(false);
+        setAdminAccess(false);
         setUnreadNotif(0);
         setUnreadMsg(0);
       }
@@ -54,12 +58,16 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         setUnreadNotif(dashboardRes.dashboardContext.unreadNotifications);
         setUnreadMsg(dashboardRes.dashboardContext.unreadMessages);
-        setIsAdmin(dashboardRes.dashboardContext.isAdmin);
+        setAdminAccess(dashboardRes.dashboardContext.isAdmin);
+      } else {
+        setAdminAccess(false);
+        setUnreadNotif(0);
+        setUnreadMsg(0);
       }
     } catch (err) {
       setSessionError(userFacingError(err));
       setMe(null);
-      setIsAdmin(false);
+      setAdminAccess(false);
       setUnreadNotif(0);
       setUnreadMsg(0);
     } finally {
@@ -74,9 +82,52 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const handleLogout = async () => {
     await signOutOfNeonAuth().catch(() => undefined);
+    if (demoEnabled) {
+      await fetch("/api/demo/persona", { method: "DELETE" }).catch(() => undefined);
+    }
     setMe(null);
-    setIsAdmin(false);
+    setAdminAccess(false);
     router.push("/");
+  };
+
+  const handleDemoPersona = async (persona: DemoPersona) => {
+    setDemoBusy(persona);
+    setSessionError(null);
+    try {
+      const response = await fetch("/api/demo/persona", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ persona }),
+      });
+      const payload = (await response.json()) as { target?: string; error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || "Could not switch demo persona.");
+      }
+      router.push(payload.target || "/dashboard");
+      router.refresh();
+      await fetchSession();
+    } catch (err) {
+      setSessionError(err instanceof Error ? err.message : "Could not switch demo persona.");
+    } finally {
+      setDemoBusy(null);
+    }
+  };
+
+  const handleDemoReset = async () => {
+    setDemoBusy("reset");
+    setSessionError(null);
+    try {
+      const response = await fetch("/api/demo/reset", { method: "POST" });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      router.refresh();
+      await fetchSession();
+    } catch (err) {
+      setSessionError(err instanceof Error ? err.message : "Could not reset demo data.");
+    } finally {
+      setDemoBusy(null);
+    }
   };
 
   const navLinks = me
@@ -86,13 +137,21 @@ export function AppShell({ children }: { children: ReactNode }) {
         { name: "Projects", href: "/projects" },
         { name: "Inbox", href: "/inbox", badge: unreadMsg },
         { name: "Notifications", href: "/notifications", badge: unreadNotif },
-        ...(isAdmin ? [{ name: "Admin", href: "/admin" }] : []),
+        ...(adminAccess ? [{ name: "Admin", href: "/admin" }] : []),
       ]
     : [
         { name: "Home", href: "/" },
+        ...(demoEnabled ? [{ name: "Demo", href: "/demo" }] : []),
         { name: "Teams", href: "/teams" },
         { name: "Projects", href: "/projects" },
       ];
+  const activeDemoPersona = me?.authUserId?.replace("demo_", "").replace("_lead", "") === "student"
+    ? "student"
+    : me?.authUserId === "demo_project_owner"
+      ? "owner"
+      : me?.authUserId === "demo_admin_professor"
+        ? "admin"
+        : null;
 
   return (
     <div className="min-h-screen pb-12 transition-colors duration-150">
@@ -170,6 +229,47 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="mx-auto max-w-6xl px-4 pt-3">
           <div className="rounded-none border border-[var(--color-danger)] bg-[var(--color-danger-bg)] px-4 py-2 text-xs font-mono font-bold uppercase tracking-wider text-[var(--color-danger)]">
             {sessionError}
+          </div>
+        </div>
+      )}
+      {demoEnabled && (
+        <div className="mx-auto max-w-6xl px-4 pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border border-[var(--border-app)] bg-[var(--surface-app)] px-4 py-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-[var(--accent-app)]">Demo Persona</span>
+              {activeDemoPersona && (
+                <span className="text-[10px] font-mono font-bold uppercase text-stone-500">
+                  {DEMO_PERSONAS.find((persona) => persona.id === activeDemoPersona)?.label}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {DEMO_PERSONAS.map((persona) => (
+                <button
+                  key={persona.id}
+                  type="button"
+                  onClick={() => handleDemoPersona(persona.id)}
+                  disabled={demoBusy !== null}
+                  className={`border px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider transition disabled:opacity-50 ${
+                    activeDemoPersona === persona.id
+                      ? "border-[var(--accent-app)] bg-[var(--accent-app)] text-white"
+                      : "border-[var(--border-app)] bg-[var(--bg-app)] text-[var(--text-app)] hover:border-[var(--accent-app)]"
+                  }`}
+                >
+                  {demoBusy === persona.id ? "Switching" : persona.label}
+                </button>
+              ))}
+              {demoResetAvailable && activeDemoPersona === "admin" && adminAccess && (
+                <button
+                  type="button"
+                  onClick={handleDemoReset}
+                  disabled={demoBusy !== null}
+                  className="border border-rose-300 bg-[var(--color-danger-bg)] px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider text-[var(--color-danger)] transition hover:bg-[var(--color-danger)] hover:text-white disabled:opacity-50"
+                >
+                  {demoBusy === "reset" ? "Resetting" : "Reset Demo Data"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

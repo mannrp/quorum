@@ -38,6 +38,8 @@ Do not commit real env files. `.gitignore` keeps them private.
 - `DATABASE_URL`: Neon Postgres connection string.
 - `PORT`: local Go server port, default `8080`.
 - `APP_ORIGIN`: frontend origin, usually `http://localhost:3000`.
+- `ENABLE_DEMO_MODE`: enables login-free seeded persona impersonation when set to `true`. Use only with a separate demo database/Neon branch.
+- `DEMO_RESET_ENABLED`: enables the demo reset HTTP endpoint when set to `true`. Requires `ENABLE_DEMO_MODE=true`.
 - `NEON_AUTH_ISSUER`: token issuer from Neon Auth.
 - `NEON_AUTH_JWKS_URL`: JWKS endpoint used by Go to validate auth tokens.
 - `NEON_AUTH_AUDIENCE`: expected token audience if Neon Auth requires one for the configured app.
@@ -51,12 +53,41 @@ Do not commit real env files. `.gitignore` keeps them private.
 ## Frontend Variables
 
 - `NEXT_PUBLIC_API_URL`: Go GraphQL endpoint, usually `http://localhost:8080/graphql`.
+- `NEXT_PUBLIC_ENABLE_DEMO_MODE`: shows the `/demo` hub and forwards demo persona cookies through the GraphQL proxy when set to `true`.
+- `NEXT_PUBLIC_DEMO_RESET_ENABLED`: shows the admin-only demo reset button when set to `true`. The API must also have `DEMO_RESET_ENABLED=true`.
 - `API_URL`: optional server-side override for the GraphQL endpoint used by the Next.js proxy.
 - `NEXT_PUBLIC_GRAPHQL_PROXY_URL`: optional browser-facing GraphQL proxy override. Defaults to `/api/graphql`.
 - `NEON_AUTH_BASE_URL`: Neon Auth URL for the current branch. This is the Auth URL from Neon, not the Data API REST URL.
 - `NEON_AUTH_COOKIE_SECRET`: at least 32 characters, used by the Next.js auth proxy to sign cached session cookies. Generate with `openssl rand -base64 32`.
 
 The Next.js app owns browser sign-in with the official Neon Auth SDK and exposes `/api/auth/[...path]` as the auth proxy. It stores Neon session state in signed httpOnly cookies, then requests a Neon JWT and sends that token to the Go GraphQL API as a bearer token. Browser GraphQL calls go to `/api/graphql` by default; that proxy forwards to `API_URL`, `NEXT_PUBLIC_API_URL`, or `http://localhost:8080/graphql` in that order. The Go API should not perform login/signup; it validates bearer tokens with `NEON_AUTH_ISSUER` and `NEON_AUTH_JWKS_URL`, then applies Quorum authorization rules.
+
+## Login-Free Demo Mode
+
+Demo mode is intended for a separate demo database or Neon branch, never the production database. It keeps product flows real by using the normal GraphQL API and authorization checks, but resolves one of three seeded personas from a demo-only header.
+
+Recommended shared demo setup:
+
+```sh
+# apps/api/.env on the demo backend
+ENABLE_DEMO_MODE=true
+DEMO_RESET_ENABLED=true
+DATABASE_URL=postgres://...demo-branch...
+
+# apps/web/.env.local on the demo frontend
+NEXT_PUBLIC_ENABLE_DEMO_MODE=true
+NEXT_PUBLIC_DEMO_RESET_ENABLED=true
+API_URL=https://your-demo-api.example.com/graphql
+```
+
+After running the standard migrations against the demo database, seed or reset deterministic fixtures:
+
+```sh
+cd apps/api
+go run ./cmd/demo-seed --reset
+```
+
+The web app exposes `/demo` with Student Lead, Project Owner, and Admin Professor personas. The persona cookie is sent only through the Next.js GraphQL proxy and the API accepts it only when `ENABLE_DEMO_MODE=true`. The admin persona can reset demo records from the UI when `DEMO_RESET_ENABLED=true`; the reset command and endpoint delete only records whose seeded users use reserved `demo_%` auth IDs.
 
 Local development does not get auth values automatically from `DATABASE_URL` or the Neon Data API REST URL. Copy `NEON_AUTH_BASE_URL` into `apps/web/.env.local` and `NEON_AUTH_ISSUER`/`NEON_AUTH_JWKS_URL` into `apps/api/.env` from the same Neon Auth branch configuration.
 

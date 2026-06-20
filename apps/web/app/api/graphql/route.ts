@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { getAuth } from "@/lib/auth/server";
+import { DEMO_COOKIE_NAME, demoModeEnabled, isDemoPersona } from "@/lib/demo";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +26,11 @@ async function currentNeonJwt() {
 export async function POST(request: Request) {
   const body = await request.text();
   const authRequired = request.headers.get("x-quorum-auth-required") === "true";
+  const store = await cookies();
+  const demoPersona = demoModeEnabled() ? store.get(DEMO_COOKIE_NAME)?.value : undefined;
   const token = await currentNeonJwt();
 
-  if (authRequired && !token) {
+  if (authRequired && !token && !isDemoPersona(demoPersona)) {
     return NextResponse.json(
       { errors: [{ message: "authentication required" }] },
       { status: 401 }
@@ -38,6 +42,9 @@ export async function POST(request: Request) {
   };
   if (token) {
     headers.authorization = `Bearer ${token}`;
+  }
+  if (!token && isDemoPersona(demoPersona)) {
+    headers["x-quorum-demo-persona"] = demoPersona;
   }
 
   const response = await fetch(graphqlUrl(), {
