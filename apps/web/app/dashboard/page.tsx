@@ -112,10 +112,7 @@ export default function DashboardPage() {
             projects {
               id
               title
-              summary
-              description
               status
-              lifecycleState
               owner {
                 id
                 fullName
@@ -124,19 +121,10 @@ export default function DashboardPage() {
               applications {
                 id
                 status
-                message
-                answers
-                reviewMessage
                 offerMessage
                 expiresAt
-                teamConfirmedAt
-                ownerConfirmedAt
-                withdrawnAt
                 createdAt
-                team {
-                  id
-                  name
-                }
+                team { id }
               }
             }
           }`,
