@@ -849,7 +849,7 @@ func (r *mutationResolver) CreateProject(ctx context.Context, input model.Create
 	}); err != nil {
 		return nil, err
 	}
-	return r.project(ctx, project)
+	return r.projectWithOptions(ctx, project, projectHydrationOptionsFromContext(ctx))
 }
 
 // UpdateProject is the resolver for the updateProject field.
@@ -1549,7 +1549,14 @@ func (r *queryResolver) DashboardContext(ctx context.Context) (*model.DashboardC
 	}
 	teams := make([]*model.Team, 0, len(teamRows))
 	for _, team := range teamRows {
-		mapped, err := r.team(ctx, team)
+		mapped, err := r.teamWithOptions(ctx, team, teamHydrationOptions{
+			includeCreatedBy:   true,
+			includeMembers:     true,
+			includeProject:     true,
+			includePermissions: true,
+			includeMemberTeam:  true,
+			creatorTags:        false,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -1561,7 +1568,9 @@ func (r *queryResolver) DashboardContext(ctx context.Context) (*model.DashboardC
 	}
 	projects := make([]*model.Project, 0, len(projectRows))
 	for _, project := range projectRows {
-		mapped, err := r.project(ctx, project)
+		mapped, err := r.projectWithOptions(ctx, project, projectHydrationOptions{
+			includeApplications: true,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -1696,7 +1705,7 @@ func (r *queryResolver) Projects(ctx context.Context, discipline *string, status
 	}
 	out := make([]*model.Project, 0, len(projects))
 	for _, project := range projects {
-		mapped, err := r.project(ctx, project)
+		mapped, err := r.projectWithOptions(ctx, project, projectHydrationOptionsFromContext(ctx))
 		if err != nil {
 			return nil, err
 		}

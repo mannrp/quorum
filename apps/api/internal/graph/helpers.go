@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -104,32 +105,80 @@ func (r *Resolver) user(ctx context.Context, user db.User) (*model.User, error) 
 }
 
 func (r *Resolver) team(ctx context.Context, team db.Team) (*model.Team, error) {
-	createdBy, err := r.cachedUser(ctx, team.CreatedBy)
-	if err != nil {
-		return nil, err
+	return r.teamWithOptions(ctx, team, teamHydrationOptionsFromContext(ctx))
+}
+
+type teamHydrationOptions struct {
+	includeCreatedBy   bool
+	includeMembers     bool
+	includeProject     bool
+	includePermissions bool
+	includeMemberTeam  bool
+	creatorTags        bool
+}
+
+func teamHydrationOptionsFromContext(ctx context.Context) teamHydrationOptions {
+	return teamHydrationOptions{
+		includeCreatedBy:   graphql.FieldRequested(ctx, "createdBy"),
+		includeMembers:     graphql.FieldRequested(ctx, "members"),
+		includeProject:     graphql.FieldRequested(ctx, "project"),
+		includePermissions: graphql.FieldRequested(ctx, "permissions"),
+		includeMemberTeam:  graphql.FieldRequested(ctx, "members.team"),
+		creatorTags:        graphql.FieldRequested(ctx, "createdBy.tags"),
 	}
-	creator, err := r.user(ctx, createdBy)
-	if err != nil {
-		return nil, err
+}
+
+func (r *Resolver) teamHydrated(ctx context.Context, team db.Team) (*model.Team, error) {
+	return r.teamWithOptions(ctx, team, teamHydrationOptions{
+		includeCreatedBy:   true,
+		includeMembers:     true,
+		includeProject:     true,
+		includePermissions: true,
+		includeMemberTeam:  true,
+		creatorTags:        true,
+	})
+}
+
+func (r *Resolver) teamWithOptions(ctx context.Context, team db.Team, options teamHydrationOptions) (*model.Team, error) {
+	var creator *model.User
+	if options.includeCreatedBy {
+		createdBy, err := r.cachedUser(ctx, team.CreatedBy)
+		if err != nil {
+			return nil, err
+		}
+		if options.creatorTags {
+			creator, err = r.user(ctx, createdBy)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			creator, err = r.shallowUser(ctx, createdBy)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
-	memberRows, err := r.Queries.ListTeamMembers(ctx, team.ID)
-	if err != nil {
-		return nil, err
-	}
-	members := make([]*model.TeamMembership, 0, len(memberRows))
-	for _, row := range memberRows {
-		memberUser := r.teamMemberUserModel(ctx, row)
-		members = append(members, &model.TeamMembership{
-			ID:       uuidString(row.ID),
-			User:     memberUser,
-			Role:     model.TeamRole(row.Role),
-			JoinedAt: timeString(row.JoinedAt),
-		})
+	members := make([]*model.TeamMembership, 0)
+	if options.includeMembers {
+		memberRows, err := r.Queries.ListTeamMembers(ctx, team.ID)
+		if err != nil {
+			return nil, err
+		}
+		members = make([]*model.TeamMembership, 0, len(memberRows))
+		for _, row := range memberRows {
+			memberUser := r.teamMemberUserModel(ctx, row)
+			members = append(members, &model.TeamMembership{
+				ID:       uuidString(row.ID),
+				User:     memberUser,
+				Role:     model.TeamRole(row.Role),
+				JoinedAt: timeString(row.JoinedAt),
+			})
+		}
 	}
 
 	var project *model.Project
-	if team.ProjectID.Valid {
+	if options.includeProject && team.ProjectID.Valid {
 		dbProject, err := r.Queries.GetProject(ctx, team.ProjectID)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return nil, err
@@ -142,25 +191,51 @@ func (r *Resolver) team(ctx context.Context, team db.Team) (*model.Team, error) 
 		}
 	}
 	mapped := teamModel(team, creator, members, project)
-	mapped.Permissions = r.teamPermissions(ctx, team)
-	for _, member := range mapped.Members {
-		member.Team = mapped
+	if options.includePermissions {
+		mapped.Permissions = r.teamPermissions(ctx, team)
+	}
+	if options.includeMemberTeam {
+		for _, member := range mapped.Members {
+			member.Team = mapped
+		}
 	}
 	return mapped, nil
 }
 
 func (r *Resolver) project(ctx context.Context, project db.Project) (*model.Project, error) {
+	return r.projectWithOptions(ctx, project, projectHydrationOptionsFromContext(ctx))
+}
+
+func projectHydrationOptionsFromContext(ctx context.Context) projectHydrationOptions {
+	return projectHydrationOptions{
+		includeTeam:             graphql.FieldRequested(ctx, "team"),
+		includeApplications:     graphql.FieldRequested(ctx, "applications"),
+		includeApplicationTeam:  graphql.FieldRequested(ctx, "applications"),
+		applicationFullTeam:     graphql.FieldRequested(ctx, "applications.team.members") || graphql.FieldRequested(ctx, "applications.team.project"),
+		includePermissions:      graphql.FieldRequested(ctx, "permissions"),
+	}
+}
+
+type projectHydrationOptions struct {
+	includeTeam            bool
+	includeApplications    bool
+	includeApplicationTeam bool
+	applicationFullTeam    bool
+	includePermissions     bool
+}
+
+func (r *Resolver) projectWithOptions(ctx context.Context, project db.Project, options projectHydrationOptions) (*model.Project, error) {
 	owner, err := r.cachedUser(ctx, project.OwnerID)
 	if err != nil {
 		return nil, err
 	}
-	ownerModel, err := r.user(ctx, owner)
+	ownerModel, err := r.shallowUser(ctx, owner)
 	if err != nil {
 		return nil, err
 	}
 
 	var team *model.Team
-	if project.TeamID.Valid {
+	if project.TeamID.Valid && options.includeTeam {
 		dbTeam, err := r.Queries.GetTeam(ctx, project.TeamID)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return nil, err
@@ -173,20 +248,25 @@ func (r *Resolver) project(ctx context.Context, project db.Project) (*model.Proj
 		}
 	}
 
-	appRows, err := r.Queries.ListProjectApplications(ctx, project.ID)
-	if err != nil {
-		return nil, err
-	}
-	apps := make([]*model.ProjectApplication, 0, len(appRows))
-	for _, application := range appRows {
-		mapped, err := r.projectApplicationWithProject(ctx, application, nil, true)
+	apps := make([]*model.ProjectApplication, 0)
+	if options.includeApplications {
+		appRows, err := r.Queries.ListProjectApplications(ctx, project.ID)
 		if err != nil {
 			return nil, err
 		}
-		apps = append(apps, mapped)
+		apps = make([]*model.ProjectApplication, 0, len(appRows))
+		for _, application := range appRows {
+			mapped, err := r.projectApplicationWithProject(ctx, application, nil, options.includeApplicationTeam, options.applicationFullTeam)
+			if err != nil {
+				return nil, err
+			}
+			apps = append(apps, mapped)
+		}
 	}
 	mapped := projectModel(project, ownerModel, team, apps)
-	mapped.Permissions = r.projectPermissions(ctx, project)
+	if options.includePermissions {
+		mapped.Permissions = r.projectPermissions(ctx, project)
+	}
 	for _, app := range mapped.Applications {
 		app.Project = mapped
 	}
@@ -228,17 +308,20 @@ func (r *Resolver) projectApplication(ctx context.Context, application db.Projec
 	if err != nil {
 		return nil, err
 	}
-	return r.projectApplicationWithProject(ctx, application, mappedProject, true)
+	return r.projectApplicationWithProject(ctx, application, mappedProject, true, true)
 }
 
-func (r *Resolver) projectApplicationWithProject(ctx context.Context, application db.ProjectApplication, mappedProject *model.Project, fullTeam bool) (*model.ProjectApplication, error) {
+func (r *Resolver) projectApplicationWithProject(ctx context.Context, application db.ProjectApplication, mappedProject *model.Project, includeTeam bool, fullTeam bool) (*model.ProjectApplication, error) {
+	if !includeTeam {
+		return projectApplicationModel(application, mappedProject, nil, nil), nil
+	}
 	team, err := r.Queries.GetTeam(ctx, application.TeamID)
 	if err != nil {
 		return nil, err
 	}
 	var mappedTeam *model.Team
 	if fullTeam {
-		mappedTeam, err = r.team(ctx, team)
+		mappedTeam, err = r.teamHydrated(ctx, team)
 	} else {
 		mappedTeam, err = r.shallowTeam(ctx, team)
 	}

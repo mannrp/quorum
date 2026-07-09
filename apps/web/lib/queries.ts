@@ -221,7 +221,13 @@ export const DASHBOARD_CONTEXT_QUERY = `
       isAdmin
       universalDeadline { id deadlineAt updatedAt }
       myTeams { ${TEAM_CARD_FIELDS} }
-      myProjects { ${PROJECT_CARD_FIELDS} applications { id status message answers createdAt team { ${TEAM_CARD_FIELDS} } } }
+      myProjects {
+        id
+        title
+        description
+        status
+        applications { id status createdAt }
+      }
       myInvitations { id status message expiresAt createdAt team { id name createdBy { id username fullName } } invitedBy { id username fullName } }
     }
     myNotifications { id type payload read createdAt }
