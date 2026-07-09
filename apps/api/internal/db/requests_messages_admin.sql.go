@@ -583,6 +583,7 @@ FROM users u
 JOIN messages m ON u.id = CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END
 WHERE m.sender_id = $1 OR m.receiver_id = $1
 ORDER BY u.full_name
+LIMIT 50
 `
 
 func (q *Queries) ListInboxUsers(ctx context.Context, senderID pgtype.UUID) ([]User, error) {
@@ -635,6 +636,7 @@ FROM team_join_requests
 WHERE team_id = $1
   AND ($2::text IS NULL OR status = $2::text)
 ORDER BY created_at DESC
+LIMIT 50
 `
 
 type ListJoinRequestsForTeamParams struct {
@@ -679,6 +681,7 @@ FROM team_join_requests
 WHERE user_id = $1
   AND ($2::text IS NULL OR status = $2::text)
 ORDER BY created_at DESC
+LIMIT 50
 `
 
 type ListJoinRequestsForUserParams struct {
@@ -762,6 +765,7 @@ SELECT id, user_id, type, payload, read, created_at
 FROM notifications
 WHERE user_id = $1
 ORDER BY created_at DESC
+LIMIT 50
 `
 
 func (q *Queries) ListNotifications(ctx context.Context, userID pgtype.UUID) ([]Notification, error) {
@@ -796,6 +800,7 @@ SELECT id, team_id, invited_user_id, invited_by, message, status, expires_at, re
 FROM team_invitations
 WHERE team_id = $1
 ORDER BY created_at DESC
+LIMIT 50
 `
 
 func (q *Queries) ListTeamInvitationsForTeam(ctx context.Context, teamID pgtype.UUID) ([]TeamInvitation, error) {
@@ -833,6 +838,7 @@ SELECT id, team_id, invited_user_id, invited_by, message, status, expires_at, re
 FROM team_invitations
 WHERE invited_user_id = $1
 ORDER BY created_at DESC
+LIMIT 50
 `
 
 func (q *Queries) ListTeamInvitationsForUser(ctx context.Context, invitedUserID pgtype.UUID) ([]TeamInvitation, error) {

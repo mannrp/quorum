@@ -273,6 +273,7 @@ WHERE ($1::text IS NULL OR u.discipline = $1::text)
     OR u.full_name ILIKE '%' || $3::text || '%'
   )
 ORDER BY u.full_name
+LIMIT 50
 `
 
 type ListUsersParams struct {

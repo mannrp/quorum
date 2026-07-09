@@ -268,6 +268,7 @@ WHERE ($1::text IS NULL OR discipline = $1::text)
   AND ($3::boolean IS NULL OR is_complete = $3::boolean)
   AND ($4::text IS NULL OR name ILIKE '%' || $4::text || '%')
 ORDER BY created_at DESC
+LIMIT 50
 `
 
 type ListTeamsParams struct {
@@ -328,6 +329,7 @@ JOIN team_memberships tm ON tm.team_id = t.id
 WHERE tm.user_id = $1
   AND t.archived_at IS NULL
 ORDER BY t.created_at DESC
+LIMIT 50
 `
 
 func (q *Queries) ListTeamsForUser(ctx context.Context, userID pgtype.UUID) ([]Team, error) {

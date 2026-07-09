@@ -38,14 +38,16 @@ SELECT *
 FROM team_join_requests
 WHERE team_id = $1
   AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
-ORDER BY created_at DESC;
+ORDER BY created_at DESC
+LIMIT 50;
 
 -- name: ListJoinRequestsForUser :many
 SELECT *
 FROM team_join_requests
 WHERE user_id = $1
   AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
-ORDER BY created_at DESC;
+ORDER BY created_at DESC
+LIMIT 50;
 
 -- name: CreateTeamInvitation :one
 INSERT INTO team_invitations (team_id, invited_user_id, invited_by, message, expires_at)
@@ -69,13 +71,15 @@ WHERE id = $1;
 SELECT *
 FROM team_invitations
 WHERE invited_user_id = $1
-ORDER BY created_at DESC;
+ORDER BY created_at DESC
+LIMIT 50;
 
 -- name: ListTeamInvitationsForTeam :many
 SELECT *
 FROM team_invitations
 WHERE team_id = $1
-ORDER BY created_at DESC;
+ORDER BY created_at DESC
+LIMIT 50;
 
 -- name: RespondToTeamInvitation :one
 UPDATE team_invitations
@@ -107,7 +111,8 @@ SELECT DISTINCT u.*
 FROM users u
 JOIN messages m ON u.id = CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END
 WHERE m.sender_id = $1 OR m.receiver_id = $1
-ORDER BY u.full_name;
+ORDER BY u.full_name
+LIMIT 50;
 
 -- name: MarkMessageRead :one
 UPDATE messages
@@ -124,7 +129,8 @@ WHERE receiver_id = $1 AND read = false;
 SELECT *
 FROM notifications
 WHERE user_id = $1
-ORDER BY created_at DESC;
+ORDER BY created_at DESC
+LIMIT 50;
 
 -- name: GetNotification :one
 SELECT *
