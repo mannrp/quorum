@@ -15,8 +15,84 @@ import (
 	"github.com/local/quorum/apps/api/internal/graph/model"
 )
 
+func (r *Resolver) cachedUser(ctx context.Context, id pgtype.UUID) (db.User, error) {
+	if cache := cacheFromContext(ctx); cache != nil {
+		key := uuidString(id)
+		cache.mu.Lock()
+		if cached, ok := cache.users[key]; ok {
+			cache.mu.Unlock()
+			return cached.value, cached.err
+		}
+		cache.mu.Unlock()
+
+		value, err := r.Queries.GetUser(ctx, id)
+		cache.mu.Lock()
+		cache.users[key] = cachedUser{value: value, err: err}
+		cache.mu.Unlock()
+		return value, err
+	}
+	return r.Queries.GetUser(ctx, id)
+}
+
+func (r *Resolver) cachedUserTags(ctx context.Context, id pgtype.UUID) ([]db.Tag, error) {
+	if cache := cacheFromContext(ctx); cache != nil {
+		key := uuidString(id)
+		cache.mu.Lock()
+		if cached, ok := cache.userTags[key]; ok {
+			cache.mu.Unlock()
+			return cached.value, cached.err
+		}
+		cache.mu.Unlock()
+
+		value, err := r.Queries.ListUserTags(ctx, id)
+		cache.mu.Lock()
+		cache.userTags[key] = cachedTags{value: value, err: err}
+		cache.mu.Unlock()
+		return value, err
+	}
+	return r.Queries.ListUserTags(ctx, id)
+}
+
+func (r *Resolver) cachedIsAdmin(ctx context.Context, id pgtype.UUID) (bool, error) {
+	if cache := cacheFromContext(ctx); cache != nil {
+		key := uuidString(id)
+		cache.mu.Lock()
+		if cached, ok := cache.adminStatus[key]; ok {
+			cache.mu.Unlock()
+			return cached.value, cached.err
+		}
+		cache.mu.Unlock()
+
+		value, err := r.Queries.IsAdmin(ctx, id)
+		cache.mu.Lock()
+		cache.adminStatus[key] = cachedBool{value: value, err: err}
+		cache.mu.Unlock()
+		return value, err
+	}
+	return r.Queries.IsAdmin(ctx, id)
+}
+
+func (r *Resolver) cachedTeamMembership(ctx context.Context, teamID pgtype.UUID, userID pgtype.UUID) (db.TeamMembership, error) {
+	if cache := cacheFromContext(ctx); cache != nil {
+		key := membershipCacheKey(teamID, userID)
+		cache.mu.Lock()
+		if cached, ok := cache.teamMemberships[key]; ok {
+			cache.mu.Unlock()
+			return cached.value, cached.err
+		}
+		cache.mu.Unlock()
+
+		value, err := r.Queries.GetTeamMembership(ctx, db.GetTeamMembershipParams{TeamID: teamID, UserID: userID})
+		cache.mu.Lock()
+		cache.teamMemberships[key] = cachedMembership{value: value, err: err}
+		cache.mu.Unlock()
+		return value, err
+	}
+	return r.Queries.GetTeamMembership(ctx, db.GetTeamMembershipParams{TeamID: teamID, UserID: userID})
+}
+
 func (r *Resolver) user(ctx context.Context, user db.User) (*model.User, error) {
-	tags, err := r.Queries.ListUserTags(ctx, user.ID)
+	tags, err := r.cachedUserTags(ctx, user.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +104,7 @@ func (r *Resolver) user(ctx context.Context, user db.User) (*model.User, error) 
 }
 
 func (r *Resolver) team(ctx context.Context, team db.Team) (*model.Team, error) {
-	createdBy, err := r.Queries.GetUser(ctx, team.CreatedBy)
+	createdBy, err := r.cachedUser(ctx, team.CreatedBy)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +150,7 @@ func (r *Resolver) team(ctx context.Context, team db.Team) (*model.Team, error) 
 }
 
 func (r *Resolver) project(ctx context.Context, project db.Project) (*model.Project, error) {
-	owner, err := r.Queries.GetUser(ctx, project.OwnerID)
+	owner, err := r.cachedUser(ctx, project.OwnerID)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +247,7 @@ func (r *Resolver) projectApplicationWithProject(ctx context.Context, applicatio
 	}
 	var applicant *model.User
 	if application.ApplicantID.Valid {
-		user, err := r.Queries.GetUser(ctx, application.ApplicantID)
+		user, err := r.cachedUser(ctx, application.ApplicantID)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return nil, err
 		}
@@ -190,7 +266,7 @@ func (r *Resolver) joinRequest(ctx context.Context, request db.TeamJoinRequest) 
 	if err != nil {
 		return nil, err
 	}
-	user, err := r.Queries.GetUser(ctx, request.UserID)
+	user, err := r.cachedUser(ctx, request.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -220,11 +296,11 @@ func (r *Resolver) teamInvitation(ctx context.Context, invitation db.TeamInvitat
 	if err != nil {
 		return nil, err
 	}
-	invitedUser, err := r.Queries.GetUser(ctx, invitation.InvitedUserID)
+	invitedUser, err := r.cachedUser(ctx, invitation.InvitedUserID)
 	if err != nil {
 		return nil, err
 	}
-	invitedBy, err := r.Queries.GetUser(ctx, invitation.InvitedBy)
+	invitedBy, err := r.cachedUser(ctx, invitation.InvitedBy)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +334,7 @@ func (r *Resolver) shallowUser(ctx context.Context, user db.User) (*model.User, 
 }
 
 func (r *Resolver) shallowTeam(ctx context.Context, team db.Team) (*model.Team, error) {
-	creator, err := r.Queries.GetUser(ctx, team.CreatedBy)
+	creator, err := r.cachedUser(ctx, team.CreatedBy)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +348,7 @@ func (r *Resolver) shallowTeam(ctx context.Context, team db.Team) (*model.Team, 
 }
 
 func (r *Resolver) shallowProject(ctx context.Context, project db.Project) (*model.Project, error) {
-	owner, err := r.Queries.GetUser(ctx, project.OwnerID)
+	owner, err := r.cachedUser(ctx, project.OwnerID)
 	if err != nil {
 		return nil, err
 	}
@@ -286,11 +362,11 @@ func (r *Resolver) shallowProject(ctx context.Context, project db.Project) (*mod
 }
 
 func (r *Resolver) message(ctx context.Context, message db.Message) (*model.Message, error) {
-	sender, err := r.Queries.GetUser(ctx, message.SenderID)
+	sender, err := r.cachedUser(ctx, message.SenderID)
 	if err != nil {
 		return nil, err
 	}
-	receiver, err := r.Queries.GetUser(ctx, message.ReceiverID)
+	receiver, err := r.cachedUser(ctx, message.ReceiverID)
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +391,7 @@ func (r *Resolver) message(ctx context.Context, message db.Message) (*model.Mess
 func (r *Resolver) deadline(ctx context.Context, deadline db.UniversalDeadline) (*model.Deadline, error) {
 	var updatedBy *model.User
 	if deadline.UpdatedBy.Valid {
-		user, err := r.Queries.GetUser(ctx, deadline.UpdatedBy)
+		user, err := r.cachedUser(ctx, deadline.UpdatedBy)
 		if err == nil {
 			updatedBy, _ = r.shallowUser(ctx, user)
 		}
@@ -328,7 +404,7 @@ func (r *Resolver) requireAdmin(ctx context.Context) (db.User, error) {
 	if err != nil {
 		return db.User{}, err
 	}
-	isAdmin, err := r.Queries.IsAdmin(ctx, current.ID)
+	isAdmin, err := r.cachedIsAdmin(ctx, current.ID)
 	if err != nil {
 		return db.User{}, err
 	}
@@ -344,7 +420,7 @@ func (r *Resolver) teamPermissions(ctx context.Context, team db.Team) *model.Tea
 	if !ok {
 		return permissions
 	}
-	membership, err := r.Queries.GetTeamMembership(ctx, db.GetTeamMembershipParams{TeamID: team.ID, UserID: current.ID})
+	membership, err := r.cachedTeamMembership(ctx, team.ID, current.ID)
 	if err != nil {
 		return permissions
 	}
@@ -369,7 +445,7 @@ func (r *Resolver) projectPermissions(ctx context.Context, project db.Project) *
 	permissions.CanReviewApplications = isOwner
 	permissions.CanSubmitForApproval = isOwner
 	permissions.CanArchive = isOwner
-	if isAdmin, err := r.Queries.IsAdmin(ctx, current.ID); err == nil {
+	if isAdmin, err := r.cachedIsAdmin(ctx, current.ID); err == nil {
 		permissions.CanApprove = isAdmin
 	}
 	return permissions
@@ -501,7 +577,7 @@ func (r *Resolver) userModel(ctx context.Context, user db.User, tags []*model.Ta
 	isSelf := ok && sameUUID(current.ID, user.ID)
 	isAdmin := false
 	if ok {
-		isAdmin, _ = r.Queries.IsAdmin(ctx, current.ID)
+		isAdmin, _ = r.cachedIsAdmin(ctx, current.ID)
 	}
 
 	if !isSelf && !isAdmin {
@@ -548,8 +624,28 @@ func (r *Resolver) canViewResume(ctx context.Context, user db.User, isSelf bool,
 }
 
 func (r *Resolver) hasTeamLeadRole(ctx context.Context, userID pgtype.UUID) bool {
+	if cache := cacheFromContext(ctx); cache != nil {
+		key := uuidString(userID)
+		cache.mu.Lock()
+		if cached, ok := cache.teamLeadStatus[key]; ok {
+			cache.mu.Unlock()
+			return cached.err == nil && cached.value
+		}
+		cache.mu.Unlock()
+
+		value, err := r.lookupTeamLeadRole(ctx, userID)
+		cache.mu.Lock()
+		cache.teamLeadStatus[key] = cachedBool{value: value, err: err}
+		cache.mu.Unlock()
+		return err == nil && value
+	}
+	value, err := r.lookupTeamLeadRole(ctx, userID)
+	return err == nil && value
+}
+
+func (r *Resolver) lookupTeamLeadRole(ctx context.Context, userID pgtype.UUID) (bool, error) {
 	if r.Pool == nil {
-		return false
+		return false, nil
 	}
 	var ok bool
 	err := r.Pool.QueryRow(ctx, `
@@ -562,12 +658,32 @@ func (r *Resolver) hasTeamLeadRole(ctx context.Context, userID pgtype.UUID) bool
 			  AND t.archived_at IS NULL
 		)
 	`, userID).Scan(&ok)
-	return err == nil && ok
+	return ok, err
 }
 
 func (r *Resolver) ownsActiveProject(ctx context.Context, userID pgtype.UUID) bool {
+	if cache := cacheFromContext(ctx); cache != nil {
+		key := uuidString(userID)
+		cache.mu.Lock()
+		if cached, ok := cache.activeProjectOwners[key]; ok {
+			cache.mu.Unlock()
+			return cached.err == nil && cached.value
+		}
+		cache.mu.Unlock()
+
+		value, err := r.lookupActiveProjectOwner(ctx, userID)
+		cache.mu.Lock()
+		cache.activeProjectOwners[key] = cachedBool{value: value, err: err}
+		cache.mu.Unlock()
+		return err == nil && value
+	}
+	value, err := r.lookupActiveProjectOwner(ctx, userID)
+	return err == nil && value
+}
+
+func (r *Resolver) lookupActiveProjectOwner(ctx context.Context, userID pgtype.UUID) (bool, error) {
 	if r.Pool == nil {
-		return false
+		return false, nil
 	}
 	var ok bool
 	err := r.Pool.QueryRow(ctx, `
@@ -578,7 +694,7 @@ func (r *Resolver) ownsActiveProject(ctx context.Context, userID pgtype.UUID) bo
 			  AND archived_at IS NULL
 		)
 	`, userID).Scan(&ok)
-	return err == nil && ok
+	return ok, err
 }
 
 func tagModel(tag db.Tag) *model.Tag {

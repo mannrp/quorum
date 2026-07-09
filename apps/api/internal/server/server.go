@@ -29,7 +29,7 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) http
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthHandler(pool))
 	mux.HandleFunc("/demo/reset", demoResetHandler(cfg, pool, queries))
-	mux.Handle("/graphql", maxBytes(1<<20, authMiddleware.Wrap(gql)))
+	mux.Handle("/graphql", maxBytes(1<<20, graph.WithRequestCache(authMiddleware.Wrap(gql))))
 	if cfg.AppEnv == "development" {
 		mux.Handle("/", playground.Handler("Quorum GraphQL", "/graphql"))
 	}
