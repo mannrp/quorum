@@ -51,6 +51,25 @@ export const SHELL_AUTH_QUERY = `
   }
 `;
 
+export const DASHBOARD_AUTH_QUERY = `
+  query DashboardAuth {
+    authState {
+      authenticated
+      hasProfile
+      profileComplete
+      profile {
+        id
+        authUserId
+        username
+        email
+        fullName
+        discipline
+        userIntent
+      }
+    }
+  }
+`;
+
 export const SHELL_COUNTS_QUERY = `
   query ShellCounts {
     dashboardContext {

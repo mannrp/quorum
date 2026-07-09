@@ -1517,7 +1517,13 @@ func (r *queryResolver) AuthState(ctx context.Context) (*model.AuthState, error)
 		}
 		return &model.AuthState{Authenticated: true}, nil
 	}
-	profile, err := r.user(ctx, current)
+	var profile *model.User
+	var err error
+	if graphql.FieldRequested(ctx, "profile.tags") {
+		profile, err = r.user(ctx, current)
+	} else {
+		profile, err = r.shallowUser(ctx, current)
+	}
 	if err != nil {
 		return nil, err
 	}
