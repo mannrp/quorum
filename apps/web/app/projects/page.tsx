@@ -9,7 +9,11 @@ import type { Project } from "@/types/domain";
 
 export default function ProjectsPage() {
   const [q, setQ] = useState("");
-  const { data, error, loading } = useGraphQL<{ projects: Project[] }>(PROJECTS_QUERY, q.trim() ? { search: q.trim() } : {});
+  const { data, error, loading } = useGraphQL<{ projects: Project[] }>(
+    PROJECTS_QUERY,
+    q.trim() ? { search: q.trim() } : {},
+    { debounceMs: 300 }
+  );
   const projects = data?.projects || [];
 
   return (

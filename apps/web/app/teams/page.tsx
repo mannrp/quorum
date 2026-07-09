@@ -8,7 +8,11 @@ import type { Team } from "@/types/domain";
 
 export default function TeamsPage() {
   const [q, setQ] = useState("");
-  const { data, error, loading } = useGraphQL<{ teams: Team[] }>(TEAMS_QUERY, q.trim() ? { search: q.trim() } : {});
+  const { data, error, loading } = useGraphQL<{ teams: Team[] }>(
+    TEAMS_QUERY,
+    q.trim() ? { search: q.trim() } : {},
+    { debounceMs: 300 }
+  );
   const teams = data?.teams || [];
 
   return (

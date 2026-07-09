@@ -35,6 +35,32 @@ export const AUTH_STATE_QUERY = `
   }
 `;
 
+export const SHELL_AUTH_QUERY = `
+  query ShellAuth {
+    authState {
+      authenticated
+      hasProfile
+      profileComplete
+      profile {
+        id
+        authUserId
+        username
+        fullName
+      }
+    }
+  }
+`;
+
+export const SHELL_COUNTS_QUERY = `
+  query ShellCounts {
+    dashboardContext {
+      unreadMessages
+      unreadNotifications
+      isAdmin
+    }
+  }
+`;
+
 export const TEAM_CARD_FIELDS = `
   id
   name
@@ -55,6 +81,17 @@ export const TEAM_CARD_FIELDS = `
   createdBy { id username fullName discipline }
   members { id role joinedAt user { id username fullName discipline } }
   project { id title summary description status lifecycleState }
+`;
+
+export const TEAM_LIST_FIELDS = `
+  id
+  name
+  description
+  isComplete
+  maxSize
+  discipline
+  recruitingState
+  members { id role joinedAt user { id username fullName discipline } }
 `;
 
 export const PROJECT_CARD_FIELDS = `
@@ -86,16 +123,28 @@ export const PROJECT_CARD_FIELDS = `
   team { id name isComplete maxSize discipline createdBy { id username fullName } members { id role joinedAt user { id username fullName discipline } } }
 `;
 
+export const PROJECT_LIST_FIELDS = `
+  id
+  title
+  summary
+  description
+  disciplines
+  teamSizeMin
+  teamSizeMax
+  status
+  lifecycleState
+  approvalState
+`;
+
 export const HOME_QUERY = `
   query Home {
-    teams { ${TEAM_CARD_FIELDS} }
-    projects { ${PROJECT_CARD_FIELDS} applications { id status message answers reviewMessage offerMessage expiresAt teamConfirmedAt ownerConfirmedAt withdrawnAt createdAt team { ${TEAM_CARD_FIELDS} } } }
+    projects { ${PROJECT_LIST_FIELDS} }
   }
 `;
 
 export const TEAMS_QUERY = `
   query Teams($search: String) {
-    teams(search: $search) { ${TEAM_CARD_FIELDS} }
+    teams(search: $search) { ${TEAM_LIST_FIELDS} }
   }
 `;
 
@@ -107,7 +156,7 @@ export const TEAM_QUERY = `
 
 export const PROJECTS_QUERY = `
   query Projects($search: String) {
-    projects(search: $search) { ${PROJECT_CARD_FIELDS} applications { id status message createdAt team { ${TEAM_CARD_FIELDS} } } }
+    projects(search: $search) { ${PROJECT_LIST_FIELDS} }
   }
 `;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type GraphQLResponse<T> = {
   data?: T;
@@ -75,7 +75,7 @@ export function userFacingError(error: unknown): string {
 export async function graphqlRequest<T>(
   query: string,
   variables?: Record<string, unknown>,
-  options?: { auth?: boolean }
+  options?: { auth?: boolean; signal?: AbortSignal }
 ): Promise<T> {
   const headers: Record<string, string> = {
     "content-type": "application/json"
@@ -90,7 +90,8 @@ export async function graphqlRequest<T>(
       method: "POST",
       headers,
       body: JSON.stringify({ query, variables: variables || {} }),
-      cache: "no-store"
+      cache: "no-store",
+      signal: options?.signal
     });
   } catch (err) {
     throw new GraphQLClientError(err instanceof Error ? err.message : "Network request failed", "network");
@@ -135,30 +136,49 @@ export async function uploadToSignedPost(
 export function useGraphQL<T>(
   query: string,
   variables?: Record<string, unknown>,
-  options?: { auth?: boolean; skip?: boolean }
+  options?: { auth?: boolean; skip?: boolean; debounceMs?: number }
 ) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!options?.skip);
+  const requestSeq = useRef(0);
   const variablesKey = JSON.stringify(variables || {});
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     if (options?.skip) return;
+    const requestId = requestSeq.current + 1;
+    requestSeq.current = requestId;
     setLoading(true);
     setError(null);
     try {
       const parsedVariables = JSON.parse(variablesKey) as Record<string, unknown>;
-      setData(await graphqlRequest<T>(query, parsedVariables, { auth: options?.auth }));
+      const result = await graphqlRequest<T>(query, parsedVariables, { auth: options?.auth, signal });
+      if (requestSeq.current === requestId && !signal?.aborted) {
+        setData(result);
+      }
     } catch (err) {
-      setError(userFacingError(err));
+      if (!signal?.aborted && requestSeq.current === requestId) {
+        setError(userFacingError(err));
+      }
     } finally {
-      setLoading(false);
+      if (!signal?.aborted && requestSeq.current === requestId) {
+        setLoading(false);
+      }
     }
   }, [query, variablesKey, options?.auth, options?.skip]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    const controller = new AbortController();
+    const debounceMs = options?.debounceMs ?? 0;
+    const timer = window.setTimeout(() => {
+      void load(controller.signal);
+    }, debounceMs);
 
-  return { data, error, loading, reload: load };
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [load, options?.debounceMs]);
+
+  return { data, error, loading, reload: () => load() };
 }
