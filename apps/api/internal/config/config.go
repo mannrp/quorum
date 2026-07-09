@@ -24,6 +24,7 @@ type Config struct {
 	Port              string
 	DemoModeEnabled   bool
 	DemoResetEnabled  bool
+	AdminEmails       []string
 }
 
 func Load() (Config, error) {
@@ -49,6 +50,7 @@ func Load() (Config, error) {
 		Port:              env("PORT", "8080"),
 		DemoModeEnabled:   boolEnv("ENABLE_DEMO_MODE"),
 		DemoResetEnabled:  boolEnv("DEMO_RESET_ENABLED"),
+		AdminEmails:       csvEnv("ADMIN_EMAILS"),
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -99,6 +101,25 @@ func boolEnv(key string) bool {
 	default:
 		return false
 	}
+}
+
+func csvEnv(key string) []string {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	values := make([]string, 0, len(parts))
+	seen := map[string]bool{}
+	for _, part := range parts {
+		value := strings.ToLower(strings.TrimSpace(part))
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		values = append(values, value)
+	}
+	return values
 }
 
 func loadEnv(path string) error {

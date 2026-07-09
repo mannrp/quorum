@@ -24,7 +24,7 @@ func (r *Resolver) user(ctx context.Context, user db.User) (*model.User, error) 
 	for _, tag := range tags {
 		outTags = append(outTags, tagModel(tag))
 	}
-	return userModel(user, outTags), nil
+	return r.userModel(ctx, user, outTags), nil
 }
 
 func (r *Resolver) team(ctx context.Context, team db.Team) (*model.Team, error) {
@@ -43,14 +43,7 @@ func (r *Resolver) team(ctx context.Context, team db.Team) (*model.Team, error) 
 	}
 	members := make([]*model.TeamMembership, 0, len(memberRows))
 	for _, row := range memberRows {
-		user, err := r.Queries.GetUser(ctx, row.UserID)
-		if err != nil {
-			return nil, err
-		}
-		memberUser, err := r.user(ctx, user)
-		if err != nil {
-			return nil, err
-		}
+		memberUser := r.teamMemberUserModel(ctx, row)
 		members = append(members, &model.TeamMembership{
 			ID:       uuidString(row.ID),
 			User:     memberUser,
@@ -260,8 +253,8 @@ func (r *Resolver) teamInvitation(ctx context.Context, invitation db.TeamInvitat
 	}, nil
 }
 
-func (r *Resolver) shallowUser(_ context.Context, user db.User) (*model.User, error) {
-	return userModel(user, []*model.Tag{}), nil
+func (r *Resolver) shallowUser(ctx context.Context, user db.User) (*model.User, error) {
+	return r.userModel(ctx, user, []*model.Tag{}), nil
 }
 
 func (r *Resolver) shallowTeam(ctx context.Context, team db.Team) (*model.Team, error) {
@@ -500,6 +493,92 @@ func userModel(user db.User, tags []*model.Tag) *model.User {
 		Tags:                  tags,
 		CreatedAt:             timeString(user.CreatedAt),
 	}
+}
+
+func (r *Resolver) userModel(ctx context.Context, user db.User, tags []*model.Tag) *model.User {
+	mapped := userModel(user, tags)
+	current, ok := auth.UserFromContext(ctx)
+	isSelf := ok && sameUUID(current.ID, user.ID)
+	isAdmin := false
+	if ok {
+		isAdmin, _ = r.Queries.IsAdmin(ctx, current.ID)
+	}
+
+	if !isSelf && !isAdmin {
+		mapped.AuthUserID = ""
+		mapped.Email = nil
+	}
+	if !r.canViewResume(ctx, user, isSelf, isAdmin) {
+		mapped.ResumeURL = nil
+	}
+	return mapped
+}
+
+func (r *Resolver) teamMemberUserModel(ctx context.Context, row db.ListTeamMembersRow) *model.User {
+	user := db.User{
+		ID:               row.UserID,
+		Username:         row.Username,
+		FullName:         row.FullName,
+		Discipline:       row.Discipline,
+		University:       row.University,
+		ResumeVisibility: string(model.ResumeVisibilityPrivate),
+	}
+	return r.userModel(ctx, user, []*model.Tag{})
+}
+
+func (r *Resolver) canViewResume(ctx context.Context, user db.User, isSelf bool, isAdmin bool) bool {
+	if !user.ResumeUrl.Valid {
+		return false
+	}
+	if isSelf || isAdmin || user.ResumeVisibility == string(model.ResumeVisibilityPublic) {
+		return true
+	}
+	current, ok := auth.UserFromContext(ctx)
+	if !ok {
+		return false
+	}
+	switch user.ResumeVisibility {
+	case string(model.ResumeVisibilityTeamLeads):
+		return r.hasTeamLeadRole(ctx, current.ID)
+	case string(model.ResumeVisibilityProjectOwners), string(model.ResumeVisibilityProjectOwnersAndProfessors):
+		return r.ownsActiveProject(ctx, current.ID)
+	default:
+		return false
+	}
+}
+
+func (r *Resolver) hasTeamLeadRole(ctx context.Context, userID pgtype.UUID) bool {
+	if r.Pool == nil {
+		return false
+	}
+	var ok bool
+	err := r.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM team_memberships tm
+			JOIN teams t ON t.id = tm.team_id
+			WHERE tm.user_id = $1
+			  AND tm.role IN ('LEAD', 'CO_LEAD')
+			  AND t.archived_at IS NULL
+		)
+	`, userID).Scan(&ok)
+	return err == nil && ok
+}
+
+func (r *Resolver) ownsActiveProject(ctx context.Context, userID pgtype.UUID) bool {
+	if r.Pool == nil {
+		return false
+	}
+	var ok bool
+	err := r.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM projects
+			WHERE owner_id = $1
+			  AND archived_at IS NULL
+		)
+	`, userID).Scan(&ok)
+	return err == nil && ok
 }
 
 func tagModel(tag db.Tag) *model.Tag {

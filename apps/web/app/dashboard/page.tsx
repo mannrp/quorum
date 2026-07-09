@@ -80,7 +80,8 @@ export default function DashboardPage() {
       }
       setMe(authResult.authState.profile);
 
-      const dashboardResult = await graphqlRequest<{
+      const [dashboardResult, requestsResult, projectsRes] = await Promise.all([
+        graphqlRequest<{
         dashboardContext: {
           myTeams: Team[];
           myProjects: Project[];
@@ -88,7 +89,61 @@ export default function DashboardPage() {
           universalDeadline: Deadline | null;
         };
         myNotifications: Notification[];
-      }>(DASHBOARD_CONTEXT_QUERY, {}, { auth: true });
+      }>(DASHBOARD_CONTEXT_QUERY, {}, { auth: true }),
+        graphqlRequest<{ myJoinRequests: DashboardJoinRequest[] }>(
+          `query GetMyJoinRequests($status: JoinRequestStatus) {
+            myJoinRequests(status: $status) {
+              id
+              status
+              message
+              expiresAt
+              createdAt
+              team {
+                id
+                name
+              }
+            }
+          }`,
+          { status: "ACCEPTED_PENDING_CONFIRMATION" },
+          { auth: true }
+        ),
+        graphqlRequest<{ projects: Project[] }>(
+          `query GetProjectsWithApplications {
+            projects {
+              id
+              title
+              summary
+              description
+              status
+              lifecycleState
+              owner {
+                id
+                fullName
+                username
+              }
+              applications {
+                id
+                status
+                message
+                answers
+                reviewMessage
+                offerMessage
+                expiresAt
+                teamConfirmedAt
+                ownerConfirmedAt
+                withdrawnAt
+                createdAt
+                team {
+                  id
+                  name
+                }
+              }
+            }
+          }`,
+          {},
+          { auth: true }
+        )
+      ]);
 
       const primaryTeam = dashboardResult.dashboardContext.myTeams[0] || null;
       const primaryProject = dashboardResult.dashboardContext.myProjects[0] || null;
@@ -99,62 +154,7 @@ export default function DashboardPage() {
       setDeadline(dashboardResult.dashboardContext.universalDeadline);
       setNotifs(dashboardResult.myNotifications.slice(0, 3));
 
-      const requestsResult = await graphqlRequest<{ myJoinRequests: DashboardJoinRequest[] }>(
-        `query GetMyJoinRequests($status: JoinRequestStatus) {
-          myJoinRequests(status: $status) {
-            id
-            status
-            message
-            expiresAt
-            createdAt
-            team {
-              id
-              name
-            }
-          }
-        }`,
-        { status: "ACCEPTED_PENDING_CONFIRMATION" },
-        { auth: true }
-      );
       setMyRequests(requestsResult.myJoinRequests || []);
-
-      // Fetch all projects to filter team's applications
-      const projectsRes = await graphqlRequest<{ projects: Project[] }>(
-        `query GetProjectsWithApplications {
-          projects {
-            id
-            title
-            summary
-            description
-            status
-            lifecycleState
-            owner {
-              id
-              fullName
-              username
-            }
-            applications {
-              id
-              status
-              message
-              answers
-              reviewMessage
-              offerMessage
-              expiresAt
-              teamConfirmedAt
-              ownerConfirmedAt
-              withdrawnAt
-              createdAt
-              team {
-                id
-                name
-              }
-            }
-          }
-        }`,
-        {},
-        { auth: true }
-      );
 
       if (primaryTeam && projectsRes.projects) {
         const filteredApps: ProjectApplication[] = [];
