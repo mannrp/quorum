@@ -21,6 +21,11 @@ import (
 	"github.com/local/quorum/apps/api/internal/storage"
 )
 
+const (
+	defaultListLimit         = 50
+	defaultConversationLimit = 100
+)
+
 // BootstrapProfile is the resolver for the bootstrapProfile field.
 func (r *mutationResolver) BootstrapProfile(ctx context.Context, input model.BootstrapProfileInput) (*model.User, error) {
 	return r.UpsertMyProfile(ctx, model.UpsertMyProfileInput{
@@ -1575,7 +1580,7 @@ func (r *queryResolver) DashboardContext(ctx context.Context) (*model.DashboardC
 		return nil, err
 	}
 	deadline, _ := r.UniversalDeadline(ctx)
-	isAdmin, _ := r.Queries.IsAdmin(ctx, current.ID)
+	isAdmin, _ := r.cachedIsAdmin(ctx, current.ID)
 	return &model.DashboardContext{
 		MyTeams: teams, MyProjects: projects, MyInvitations: invitations,
 		UnreadMessages: int(unreadMessages), UnreadNotifications: int(unreadNotifications),
@@ -1600,6 +1605,9 @@ func (r *queryResolver) Users(ctx context.Context, discipline *string, tag *stri
 	users, err := r.Queries.ListUsers(ctx, db.ListUsersParams{Discipline: text(discipline), Tag: text(tag), Search: text(search)})
 	if err != nil {
 		return nil, err
+	}
+	if len(users) > defaultListLimit {
+		users = users[:defaultListLimit]
 	}
 	out := make([]*model.User, 0, len(users))
 	for _, user := range users {
@@ -1638,6 +1646,9 @@ func (r *queryResolver) Teams(ctx context.Context, discipline *string, hasProjec
 	})
 	if err != nil {
 		return nil, err
+	}
+	if len(teams) > defaultListLimit {
+		teams = teams[:defaultListLimit]
 	}
 	out := make([]*model.Team, 0, len(teams))
 	for _, team := range teams {
@@ -1680,6 +1691,9 @@ func (r *queryResolver) Projects(ctx context.Context, discipline *string, status
 	if err != nil {
 		return nil, err
 	}
+	if len(projects) > defaultListLimit {
+		projects = projects[:defaultListLimit]
+	}
 	out := make([]*model.Project, 0, len(projects))
 	for _, project := range projects {
 		mapped, err := r.project(ctx, project)
@@ -1705,6 +1719,9 @@ func (r *queryResolver) MyMessages(ctx context.Context, withUser string) ([]*mod
 	if err != nil {
 		return nil, err
 	}
+	if len(messages) > defaultConversationLimit {
+		messages = messages[len(messages)-defaultConversationLimit:]
+	}
 	out := make([]*model.Message, 0, len(messages))
 	for _, message := range messages {
 		mapped, err := r.message(ctx, message)
@@ -1725,6 +1742,9 @@ func (r *queryResolver) MyInbox(ctx context.Context) ([]*model.User, error) {
 	users, err := r.Queries.ListInboxUsers(ctx, current.ID)
 	if err != nil {
 		return nil, err
+	}
+	if len(users) > defaultListLimit {
+		users = users[:defaultListLimit]
 	}
 	out := make([]*model.User, 0, len(users))
 	for _, user := range users {
@@ -1747,6 +1767,9 @@ func (r *queryResolver) MyNotifications(ctx context.Context) ([]*model.Notificat
 	if err != nil {
 		return nil, err
 	}
+	if len(notifications) > defaultListLimit {
+		notifications = notifications[:defaultListLimit]
+	}
 	out := make([]*model.Notification, 0, len(notifications))
 	for _, notification := range notifications {
 		out = append(out, notificationModel(notification))
@@ -1763,6 +1786,9 @@ func (r *queryResolver) MyTeamInvitations(ctx context.Context) ([]*model.TeamInv
 	rows, err := r.Queries.ListTeamInvitationsForUser(ctx, current.ID)
 	if err != nil {
 		return nil, err
+	}
+	if len(rows) > defaultListLimit {
+		rows = rows[:defaultListLimit]
 	}
 	out := make([]*model.TeamInvitation, 0, len(rows))
 	for _, row := range rows {
@@ -1792,6 +1818,9 @@ func (r *queryResolver) MyJoinRequests(ctx context.Context, status *model.JoinRe
 	rows, err := r.Queries.ListJoinRequestsForUser(ctx, db.ListJoinRequestsForUserParams{UserID: current.ID, Status: text(statusText)})
 	if err != nil {
 		return nil, err
+	}
+	if len(rows) > defaultListLimit {
+		rows = rows[:defaultListLimit]
 	}
 	out := make([]*model.TeamJoinRequest, 0, len(rows))
 	for _, row := range rows {
@@ -1824,6 +1853,9 @@ func (r *queryResolver) TeamJoinRequests(ctx context.Context, teamID string, sta
 	rows, err := r.Queries.ListJoinRequestsForTeam(ctx, db.ListJoinRequestsForTeamParams{TeamID: tid, Status: text(statusText)})
 	if err != nil {
 		return nil, err
+	}
+	if len(rows) > defaultListLimit {
+		rows = rows[:defaultListLimit]
 	}
 	out := make([]*model.TeamJoinRequest, 0, len(rows))
 	for _, row := range rows {
