@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql"
 	pgx "github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/local/quorum/apps/api/internal/auth"
@@ -1543,53 +1544,74 @@ func (r *queryResolver) DashboardContext(ctx context.Context) (*model.DashboardC
 	if err != nil {
 		return nil, err
 	}
-	teamRows, err := r.Queries.ListTeamsForUser(ctx, current.ID)
-	if err != nil {
-		return nil, err
-	}
-	teams := make([]*model.Team, 0, len(teamRows))
-	for _, team := range teamRows {
-		mapped, err := r.teamWithOptions(ctx, team, teamHydrationOptions{
-			includeCreatedBy:   true,
-			includeMembers:     true,
-			includeProject:     true,
-			includePermissions: true,
-			includeMemberTeam:  true,
-			creatorTags:        false,
-		})
+	teams := make([]*model.Team, 0)
+	if graphql.FieldRequested(ctx, "myTeams") {
+		teamRows, err := r.Queries.ListTeamsForUser(ctx, current.ID)
 		if err != nil {
 			return nil, err
 		}
-		teams = append(teams, mapped)
+		teams = make([]*model.Team, 0, len(teamRows))
+		for _, team := range teamRows {
+			mapped, err := r.teamWithOptions(ctx, team, teamHydrationOptions{
+				includeCreatedBy:   true,
+				includeMembers:     true,
+				includeProject:     true,
+				includePermissions: true,
+				includeMemberTeam:  true,
+				creatorTags:        false,
+			})
+			if err != nil {
+				return nil, err
+			}
+			teams = append(teams, mapped)
+		}
 	}
-	projectRows, err := r.Queries.ListProjectsForOwner(ctx, current.ID)
-	if err != nil {
-		return nil, err
-	}
-	projects := make([]*model.Project, 0, len(projectRows))
-	for _, project := range projectRows {
-		mapped, err := r.projectWithOptions(ctx, project, projectHydrationOptions{
-			includeApplications: true,
-		})
+	projects := make([]*model.Project, 0)
+	if graphql.FieldRequested(ctx, "myProjects") {
+		projectRows, err := r.Queries.ListProjectsForOwner(ctx, current.ID)
 		if err != nil {
 			return nil, err
 		}
-		projects = append(projects, mapped)
+		projects = make([]*model.Project, 0, len(projectRows))
+		for _, project := range projectRows {
+			mapped, err := r.projectWithOptions(ctx, project, projectHydrationOptions{
+				includeApplications: true,
+			})
+			if err != nil {
+				return nil, err
+			}
+			projects = append(projects, mapped)
+		}
 	}
-	invitations, err := r.MyTeamInvitations(ctx)
-	if err != nil {
-		return nil, err
+	invitations := make([]*model.TeamInvitation, 0)
+	if graphql.FieldRequested(ctx, "myInvitations") {
+		invitations, err = r.MyTeamInvitations(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
-	unreadMessages, err := r.Queries.CountUnreadMessages(ctx, current.ID)
-	if err != nil {
-		return nil, err
+	var unreadMessages int32
+	if graphql.FieldRequested(ctx, "unreadMessages") {
+		unreadMessages, err = r.Queries.CountUnreadMessages(ctx, current.ID)
+		if err != nil {
+			return nil, err
+		}
 	}
-	unreadNotifications, err := r.Queries.CountUnreadNotifications(ctx, current.ID)
-	if err != nil {
-		return nil, err
+	var unreadNotifications int32
+	if graphql.FieldRequested(ctx, "unreadNotifications") {
+		unreadNotifications, err = r.Queries.CountUnreadNotifications(ctx, current.ID)
+		if err != nil {
+			return nil, err
+		}
 	}
-	deadline, _ := r.UniversalDeadline(ctx)
-	isAdmin, _ := r.cachedIsAdmin(ctx, current.ID)
+	var deadline *model.Deadline
+	if graphql.FieldRequested(ctx, "universalDeadline") {
+		deadline, _ = r.UniversalDeadline(ctx)
+	}
+	isAdmin := false
+	if graphql.FieldRequested(ctx, "isAdmin") {
+		isAdmin, _ = r.cachedIsAdmin(ctx, current.ID)
+	}
 	return &model.DashboardContext{
 		MyTeams: teams, MyProjects: projects, MyInvitations: invitations,
 		UnreadMessages: int(unreadMessages), UnreadNotifications: int(unreadNotifications),
