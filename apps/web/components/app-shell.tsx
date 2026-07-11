@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useState, useEffect, useCallback } from "react";
 import { graphqlRequest, userFacingError } from "@/lib/graphql";
 import { signOutOfNeonAuth } from "@/lib/neon-auth";
-import { DEMO_PERSONAS, DemoPersona, demoModeEnabled, demoResetEnabled } from "@/lib/demo";
+import { DEMO_PERSONAS, DemoPersona, demoModeEnabled, demoPersonaFromAuthUserId, demoResetEnabled } from "@/lib/demo";
 import { AUTH_STATE_QUERY, DASHBOARD_CONTEXT_QUERY } from "@/lib/queries";
 import type { AuthState, User } from "@/types/domain";
 
@@ -145,13 +145,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         { name: "Teams", href: "/teams" },
         { name: "Projects", href: "/projects" },
       ];
-  const activeDemoPersona = me?.authUserId?.replace("demo_", "").replace("_lead", "") === "student"
-    ? "student"
-    : me?.authUserId === "demo_project_owner"
-      ? "owner"
-      : me?.authUserId === "demo_admin_professor"
-        ? "admin"
-        : null;
+  const activeDemoPersona = demoPersonaFromAuthUserId(me?.authUserId);
 
   return (
     <div className="min-h-screen pb-12 transition-colors duration-150">

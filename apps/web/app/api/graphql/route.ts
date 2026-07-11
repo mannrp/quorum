@@ -43,7 +43,7 @@ export async function POST(request: Request) {
   if (token) {
     headers.authorization = `Bearer ${token}`;
   }
-  if (!token && isDemoPersona(demoPersona)) {
+  if (isDemoPersona(demoPersona)) {
     headers["x-quorum-demo-persona"] = demoPersona;
   }
 

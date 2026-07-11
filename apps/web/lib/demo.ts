@@ -42,3 +42,16 @@ export function demoResetEnabled() {
 export function isDemoPersona(value: string | undefined | null): value is DemoPersona {
   return value === "student" || value === "owner" || value === "admin";
 }
+
+export function demoPersonaFromAuthUserId(authUserId: string | undefined | null): DemoPersona | null {
+  switch (authUserId) {
+    case "demo_student_lead":
+      return "student";
+    case "demo_project_owner":
+      return "owner";
+    case "demo_admin_professor":
+      return "admin";
+    default:
+      return null;
+  }
+}

@@ -1,0 +1,148 @@
+-- Legacy sample rows from 000002 were useful locally, but production branches
+-- should start clean. Demo data is now created only by cmd/demo-seed.
+WITH legacy_users(id) AS (
+  VALUES
+    ('00000000-0000-0000-0000-000000000001'::uuid),
+    ('00000000-0000-0000-0000-000000000002'::uuid),
+    ('00000000-0000-0000-0000-000000000003'::uuid)
+),
+legacy_teams(id) AS (
+  VALUES
+    ('20000000-0000-0000-0000-000000000001'::uuid),
+    ('20000000-0000-0000-0000-000000000002'::uuid)
+),
+legacy_projects(id) AS (
+  VALUES
+    ('30000000-0000-0000-0000-000000000001'::uuid),
+    ('30000000-0000-0000-0000-000000000002'::uuid)
+)
+DELETE FROM notifications
+WHERE user_id IN (SELECT id FROM legacy_users);
+
+WITH legacy_users(id) AS (
+  VALUES
+    ('00000000-0000-0000-0000-000000000001'::uuid),
+    ('00000000-0000-0000-0000-000000000002'::uuid),
+    ('00000000-0000-0000-0000-000000000003'::uuid)
+)
+DELETE FROM messages
+WHERE sender_id IN (SELECT id FROM legacy_users)
+   OR receiver_id IN (SELECT id FROM legacy_users);
+
+WITH legacy_users(id) AS (
+  VALUES
+    ('00000000-0000-0000-0000-000000000001'::uuid),
+    ('00000000-0000-0000-0000-000000000002'::uuid),
+    ('00000000-0000-0000-0000-000000000003'::uuid)
+),
+legacy_teams(id) AS (
+  VALUES
+    ('20000000-0000-0000-0000-000000000001'::uuid),
+    ('20000000-0000-0000-0000-000000000002'::uuid)
+),
+legacy_projects(id) AS (
+  VALUES
+    ('30000000-0000-0000-0000-000000000001'::uuid),
+    ('30000000-0000-0000-0000-000000000002'::uuid)
+)
+DELETE FROM project_applications
+WHERE project_id IN (SELECT id FROM legacy_projects)
+   OR team_id IN (SELECT id FROM legacy_teams)
+   OR applicant_id IN (SELECT id FROM legacy_users);
+
+WITH legacy_users(id) AS (
+  VALUES
+    ('00000000-0000-0000-0000-000000000001'::uuid),
+    ('00000000-0000-0000-0000-000000000002'::uuid),
+    ('00000000-0000-0000-0000-000000000003'::uuid)
+),
+legacy_teams(id) AS (
+  VALUES
+    ('20000000-0000-0000-0000-000000000001'::uuid),
+    ('20000000-0000-0000-0000-000000000002'::uuid)
+)
+DELETE FROM team_join_requests
+WHERE team_id IN (SELECT id FROM legacy_teams)
+   OR user_id IN (SELECT id FROM legacy_users);
+
+WITH legacy_users(id) AS (
+  VALUES
+    ('00000000-0000-0000-0000-000000000001'::uuid),
+    ('00000000-0000-0000-0000-000000000002'::uuid),
+    ('00000000-0000-0000-0000-000000000003'::uuid)
+),
+legacy_teams(id) AS (
+  VALUES
+    ('20000000-0000-0000-0000-000000000001'::uuid),
+    ('20000000-0000-0000-0000-000000000002'::uuid)
+)
+DELETE FROM team_invitations
+WHERE team_id IN (SELECT id FROM legacy_teams)
+   OR invited_user_id IN (SELECT id FROM legacy_users)
+   OR invited_by IN (SELECT id FROM legacy_users);
+
+UPDATE teams
+SET project_id = NULL
+WHERE id IN (
+  '20000000-0000-0000-0000-000000000001'::uuid,
+  '20000000-0000-0000-0000-000000000002'::uuid
+)
+   OR project_id IN (
+  '30000000-0000-0000-0000-000000000001'::uuid,
+  '30000000-0000-0000-0000-000000000002'::uuid
+);
+
+UPDATE projects
+SET team_id = NULL
+WHERE id IN (
+  '30000000-0000-0000-0000-000000000001'::uuid,
+  '30000000-0000-0000-0000-000000000002'::uuid
+)
+   OR team_id IN (
+  '20000000-0000-0000-0000-000000000001'::uuid,
+  '20000000-0000-0000-0000-000000000002'::uuid
+);
+
+DELETE FROM projects
+WHERE id IN (
+  '30000000-0000-0000-0000-000000000001'::uuid,
+  '30000000-0000-0000-0000-000000000002'::uuid
+);
+
+DELETE FROM team_memberships
+WHERE team_id IN (
+  '20000000-0000-0000-0000-000000000001'::uuid,
+  '20000000-0000-0000-0000-000000000002'::uuid
+)
+   OR user_id IN (
+  '00000000-0000-0000-0000-000000000001'::uuid,
+  '00000000-0000-0000-0000-000000000002'::uuid,
+  '00000000-0000-0000-0000-000000000003'::uuid
+);
+
+DELETE FROM teams
+WHERE id IN (
+  '20000000-0000-0000-0000-000000000001'::uuid,
+  '20000000-0000-0000-0000-000000000002'::uuid
+);
+
+DELETE FROM admin_users
+WHERE user_id IN (
+  '00000000-0000-0000-0000-000000000001'::uuid,
+  '00000000-0000-0000-0000-000000000002'::uuid,
+  '00000000-0000-0000-0000-000000000003'::uuid
+);
+
+DELETE FROM user_tags
+WHERE user_id IN (
+  '00000000-0000-0000-0000-000000000001'::uuid,
+  '00000000-0000-0000-0000-000000000002'::uuid,
+  '00000000-0000-0000-0000-000000000003'::uuid
+);
+
+DELETE FROM users
+WHERE id IN (
+  '00000000-0000-0000-0000-000000000001'::uuid,
+  '00000000-0000-0000-0000-000000000002'::uuid,
+  '00000000-0000-0000-0000-000000000003'::uuid
+);

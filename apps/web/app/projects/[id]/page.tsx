@@ -30,22 +30,18 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     const fetchSessionData = async () => {
       try {
-        const meRes = await graphqlRequest<{ me: User | null }>(
-          `query meProjectDetail { me { id username fullName } }`,
+        const sessionRes = await graphqlRequest<{ me: User | null; teams: Team[] }>(
+          `query projectDetailSession {
+            me { id username fullName }
+            teams { id name maxSize createdBy { id } members { user { id } role } }
+          }`,
           {},
           { auth: true }
         );
-        if (meRes.me) {
-          setMe(meRes.me);
-          // Check if associated with a team
-          const teamRes = await graphqlRequest<{ teams: Team[] }>(
-            `query myTeamsProject { teams { id name maxSize createdBy { id } members { user { id } role } } }`,
-            {},
-            { auth: true }
-          );
-          
-          const userTeam = teamRes.teams.find((t) =>
-            t.members.some((m) => m.user.id === meRes.me?.id)
+        if (sessionRes.me) {
+          setMe(sessionRes.me);
+          const userTeam = sessionRes.teams.find((t) =>
+            t.members.some((m) => m.user.id === sessionRes.me?.id)
           );
           if (userTeam) setMyTeam(userTeam);
         }
