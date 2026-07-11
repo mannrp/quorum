@@ -208,11 +208,11 @@ func (r *Resolver) project(ctx context.Context, project db.Project) (*model.Proj
 
 func projectHydrationOptionsFromContext(ctx context.Context) projectHydrationOptions {
 	return projectHydrationOptions{
-		includeTeam:             graphql.FieldRequested(ctx, "team"),
-		includeApplications:     graphql.FieldRequested(ctx, "applications"),
-		includeApplicationTeam:  graphql.FieldRequested(ctx, "applications"),
-		applicationFullTeam:     graphql.FieldRequested(ctx, "applications.team.members") || graphql.FieldRequested(ctx, "applications.team.project"),
-		includePermissions:      graphql.FieldRequested(ctx, "permissions"),
+		includeTeam:            graphql.FieldRequested(ctx, "team"),
+		includeApplications:    graphql.FieldRequested(ctx, "applications"),
+		includeApplicationTeam: graphql.FieldRequested(ctx, "applications"),
+		applicationFullTeam:    graphql.FieldRequested(ctx, "applications.team.members") || graphql.FieldRequested(ctx, "applications.team.project"),
+		includePermissions:     graphql.FieldRequested(ctx, "permissions"),
 	}
 }
 
