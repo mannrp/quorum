@@ -10,7 +10,8 @@ WHERE (sqlc.narg('discipline')::text IS NULL OR discipline = sqlc.narg('discipli
   AND (sqlc.narg('has_project')::boolean IS NULL OR (project_id IS NOT NULL) = sqlc.narg('has_project')::boolean)
   AND (sqlc.narg('is_complete')::boolean IS NULL OR is_complete = sqlc.narg('is_complete')::boolean)
   AND (sqlc.narg('search')::text IS NULL OR name ILIKE '%' || sqlc.narg('search')::text || '%')
-ORDER BY created_at DESC;
+ORDER BY created_at DESC
+LIMIT 50;
 
 -- name: ListTeamsForUser :many
 SELECT DISTINCT t.*
@@ -18,7 +19,8 @@ FROM teams t
 JOIN team_memberships tm ON tm.team_id = t.id
 WHERE tm.user_id = $1
   AND t.archived_at IS NULL
-ORDER BY t.created_at DESC;
+ORDER BY t.created_at DESC
+LIMIT 50;
 
 -- name: ListTeamMembers :many
 SELECT tm.*, u.username, u.full_name, u.discipline, u.university

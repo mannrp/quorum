@@ -8,20 +8,23 @@ WHERE (sqlc.narg('discipline')::text IS NULL OR sqlc.narg('discipline')::text = 
   AND archived_at IS NULL
   AND (sqlc.narg('status')::text IS NULL OR lifecycle_state = sqlc.narg('status')::text OR status = sqlc.narg('status')::text)
   AND (sqlc.narg('search')::text IS NULL OR title ILIKE '%' || sqlc.narg('search')::text || '%')
-ORDER BY created_at DESC;
+ORDER BY created_at DESC
+LIMIT 50;
 
 -- name: ListProjectsForOwner :many
 SELECT *
 FROM projects
 WHERE owner_id = $1
   AND archived_at IS NULL
-ORDER BY created_at DESC;
+ORDER BY created_at DESC
+LIMIT 50;
 
 -- name: ListProjectApplications :many
 SELECT *
 FROM project_applications
 WHERE project_id = $1
-ORDER BY created_at DESC;
+ORDER BY created_at DESC
+LIMIT 50;
 
 -- name: GetProjectApplication :one
 SELECT *

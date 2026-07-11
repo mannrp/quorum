@@ -5,7 +5,7 @@ import { ReactNode, useState, useEffect, useCallback } from "react";
 import { graphqlRequest, userFacingError } from "@/lib/graphql";
 import { signOutOfNeonAuth } from "@/lib/neon-auth";
 import { DEMO_PERSONAS, DemoPersona, demoModeEnabled, demoPersonaFromAuthUserId, demoResetEnabled } from "@/lib/demo";
-import { AUTH_STATE_QUERY, DASHBOARD_CONTEXT_QUERY } from "@/lib/queries";
+import { SHELL_AUTH_QUERY, SHELL_COUNTS_QUERY } from "@/lib/queries";
 import type { AuthState, User } from "@/types/domain";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -41,7 +41,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const fetchSession = useCallback(async () => {
     try {
       setSessionError(null);
-      const res = await graphqlRequest<{ authState: AuthState }>(AUTH_STATE_QUERY);
+      const res = await graphqlRequest<{ authState: AuthState }>(SHELL_AUTH_QUERY);
       if (res.authState.profile) {
         setMe(res.authState.profile);
       } else {
@@ -52,13 +52,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       }
 
       if (res.authState.profileComplete) {
-        const dashboardRes = await graphqlRequest<{
+        const counts = await graphqlRequest<{
           dashboardContext: { unreadMessages: number; unreadNotifications: number; isAdmin: boolean };
-        }>(DASHBOARD_CONTEXT_QUERY, {}, { auth: true });
+        }>(SHELL_COUNTS_QUERY, {}, { auth: true });
 
-        setUnreadNotif(dashboardRes.dashboardContext.unreadNotifications);
-        setUnreadMsg(dashboardRes.dashboardContext.unreadMessages);
-        setAdminAccess(dashboardRes.dashboardContext.isAdmin);
+        setUnreadNotif(counts.dashboardContext.unreadNotifications);
+        setUnreadMsg(counts.dashboardContext.unreadMessages);
+        setAdminAccess(counts.dashboardContext.isAdmin);
       } else {
         setAdminAccess(false);
         setUnreadNotif(0);
@@ -75,10 +75,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Listen to path changes or auth token updates to refresh session
+  // Load shell state once; mutations that change auth/persona explicitly refresh it.
   useEffect(() => {
     void fetchSession();
-  }, [pathname, fetchSession]);
+  }, [fetchSession]);
 
   const handleLogout = async () => {
     await signOutOfNeonAuth().catch(() => undefined);

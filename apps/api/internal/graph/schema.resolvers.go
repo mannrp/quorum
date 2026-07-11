@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql"
 	pgx "github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/local/quorum/apps/api/internal/auth"
@@ -19,6 +20,11 @@ import (
 	"github.com/local/quorum/apps/api/internal/graph/generated"
 	"github.com/local/quorum/apps/api/internal/graph/model"
 	"github.com/local/quorum/apps/api/internal/storage"
+)
+
+const (
+	defaultListLimit         = 50
+	defaultConversationLimit = 100
 )
 
 // BootstrapProfile is the resolver for the bootstrapProfile field.
@@ -844,7 +850,7 @@ func (r *mutationResolver) CreateProject(ctx context.Context, input model.Create
 	}); err != nil {
 		return nil, err
 	}
-	return r.project(ctx, project)
+	return r.projectWithOptions(ctx, project, projectHydrationOptionsFromContext(ctx))
 }
 
 // UpdateProject is the resolver for the updateProject field.
@@ -1511,7 +1517,13 @@ func (r *queryResolver) AuthState(ctx context.Context) (*model.AuthState, error)
 		}
 		return &model.AuthState{Authenticated: true}, nil
 	}
-	profile, err := r.user(ctx, current)
+	var profile *model.User
+	var err error
+	if graphql.FieldRequested(ctx, "profile.tags") {
+		profile, err = r.user(ctx, current)
+	} else {
+		profile, err = r.shallowUser(ctx, current)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -1538,44 +1550,74 @@ func (r *queryResolver) DashboardContext(ctx context.Context) (*model.DashboardC
 	if err != nil {
 		return nil, err
 	}
-	teamRows, err := r.Queries.ListTeamsForUser(ctx, current.ID)
-	if err != nil {
-		return nil, err
-	}
-	teams := make([]*model.Team, 0, len(teamRows))
-	for _, team := range teamRows {
-		mapped, err := r.team(ctx, team)
+	teams := make([]*model.Team, 0)
+	if graphql.FieldRequested(ctx, "myTeams") {
+		teamRows, err := r.Queries.ListTeamsForUser(ctx, current.ID)
 		if err != nil {
 			return nil, err
 		}
-		teams = append(teams, mapped)
+		teams = make([]*model.Team, 0, len(teamRows))
+		for _, team := range teamRows {
+			mapped, err := r.teamWithOptions(ctx, team, teamHydrationOptions{
+				includeCreatedBy:   true,
+				includeMembers:     true,
+				includeProject:     true,
+				includePermissions: true,
+				includeMemberTeam:  true,
+				creatorTags:        false,
+			})
+			if err != nil {
+				return nil, err
+			}
+			teams = append(teams, mapped)
+		}
 	}
-	projectRows, err := r.Queries.ListProjectsForOwner(ctx, current.ID)
-	if err != nil {
-		return nil, err
-	}
-	projects := make([]*model.Project, 0, len(projectRows))
-	for _, project := range projectRows {
-		mapped, err := r.project(ctx, project)
+	projects := make([]*model.Project, 0)
+	if graphql.FieldRequested(ctx, "myProjects") {
+		projectRows, err := r.Queries.ListProjectsForOwner(ctx, current.ID)
 		if err != nil {
 			return nil, err
 		}
-		projects = append(projects, mapped)
+		projects = make([]*model.Project, 0, len(projectRows))
+		for _, project := range projectRows {
+			mapped, err := r.projectWithOptions(ctx, project, projectHydrationOptions{
+				includeApplications: true,
+			})
+			if err != nil {
+				return nil, err
+			}
+			projects = append(projects, mapped)
+		}
 	}
-	invitations, err := r.MyTeamInvitations(ctx)
-	if err != nil {
-		return nil, err
+	invitations := make([]*model.TeamInvitation, 0)
+	if graphql.FieldRequested(ctx, "myInvitations") {
+		invitations, err = r.MyTeamInvitations(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
-	unreadMessages, err := r.Queries.CountUnreadMessages(ctx, current.ID)
-	if err != nil {
-		return nil, err
+	var unreadMessages int32
+	if graphql.FieldRequested(ctx, "unreadMessages") {
+		unreadMessages, err = r.Queries.CountUnreadMessages(ctx, current.ID)
+		if err != nil {
+			return nil, err
+		}
 	}
-	unreadNotifications, err := r.Queries.CountUnreadNotifications(ctx, current.ID)
-	if err != nil {
-		return nil, err
+	var unreadNotifications int32
+	if graphql.FieldRequested(ctx, "unreadNotifications") {
+		unreadNotifications, err = r.Queries.CountUnreadNotifications(ctx, current.ID)
+		if err != nil {
+			return nil, err
+		}
 	}
-	deadline, _ := r.UniversalDeadline(ctx)
-	isAdmin, _ := r.Queries.IsAdmin(ctx, current.ID)
+	var deadline *model.Deadline
+	if graphql.FieldRequested(ctx, "universalDeadline") {
+		deadline, _ = r.UniversalDeadline(ctx)
+	}
+	isAdmin := false
+	if graphql.FieldRequested(ctx, "isAdmin") {
+		isAdmin, _ = r.cachedIsAdmin(ctx, current.ID)
+	}
 	return &model.DashboardContext{
 		MyTeams: teams, MyProjects: projects, MyInvitations: invitations,
 		UnreadMessages: int(unreadMessages), UnreadNotifications: int(unreadNotifications),
@@ -1600,6 +1642,9 @@ func (r *queryResolver) Users(ctx context.Context, discipline *string, tag *stri
 	users, err := r.Queries.ListUsers(ctx, db.ListUsersParams{Discipline: text(discipline), Tag: text(tag), Search: text(search)})
 	if err != nil {
 		return nil, err
+	}
+	if len(users) > defaultListLimit {
+		users = users[:defaultListLimit]
 	}
 	out := make([]*model.User, 0, len(users))
 	for _, user := range users {
@@ -1638,6 +1683,9 @@ func (r *queryResolver) Teams(ctx context.Context, discipline *string, hasProjec
 	})
 	if err != nil {
 		return nil, err
+	}
+	if len(teams) > defaultListLimit {
+		teams = teams[:defaultListLimit]
 	}
 	out := make([]*model.Team, 0, len(teams))
 	for _, team := range teams {
@@ -1680,9 +1728,12 @@ func (r *queryResolver) Projects(ctx context.Context, discipline *string, status
 	if err != nil {
 		return nil, err
 	}
+	if len(projects) > defaultListLimit {
+		projects = projects[:defaultListLimit]
+	}
 	out := make([]*model.Project, 0, len(projects))
 	for _, project := range projects {
-		mapped, err := r.project(ctx, project)
+		mapped, err := r.projectWithOptions(ctx, project, projectHydrationOptionsFromContext(ctx))
 		if err != nil {
 			return nil, err
 		}
@@ -1705,6 +1756,9 @@ func (r *queryResolver) MyMessages(ctx context.Context, withUser string) ([]*mod
 	if err != nil {
 		return nil, err
 	}
+	if len(messages) > defaultConversationLimit {
+		messages = messages[len(messages)-defaultConversationLimit:]
+	}
 	out := make([]*model.Message, 0, len(messages))
 	for _, message := range messages {
 		mapped, err := r.message(ctx, message)
@@ -1725,6 +1779,9 @@ func (r *queryResolver) MyInbox(ctx context.Context) ([]*model.User, error) {
 	users, err := r.Queries.ListInboxUsers(ctx, current.ID)
 	if err != nil {
 		return nil, err
+	}
+	if len(users) > defaultListLimit {
+		users = users[:defaultListLimit]
 	}
 	out := make([]*model.User, 0, len(users))
 	for _, user := range users {
@@ -1747,6 +1804,9 @@ func (r *queryResolver) MyNotifications(ctx context.Context) ([]*model.Notificat
 	if err != nil {
 		return nil, err
 	}
+	if len(notifications) > defaultListLimit {
+		notifications = notifications[:defaultListLimit]
+	}
 	out := make([]*model.Notification, 0, len(notifications))
 	for _, notification := range notifications {
 		out = append(out, notificationModel(notification))
@@ -1763,6 +1823,9 @@ func (r *queryResolver) MyTeamInvitations(ctx context.Context) ([]*model.TeamInv
 	rows, err := r.Queries.ListTeamInvitationsForUser(ctx, current.ID)
 	if err != nil {
 		return nil, err
+	}
+	if len(rows) > defaultListLimit {
+		rows = rows[:defaultListLimit]
 	}
 	out := make([]*model.TeamInvitation, 0, len(rows))
 	for _, row := range rows {
@@ -1792,6 +1855,9 @@ func (r *queryResolver) MyJoinRequests(ctx context.Context, status *model.JoinRe
 	rows, err := r.Queries.ListJoinRequestsForUser(ctx, db.ListJoinRequestsForUserParams{UserID: current.ID, Status: text(statusText)})
 	if err != nil {
 		return nil, err
+	}
+	if len(rows) > defaultListLimit {
+		rows = rows[:defaultListLimit]
 	}
 	out := make([]*model.TeamJoinRequest, 0, len(rows))
 	for _, row := range rows {
@@ -1824,6 +1890,9 @@ func (r *queryResolver) TeamJoinRequests(ctx context.Context, teamID string, sta
 	rows, err := r.Queries.ListJoinRequestsForTeam(ctx, db.ListJoinRequestsForTeamParams{TeamID: tid, Status: text(statusText)})
 	if err != nil {
 		return nil, err
+	}
+	if len(rows) > defaultListLimit {
+		rows = rows[:defaultListLimit]
 	}
 	out := make([]*model.TeamJoinRequest, 0, len(rows))
 	for _, row := range rows {

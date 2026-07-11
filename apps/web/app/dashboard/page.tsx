@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ConfirmDialog, Section, Status } from "@/components/ui";
 import { DeadlineDisplay } from "@/components/deadline-display";
 import { graphqlRequest, userFacingError } from "@/lib/graphql";
-import { AUTH_STATE_QUERY, DASHBOARD_CONTEXT_QUERY } from "@/lib/queries";
+import { DASHBOARD_AUTH_QUERY, DASHBOARD_CONTEXT_QUERY } from "@/lib/queries";
 import type { AuthState, User, Team, Project, ProjectApplication, Notification } from "@/types/domain";
 
 type DashboardInvitation = {
@@ -69,7 +69,7 @@ export default function DashboardPage() {
   const fetchDashboardData = async () => {
     try {
       setError(null);
-      const authResult = await graphqlRequest<{ authState: AuthState }>(AUTH_STATE_QUERY, {}, { auth: true });
+      const authResult = await graphqlRequest<{ authState: AuthState }>(DASHBOARD_AUTH_QUERY, {}, { auth: true });
       if (!authResult.authState.authenticated) {
         router.push("/auth/login");
         return;
@@ -112,10 +112,7 @@ export default function DashboardPage() {
             projects {
               id
               title
-              summary
-              description
               status
-              lifecycleState
               owner {
                 id
                 fullName
@@ -124,19 +121,10 @@ export default function DashboardPage() {
               applications {
                 id
                 status
-                message
-                answers
-                reviewMessage
                 offerMessage
                 expiresAt
-                teamConfirmedAt
-                ownerConfirmedAt
-                withdrawnAt
                 createdAt
-                team {
-                  id
-                  name
-                }
+                team { id }
               }
             }
           }`,

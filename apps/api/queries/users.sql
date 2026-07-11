@@ -21,7 +21,8 @@ WHERE (sqlc.narg('discipline')::text IS NULL OR u.discipline = sqlc.narg('discip
     OR u.username ILIKE '%' || sqlc.narg('search')::text || '%'
     OR u.full_name ILIKE '%' || sqlc.narg('search')::text || '%'
   )
-ORDER BY u.full_name;
+ORDER BY u.full_name
+LIMIT 50;
 
 -- name: ListUserTags :many
 SELECT t.*
