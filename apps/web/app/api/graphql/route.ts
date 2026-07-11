@@ -25,12 +25,13 @@ async function currentNeonJwt() {
 
 export async function POST(request: Request) {
   const body = await request.text();
-  const authRequired = request.headers.get("x-quorum-auth-required") === "true";
+  const legacyAuthRequired = request.headers.get("x-quorum-auth-required") === "true";
+  const authMode = request.headers.get("x-quorum-auth-mode") || (legacyAuthRequired ? "required" : "none");
   const store = await cookies();
   const demoPersona = demoModeEnabled() ? store.get(DEMO_COOKIE_NAME)?.value : undefined;
-  const token = await currentNeonJwt();
+  const token = authMode === "none" ? "" : await currentNeonJwt();
 
-  if (authRequired && !token && !isDemoPersona(demoPersona)) {
+  if (authMode === "required" && !token && !isDemoPersona(demoPersona)) {
     return NextResponse.json(
       { errors: [{ message: "authentication required" }] },
       { status: 401 }

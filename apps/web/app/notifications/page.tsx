@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Section, Status } from "@/components/ui";
+import { Section, Status, LoadingSkeleton } from "@/components/ui";
 import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { NOTIFICATIONS_QUERY } from "@/lib/queries";
 import type { Notification } from "@/types/domain";
@@ -75,7 +75,7 @@ export default function NotificationsPage() {
         </div>
       </section>
 
-      {loading && <Section title="Loading"><p className="text-xs text-[var(--muted-app)] animate-pulse">Syncing notices...</p></Section>}
+      {loading && <Section title="Notifications"><LoadingSkeleton rows={4} /></Section>}
       {error && <Section title="GraphQL Error"><p className="text-xs font-semibold text-rose-500">{error}</p></Section>}
       {actionError && <Section title="Action Failed"><p className="text-xs font-semibold text-rose-500">{actionError}</p></Section>}
 

@@ -1,14 +1,14 @@
 "use client";
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
-import { ActionButton, Section, Status, Badge, Modal } from "@/components/ui";
+import { ActionButton, Section, Status, Badge, Modal, LoadingSkeleton } from "@/components/ui";
 import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { TEAM_QUERY } from "@/lib/queries";
 import type { Team, TeamRole, User } from "@/types/domain";
 
 export default function TeamDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, error, loading, reload } = useGraphQL<{ team: Team | null }>(TEAM_QUERY, { id });
+  const { data, error, loading, reload } = useGraphQL<{ team: Team | null }>(TEAM_QUERY, { id }, { auth: "optional" });
   
   const [me, setMe] = useState<User | null>(null);
   const [isJoinOpen, setIsJoinOpen] = useState(false);
@@ -74,8 +74,8 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   if (loading) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12">
-        <Section title="Loading">
-          <p className="text-xs text-[var(--muted-app)] animate-pulse">Syncing team registry...</p>
+        <Section title="Team">
+          <LoadingSkeleton rows={6} />
         </Section>
       </div>
     );

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Section, Status, Badge } from "@/components/ui";
+import { Section, Status, Badge, LoadingSkeleton } from "@/components/ui";
 import { useGraphQL } from "@/lib/graphql";
 import { PROJECTS_QUERY } from "@/lib/queries";
 import type { Project } from "@/types/domain";
@@ -12,7 +12,7 @@ export default function ProjectsPage() {
   const { data, error, loading } = useGraphQL<{ projects: Project[] }>(
     PROJECTS_QUERY,
     q.trim() ? { search: q.trim() } : {},
-    { debounceMs: 300 }
+    { debounceMs: q.trim() ? 250 : 0 }
   );
   const projects = data?.projects || [];
 
@@ -33,7 +33,7 @@ export default function ProjectsPage() {
         </div>
       </section>
 
-      {loading && <Section title="Loading"><p className="text-xs text-[var(--muted-app)] animate-pulse">Loading projects from GraphQL...</p></Section>}
+      {loading && <Section title="Projects"><LoadingSkeleton rows={5} /></Section>}
       {error && <Section title="GraphQL Error"><p className="text-xs font-semibold text-rose-500">{error}</p></Section>}
 
       <div className="stagger-in grid gap-5 md:grid-cols-2">

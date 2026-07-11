@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useState, useEffect, useCallback } from "react";
-import { graphqlRequest, userFacingError } from "@/lib/graphql";
+import { clearGraphQLCache, graphqlRequest, userFacingError } from "@/lib/graphql";
 import { signOutOfNeonAuth } from "@/lib/neon-auth";
 import { DEMO_PERSONAS, DemoPersona, demoModeEnabled, demoPersonaFromAuthUserId, demoResetEnabled } from "@/lib/demo";
 import { SHELL_AUTH_QUERY, SHELL_COUNTS_QUERY } from "@/lib/queries";
@@ -41,7 +41,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const fetchSession = useCallback(async () => {
     try {
       setSessionError(null);
-      const res = await graphqlRequest<{ authState: AuthState }>(SHELL_AUTH_QUERY);
+      const res = await graphqlRequest<{ authState: AuthState }>(SHELL_AUTH_QUERY, {}, { auth: "optional", cacheMs: 60_000 });
       if (res.authState.profile) {
         setMe(res.authState.profile);
       } else {
@@ -85,6 +85,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (demoEnabled) {
       await fetch("/api/demo/persona", { method: "DELETE" }).catch(() => undefined);
     }
+    clearGraphQLCache();
     setMe(null);
     setAdminAccess(false);
     router.push("/");
@@ -103,6 +104,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       if (!response.ok) {
         throw new Error(payload.error || "Could not switch demo persona.");
       }
+      clearGraphQLCache();
       router.push(payload.target || "/dashboard");
       router.refresh();
       await fetchSession();
@@ -121,6 +123,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       if (!response.ok) {
         throw new Error(await response.text());
       }
+      clearGraphQLCache();
       router.refresh();
       await fetchSession();
     } catch (err) {
@@ -192,7 +195,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </button>
 
             {loading ? (
-              <span className="text-[9px] font-mono text-stone-400 font-bold uppercase tracking-wider animate-pulse">Loading...</span>
+              <span className="skeleton-block h-7 w-24" role="status" aria-label="Loading account" />
             ) : me ? (
               <div className="flex items-center gap-2.5">
                 <Link href={`/profile/${me.username}`} className="flex items-center gap-2 px-2 py-1 border border-transparent hover:border-[var(--border-subtle)] bg-transparent transition">

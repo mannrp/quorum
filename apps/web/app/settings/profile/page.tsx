@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Section, Status, Combobox } from "@/components/ui";
+import { Section, Status, Combobox, LoadingSkeleton } from "@/components/ui";
 import { graphqlRequest, uploadToSignedPost, userFacingError } from "@/lib/graphql";
 import { DISCIPLINE_OPTIONS, RESUME_VISIBILITY_OPTIONS, SKILL_OPTIONS } from "@/lib/policy";
 import { ME_QUERY } from "@/lib/queries";
@@ -100,7 +100,7 @@ export default function ProfileSettingsPage() {
   };
 
   if (loading) {
-    return <Section title="Loading"><p className="text-xs text-stone-500 animate-pulse uppercase tracking-wider">Fetching settings console...</p></Section>;
+    return <Section title="Profile settings"><LoadingSkeleton rows={5} /></Section>;
   }
 
   return (

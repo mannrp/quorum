@@ -2,10 +2,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog, Section, Status } from "@/components/ui";
+import { ConfirmDialog, Section, Status, LoadingSkeleton } from "@/components/ui";
 import { DeadlineDisplay } from "@/components/deadline-display";
-import { graphqlRequest, userFacingError } from "@/lib/graphql";
-import { DASHBOARD_AUTH_QUERY, DASHBOARD_CONTEXT_QUERY } from "@/lib/queries";
+import { getCachedGraphQLData, graphqlRequest, userFacingError } from "@/lib/graphql";
+import { DASHBOARD_PAGE_QUERY } from "@/lib/queries";
 import type { AuthState, User, Team, Project, ProjectApplication, Notification } from "@/types/domain";
 
 type DashboardInvitation = {
@@ -37,6 +37,45 @@ type ConfirmAction = {
   onConfirm: () => Promise<void>;
 };
 
+type DashboardPageData = {
+  authState: AuthState;
+  dashboardContext: {
+    myTeams: Team[];
+    myProjects: Project[];
+    myInvitations: DashboardInvitation[];
+    universalDeadline: Deadline | null;
+  };
+  myNotifications: Notification[];
+  myJoinRequests: DashboardJoinRequest[];
+  projects: Project[];
+};
+
+function dashboardView(result: DashboardPageData) {
+  const team = result.dashboardContext.myTeams[0] || null;
+  const project = result.dashboardContext.myProjects[0] || null;
+  const teamApps: ProjectApplication[] = [];
+  if (team) {
+    for (const candidate of result.projects || []) {
+      for (const application of candidate.applications || []) {
+        if (application.team?.id === team.id) {
+          teamApps.push({ ...application, project: candidate });
+        }
+      }
+    }
+  }
+  return {
+    me: result.authState.profile || null,
+    team,
+    project,
+    applications: project?.applications || [],
+    teamApps,
+    notifs: result.myNotifications.slice(0, 3),
+    invitations: result.dashboardContext.myInvitations,
+    myRequests: result.myJoinRequests || [],
+    deadline: result.dashboardContext.universalDeadline,
+  };
+}
+
 function getRemainingTimeText(expiresAtStr: string): string {
   const expiresAt = new Date(expiresAtStr);
   const diffMs = expiresAt.getTime() - Date.now();
@@ -51,117 +90,57 @@ function getRemainingTimeText(expiresAtStr: string): string {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [me, setMe] = useState<User | null>(null);
-  const [team, setTeam] = useState<Team | null>(null);
-  const [project, setProject] = useState<Project | null>(null);
-  const [applications, setApplications] = useState<ProjectApplication[]>([]);
-  const [teamApps, setTeamApps] = useState<ProjectApplication[]>([]);
-  const [notifs, setNotifs] = useState<Notification[]>([]);
-  const [invitations, setInvitations] = useState<DashboardInvitation[]>([]);
-  const [myRequests, setMyRequests] = useState<DashboardJoinRequest[]>([]);
-  const [deadline, setDeadline] = useState<Deadline | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedView = (() => {
+    const cached = getCachedGraphQLData<DashboardPageData>(
+      DASHBOARD_PAGE_QUERY,
+      { requestStatus: "ACCEPTED_PENDING_CONFIRMATION" },
+      true
+    );
+    return cached ? dashboardView(cached) : null;
+  })();
+  const [me, setMe] = useState<User | null>(cachedView?.me || null);
+  const [team, setTeam] = useState<Team | null>(cachedView?.team || null);
+  const [project, setProject] = useState<Project | null>(cachedView?.project || null);
+  const [applications, setApplications] = useState<ProjectApplication[]>(cachedView?.applications || []);
+  const [teamApps, setTeamApps] = useState<ProjectApplication[]>(cachedView?.teamApps || []);
+  const [notifs, setNotifs] = useState<Notification[]>(cachedView?.notifs || []);
+  const [invitations, setInvitations] = useState<DashboardInvitation[]>(cachedView?.invitations || []);
+  const [myRequests, setMyRequests] = useState<DashboardJoinRequest[]>(cachedView?.myRequests || []);
+  const [deadline, setDeadline] = useState<Deadline | null>(cachedView?.deadline || null);
+  const [loading, setLoading] = useState(!cachedView);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [confirming, setConfirming] = useState(false);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (force = false) => {
     try {
       setError(null);
-      const authResult = await graphqlRequest<{ authState: AuthState }>(DASHBOARD_AUTH_QUERY, {}, { auth: true });
-      if (!authResult.authState.authenticated) {
+      const queryOptions = { auth: true, cacheMs: 60_000, force } as const;
+      const result = await graphqlRequest<DashboardPageData>(
+        DASHBOARD_PAGE_QUERY,
+        { requestStatus: "ACCEPTED_PENDING_CONFIRMATION" },
+        queryOptions
+      );
+
+      if (!result.authState.authenticated) {
         router.push("/auth/login");
         return;
       }
-      if (!authResult.authState.profile || !authResult.authState.profileComplete) {
+      if (!result.authState.profile || !result.authState.profileComplete) {
         router.push("/onboarding");
         return;
       }
-      setMe(authResult.authState.profile);
-
-      const [dashboardResult, requestsResult, projectsRes] = await Promise.all([
-        graphqlRequest<{
-        dashboardContext: {
-          myTeams: Team[];
-          myProjects: Project[];
-          myInvitations: DashboardInvitation[];
-          universalDeadline: Deadline | null;
-        };
-        myNotifications: Notification[];
-      }>(DASHBOARD_CONTEXT_QUERY, {}, { auth: true }),
-        graphqlRequest<{ myJoinRequests: DashboardJoinRequest[] }>(
-          `query GetMyJoinRequests($status: JoinRequestStatus) {
-            myJoinRequests(status: $status) {
-              id
-              status
-              message
-              expiresAt
-              createdAt
-              team {
-                id
-                name
-              }
-            }
-          }`,
-          { status: "ACCEPTED_PENDING_CONFIRMATION" },
-          { auth: true }
-        ),
-        graphqlRequest<{ projects: Project[] }>(
-          `query GetProjectsWithApplications {
-            projects {
-              id
-              title
-              status
-              owner {
-                id
-                fullName
-                username
-              }
-              applications {
-                id
-                status
-                offerMessage
-                expiresAt
-                createdAt
-                team { id }
-              }
-            }
-          }`,
-          {},
-          { auth: true }
-        )
-      ]);
-
-      const primaryTeam = dashboardResult.dashboardContext.myTeams[0] || null;
-      const primaryProject = dashboardResult.dashboardContext.myProjects[0] || null;
-      setTeam(primaryTeam);
-      setProject(primaryProject);
-      setApplications(primaryProject?.applications || []);
-      setInvitations(dashboardResult.dashboardContext.myInvitations);
-      setDeadline(dashboardResult.dashboardContext.universalDeadline);
-      setNotifs(dashboardResult.myNotifications.slice(0, 3));
-
-      setMyRequests(requestsResult.myJoinRequests || []);
-
-      if (primaryTeam && projectsRes.projects) {
-        const filteredApps: ProjectApplication[] = [];
-        for (const p of projectsRes.projects) {
-          if (p.applications) {
-            for (const app of p.applications) {
-              if (app.team && app.team.id === primaryTeam.id) {
-                filteredApps.push({
-                  ...app,
-                  project: p
-                });
-              }
-            }
-          }
-        }
-        setTeamApps(filteredApps);
-      } else {
-        setTeamApps([]);
-      }
+      const view = dashboardView(result);
+      setMe(view.me);
+      setTeam(view.team);
+      setProject(view.project);
+      setApplications(view.applications);
+      setInvitations(view.invitations);
+      setDeadline(view.deadline);
+      setNotifs(view.notifs);
+      setMyRequests(view.myRequests);
+      setTeamApps(view.teamApps);
 
     } catch (err) {
       setError(userFacingError(err));
@@ -208,7 +187,7 @@ export default function DashboardPage() {
             { auth: true }
           );
           setNotice(`Invitation successfully ${accept ? "accepted" : "declined"}.`);
-          await fetchDashboardData();
+          await fetchDashboardData(true);
         } catch (err) {
           const msg = userFacingError(err);
           if (accept && msg.toLowerCase().includes("already")) {
@@ -241,7 +220,7 @@ export default function DashboardPage() {
             { auth: true }
           );
           setNotice("You have successfully confirmed your membership on the team!");
-          await fetchDashboardData();
+          await fetchDashboardData(true);
         } catch (err) {
           setError(userFacingError(err));
         }
@@ -270,7 +249,7 @@ export default function DashboardPage() {
             { auth: true }
           );
           setNotice("Offer confirmed by your team! Waiting for the project owner's final match confirmation.");
-          await fetchDashboardData();
+          await fetchDashboardData(true);
         } catch (err) {
           setError(userFacingError(err));
         }
@@ -300,7 +279,7 @@ export default function DashboardPage() {
             { auth: true }
           );
           setNotice("Application successfully withdrawn.");
-          await fetchDashboardData();
+          await fetchDashboardData(true);
         } catch (err) {
           setError(userFacingError(err));
         }
@@ -313,8 +292,8 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto py-12 px-4">
-        <Section title="Dashboard Portal Loading">
-          <p className="text-xs text-stone-500 font-mono animate-pulse uppercase tracking-widest">Syncing workspace databases...</p>
+        <Section title="Dashboard">
+          <LoadingSkeleton rows={5} />
         </Section>
       </div>
     );

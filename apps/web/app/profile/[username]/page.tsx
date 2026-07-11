@@ -2,18 +2,18 @@
 
 import { use } from "react";
 import Link from "next/link";
-import { Section, Status, Badge } from "@/components/ui";
+import { Section, Status, Badge, LoadingSkeleton } from "@/components/ui";
 import { useGraphQL } from "@/lib/graphql";
 import { PROFILE_QUERY } from "@/lib/queries";
 import type { User } from "@/types/domain";
 
 export default function ProfilePage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = use(params);
-  const { data, error, loading } = useGraphQL<{ user: User | null }>(PROFILE_QUERY, { username });
+  const { data, error, loading } = useGraphQL<{ user: User | null }>(PROFILE_QUERY, { username }, { auth: "optional" });
   const user = data?.user;
 
   if (loading) {
-    return <Section title="Loading"><p className="text-slate-400">Loading profile from GraphQL...</p></Section>;
+    return <Section title="Profile"><LoadingSkeleton rows={5} /></Section>;
   }
 
   if (error || !user) {

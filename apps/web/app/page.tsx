@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Section, Status, Badge } from "@/components/ui";
+import { Section, Status, Badge, LoadingSkeleton } from "@/components/ui";
 import { useGraphQL } from "@/lib/graphql";
 import { HOME_QUERY } from "@/lib/queries";
 import type { Project, Team } from "@/types/domain";
@@ -53,7 +53,7 @@ export default function HomePage() {
 
         <div className="space-y-5">
           <Section title="Active Project Postings Summary">
-            {loading && <p className="text-xs text-[var(--muted-app)] animate-pulse">Loading live project registry...</p>}
+            {loading && <LoadingSkeleton rows={3} />}
             {error && <p className="text-xs font-semibold text-rose-500">{error}</p>}
             {!loading && !error && projects.length === 0 && <p className="text-xs text-[var(--muted-app)]">No project postings are available yet.</p>}
             <div className="stagger-in divide-y divide-[var(--border-subtle)]">

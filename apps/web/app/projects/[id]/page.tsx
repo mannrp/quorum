@@ -1,14 +1,14 @@
 "use client";
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
-import { Section, Status, Badge, Modal } from "@/components/ui";
+import { Section, Status, Badge, Modal, LoadingSkeleton } from "@/components/ui";
 import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { PROJECT_QUERY } from "@/lib/queries";
 import type { Project, Team, User } from "@/types/domain";
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, error, loading, reload } = useGraphQL<{ project: Project | null }>(PROJECT_QUERY, { id });
+  const { data, error, loading, reload } = useGraphQL<{ project: Project | null }>(PROJECT_QUERY, { id }, { auth: "optional" });
   
   const [me, setMe] = useState<User | null>(null);
   const [myTeam, setMyTeam] = useState<Team | null>(null);
@@ -123,8 +123,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   if (loading) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12">
-        <Section title="Loading">
-          <p className="text-xs text-[var(--muted-app)] animate-pulse">Syncing project records...</p>
+        <Section title="Project">
+          <LoadingSkeleton rows={6} />
         </Section>
       </div>
     );

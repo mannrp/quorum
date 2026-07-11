@@ -208,6 +208,7 @@ func (r *Resolver) project(ctx context.Context, project db.Project) (*model.Proj
 
 func projectHydrationOptionsFromContext(ctx context.Context) projectHydrationOptions {
 	return projectHydrationOptions{
+		includeOwner:           graphql.FieldRequested(ctx, "owner"),
 		includeTeam:            graphql.FieldRequested(ctx, "team"),
 		includeApplications:    graphql.FieldRequested(ctx, "applications"),
 		includeApplicationTeam: graphql.FieldRequested(ctx, "applications"),
@@ -217,6 +218,7 @@ func projectHydrationOptionsFromContext(ctx context.Context) projectHydrationOpt
 }
 
 type projectHydrationOptions struct {
+	includeOwner           bool
 	includeTeam            bool
 	includeApplications    bool
 	includeApplicationTeam bool
@@ -225,13 +227,16 @@ type projectHydrationOptions struct {
 }
 
 func (r *Resolver) projectWithOptions(ctx context.Context, project db.Project, options projectHydrationOptions) (*model.Project, error) {
-	owner, err := r.cachedUser(ctx, project.OwnerID)
-	if err != nil {
-		return nil, err
-	}
-	ownerModel, err := r.shallowUser(ctx, owner)
-	if err != nil {
-		return nil, err
+	var ownerModel *model.User
+	if options.includeOwner {
+		owner, err := r.cachedUser(ctx, project.OwnerID)
+		if err != nil {
+			return nil, err
+		}
+		ownerModel, err = r.shallowUser(ctx, owner)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var team *model.Team

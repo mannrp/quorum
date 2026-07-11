@@ -2,7 +2,7 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Section, Status, Badge, Modal } from "@/components/ui";
+import { Section, Status, Badge, Modal, LoadingSkeleton } from "@/components/ui";
 import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { TEAM_QUERY } from "@/lib/queries";
 import type { Team, TeamMembership, TeamRole } from "@/types/domain";
@@ -23,7 +23,7 @@ type JoinRequest = {
 export default function TeamManagePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { data, error, loading, reload } = useGraphQL<{ team: Team | null }>(TEAM_QUERY, { id });
+  const { data, error, loading, reload } = useGraphQL<{ team: Team | null }>(TEAM_QUERY, { id }, { auth: true });
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -201,7 +201,7 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
   };
 
   if (loading) {
-    return <Section title="Loading"><p className="text-xs text-stone-500 animate-pulse">Loading settings...</p></Section>;
+    return <Section title="Manage team"><LoadingSkeleton rows={6} /></Section>;
   }
 
   if (error || !team) {

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { Section, Status, Badge } from "@/components/ui";
+import { Section, Status, Badge, LoadingSkeleton } from "@/components/ui";
 import { useGraphQL } from "@/lib/graphql";
 import { TEAMS_QUERY } from "@/lib/queries";
 import type { Team } from "@/types/domain";
@@ -11,7 +11,7 @@ export default function TeamsPage() {
   const { data, error, loading } = useGraphQL<{ teams: Team[] }>(
     TEAMS_QUERY,
     q.trim() ? { search: q.trim() } : {},
-    { debounceMs: 300 }
+    { debounceMs: q.trim() ? 250 : 0 }
   );
   const teams = data?.teams || [];
 
@@ -40,7 +40,7 @@ export default function TeamsPage() {
         </div>
       </section>
 
-      {loading && <Section title="Loading"><p className="text-xs text-[var(--muted-app)] animate-pulse">Loading active teams...</p></Section>}
+      {loading && <Section title="Teams"><LoadingSkeleton rows={5} /></Section>}
       {error && <Section title="GraphQL Error"><p className="text-xs font-semibold text-rose-500">{error}</p></Section>}
 
       <div className="stagger-in grid gap-5 md:grid-cols-2">

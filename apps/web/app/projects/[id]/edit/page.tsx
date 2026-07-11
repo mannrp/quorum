@@ -2,7 +2,7 @@
 import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Section, Combobox } from "@/components/ui";
+import { Section, Combobox, LoadingSkeleton } from "@/components/ui";
 import { useGraphQL, graphqlRequest, userFacingError } from "@/lib/graphql";
 import { DISCIPLINE_OPTIONS, PROJECT_TEAM_SIZE_MAX, PROJECT_TEAM_SIZE_MIN } from "@/lib/policy";
 import { PROJECT_QUERY } from "@/lib/queries";
@@ -11,7 +11,7 @@ import type { Project } from "@/types/domain";
 export default function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { data, error, loading, reload } = useGraphQL<{ project: Project | null }>(PROJECT_QUERY, { id });
+  const { data, error, loading, reload } = useGraphQL<{ project: Project | null }>(PROJECT_QUERY, { id }, { auth: true });
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -64,7 +64,7 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
   };
 
   if (loading) {
-    return <Section title="Loading"><p className="text-xs text-stone-500 animate-pulse">Fetching project details...</p></Section>;
+    return <Section title="Edit project"><LoadingSkeleton rows={6} /></Section>;
   }
 
   if (error || !data?.project) {

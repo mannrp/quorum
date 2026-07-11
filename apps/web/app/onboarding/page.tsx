@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Section, Combobox } from "@/components/ui";
+import { Section, Combobox, LoadingSkeleton } from "@/components/ui";
 import { authDestination } from "@/lib/auth-routing";
 import { graphqlRequest, uploadToSignedPost, userFacingError } from "@/lib/graphql";
 import { getCurrentNeonUser } from "@/lib/neon-auth";
@@ -125,8 +125,8 @@ export default function OnboardingPage() {
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto py-12">
-        <Section title="Loading Setup Dashboard">
-          <p className="text-stone-400 animate-pulse text-xs uppercase tracking-wider">Fetching profile credentials...</p>
+        <Section title="Set up your profile">
+          <LoadingSkeleton rows={5} />
         </Section>
       </div>
     );

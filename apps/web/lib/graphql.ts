@@ -7,6 +7,39 @@ type GraphQLResponse<T> = {
   errors?: { message: string }[];
 };
 
+type GraphQLRequestOptions = {
+  auth?: boolean | "optional";
+  signal?: AbortSignal;
+  cacheMs?: number;
+  force?: boolean;
+};
+
+type QueryCacheEntry = {
+  data: unknown;
+  updatedAt: number;
+};
+
+const queryCache = new Map<string, QueryCacheEntry>();
+const queriesInFlight = new Map<string, Promise<unknown>>();
+const DEFAULT_QUERY_CACHE_MS = 60_000;
+
+function queryCacheKey(query: string, variables: Record<string, unknown>, auth: boolean | "optional" = false) {
+  return JSON.stringify([query, variables, auth]);
+}
+
+export function clearGraphQLCache() {
+  queryCache.clear();
+  queriesInFlight.clear();
+}
+
+export function getCachedGraphQLData<T>(
+  query: string,
+  variables: Record<string, unknown> = {},
+  auth: boolean | "optional" = false
+) {
+  return queryCache.get(queryCacheKey(query, variables, auth))?.data as T | undefined;
+}
+
 export type GraphQLClientErrorKind =
   | "auth"
   | "permission"
@@ -75,13 +108,26 @@ export function userFacingError(error: unknown): string {
 export async function graphqlRequest<T>(
   query: string,
   variables?: Record<string, unknown>,
-  options?: { auth?: boolean; signal?: AbortSignal }
+  options?: GraphQLRequestOptions
 ): Promise<T> {
+  const normalizedVariables = variables || {};
+  const cacheKey = queryCacheKey(query, normalizedVariables, options?.auth);
+  const cacheMs = options?.cacheMs ?? 0;
+  const cached = queryCache.get(cacheKey);
+  if (!options?.force && cacheMs > 0 && cached && Date.now() - cached.updatedAt < cacheMs) {
+    return cached.data as T;
+  }
+  if (!options?.force && !options?.signal) {
+    const pending = queriesInFlight.get(cacheKey);
+    if (pending) return pending as Promise<T>;
+  }
+
+  const request = (async () => {
   const headers: Record<string, string> = {
     "content-type": "application/json"
   };
   if (options?.auth) {
-    headers["x-quorum-auth-required"] = "true";
+    headers["x-quorum-auth-mode"] = options.auth === true ? "required" : "optional";
   }
 
   let response: Response;
@@ -89,7 +135,7 @@ export async function graphqlRequest<T>(
     response = await fetch(graphqlUrl(), {
       method: "POST",
       headers,
-      body: JSON.stringify({ query, variables: variables || {} }),
+      body: JSON.stringify({ query, variables: normalizedVariables }),
       cache: "no-store",
       signal: options?.signal
     });
@@ -110,7 +156,25 @@ export async function graphqlRequest<T>(
   if (!payload.data) {
     throw new GraphQLClientError("GraphQL response did not include data", "unknown");
   }
+  if (/^\s*mutation\b/.test(query)) {
+    clearGraphQLCache();
+  }
+  if (cacheMs > 0) {
+    queryCache.set(cacheKey, { data: payload.data, updatedAt: Date.now() });
+  }
   return payload.data;
+  })();
+
+  if (!options?.signal) {
+    queriesInFlight.set(cacheKey, request);
+  }
+  try {
+    return await request;
+  } finally {
+    if (queriesInFlight.get(cacheKey) === request) {
+      queriesInFlight.delete(cacheKey);
+    }
+  }
 }
 
 export async function uploadToSignedPost(
@@ -136,23 +200,40 @@ export async function uploadToSignedPost(
 export function useGraphQL<T>(
   query: string,
   variables?: Record<string, unknown>,
-  options?: { auth?: boolean; skip?: boolean; debounceMs?: number }
+  options?: { auth?: boolean | "optional"; skip?: boolean; debounceMs?: number }
 ) {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(!options?.skip);
-  const requestSeq = useRef(0);
   const variablesKey = JSON.stringify(variables || {});
+  const cacheKey = queryCacheKey(query, JSON.parse(variablesKey) as Record<string, unknown>, options?.auth);
+  const initialCached = queryCache.get(cacheKey)?.data as T | undefined;
+  const [data, setData] = useState<T | null>(initialCached ?? null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(!options?.skip && !initialCached);
+  const [isFetching, setIsFetching] = useState(false);
+  const requestSeq = useRef(0);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
+  const load = useCallback(async (signal?: AbortSignal, force = false) => {
     if (options?.skip) return;
+    const parsedVariables = JSON.parse(variablesKey) as Record<string, unknown>;
+    const key = queryCacheKey(query, parsedVariables, options?.auth);
+    const cached = queryCache.get(key);
+    if (!force && cached && Date.now() - cached.updatedAt < DEFAULT_QUERY_CACHE_MS) {
+      setData(cached.data as T);
+      setLoading(false);
+      return;
+    }
     const requestId = requestSeq.current + 1;
     requestSeq.current = requestId;
-    setLoading(true);
+    setLoading(!cached);
+    setIsFetching(true);
     setError(null);
     try {
-      const parsedVariables = JSON.parse(variablesKey) as Record<string, unknown>;
-      const result = await graphqlRequest<T>(query, parsedVariables, { auth: options?.auth, signal });
+      if (cached) setData(cached.data as T);
+      const result = await graphqlRequest<T>(query, parsedVariables, {
+        auth: options?.auth,
+        signal,
+        cacheMs: DEFAULT_QUERY_CACHE_MS,
+        force,
+      });
       if (requestSeq.current === requestId && !signal?.aborted) {
         setData(result);
       }
@@ -163,6 +244,7 @@ export function useGraphQL<T>(
     } finally {
       if (!signal?.aborted && requestSeq.current === requestId) {
         setLoading(false);
+        setIsFetching(false);
       }
     }
   }, [query, variablesKey, options?.auth, options?.skip]);
@@ -180,5 +262,5 @@ export function useGraphQL<T>(
     };
   }, [load, options?.debounceMs]);
 
-  return { data, error, loading, reload: () => load() };
+  return { data, error, loading, isFetching, reload: () => load(undefined, true) };
 }

@@ -1,7 +1,7 @@
 "use client";
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
-import { ConfirmDialog, Section, Status, Modal } from "@/components/ui";
+import { ConfirmDialog, Section, Status, Modal, LoadingSkeleton } from "@/components/ui";
 import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { PROJECT_QUERY } from "@/lib/queries";
 import type { Project, ProjectApplication } from "@/types/domain";
@@ -16,7 +16,7 @@ type ConfirmAction = {
 
 export default function ProjectApplicationsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, error, loading, reload } = useGraphQL<{ project: Project | null }>(PROJECT_QUERY, { id });
+  const { data, error, loading, reload } = useGraphQL<{ project: Project | null }>(PROJECT_QUERY, { id }, { auth: true });
 
   const [apps, setApps] = useState<ProjectApplication[]>([]);
   const [selectedApp, setSelectedApp] = useState<ProjectApplication | null>(null);
@@ -127,7 +127,7 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
   };
 
   if (loading) {
-    return <Section title="Loading"><p className="text-xs text-stone-500 animate-pulse">Loading project applications review dashboard...</p></Section>;
+    return <Section title="Applications"><LoadingSkeleton rows={6} /></Section>;
   }
 
   if (error || !project) {

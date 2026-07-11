@@ -14,6 +14,18 @@ export function Section({ title, children, className = "", variant = "wide" }: {
   );
 }
 
+export function LoadingSkeleton({ rows = 3, className = "" }: { rows?: number; className?: string }) {
+  return (
+    <div className={`loading-skeleton space-y-3 ${className}`} role="status" aria-label="Loading content">
+      <span className="sr-only">Loading content</span>
+      <div className="skeleton-block h-3 w-2/5" />
+      {Array.from({ length: rows }, (_, index) => (
+        <div key={index} className={`skeleton-block h-3 ${index === rows - 1 ? "w-3/5" : "w-full"}`} />
+      ))}
+    </div>
+  );
+}
+
 export function Status({ value }: { value: string }) {
   const getStyle = (val: string) => {
     switch (val.toUpperCase()) {

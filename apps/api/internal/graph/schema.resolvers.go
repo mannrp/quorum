@@ -20,6 +20,7 @@ import (
 	"github.com/local/quorum/apps/api/internal/graph/generated"
 	"github.com/local/quorum/apps/api/internal/graph/model"
 	"github.com/local/quorum/apps/api/internal/storage"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -1687,13 +1688,22 @@ func (r *queryResolver) Teams(ctx context.Context, discipline *string, hasProjec
 	if len(teams) > defaultListLimit {
 		teams = teams[:defaultListLimit]
 	}
-	out := make([]*model.Team, 0, len(teams))
-	for _, team := range teams {
-		mapped, err := r.team(ctx, team)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, mapped)
+	out := make([]*model.Team, len(teams))
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.SetLimit(8)
+	for index := range teams {
+		index := index
+		group.Go(func() error {
+			mapped, err := r.team(groupCtx, teams[index])
+			if err != nil {
+				return err
+			}
+			out[index] = mapped
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -1731,13 +1741,23 @@ func (r *queryResolver) Projects(ctx context.Context, discipline *string, status
 	if len(projects) > defaultListLimit {
 		projects = projects[:defaultListLimit]
 	}
-	out := make([]*model.Project, 0, len(projects))
-	for _, project := range projects {
-		mapped, err := r.projectWithOptions(ctx, project, projectHydrationOptionsFromContext(ctx))
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, mapped)
+	out := make([]*model.Project, len(projects))
+	options := projectHydrationOptionsFromContext(ctx)
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.SetLimit(8)
+	for index := range projects {
+		index := index
+		group.Go(func() error {
+			mapped, err := r.projectWithOptions(groupCtx, projects[index], options)
+			if err != nil {
+				return err
+			}
+			out[index] = mapped
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

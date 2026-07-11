@@ -252,3 +252,60 @@ export const DASHBOARD_CONTEXT_QUERY = `
     myNotifications { id type payload read createdAt }
   }
 `;
+
+export const DASHBOARD_PAGE_QUERY = `
+  query DashboardPage($requestStatus: JoinRequestStatus) {
+    authState {
+      authenticated
+      hasProfile
+      profileComplete
+      profile {
+        id
+        authUserId
+        username
+        email
+        fullName
+        discipline
+        userIntent
+      }
+    }
+    dashboardContext {
+      unreadMessages
+      unreadNotifications
+      isAdmin
+      universalDeadline { id deadlineAt updatedAt }
+      myTeams { ${TEAM_CARD_FIELDS} }
+      myProjects {
+        id
+        title
+        description
+        status
+        applications { id status createdAt }
+      }
+      myInvitations { id status message expiresAt createdAt team { id name createdBy { id username fullName } } invitedBy { id username fullName } }
+    }
+    myNotifications { id type payload read createdAt }
+    myJoinRequests(status: $requestStatus) {
+      id
+      status
+      message
+      expiresAt
+      createdAt
+      team { id name }
+    }
+    projects {
+      id
+      title
+      status
+      owner { id fullName username }
+      applications {
+        id
+        status
+        offerMessage
+        expiresAt
+        createdAt
+        team { id }
+      }
+    }
+  }
+`;

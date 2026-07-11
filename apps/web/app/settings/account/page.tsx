@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Section, Modal } from "@/components/ui";
+import { Section, Modal, LoadingSkeleton } from "@/components/ui";
 import { graphqlRequest, userFacingError } from "@/lib/graphql";
 import { ME_QUERY } from "@/lib/queries";
 import type { User } from "@/types/domain";
@@ -51,7 +51,7 @@ export default function AccountSettingsPage() {
   };
 
   if (loading) {
-    return <Section title="Loading"><p className="text-xs text-stone-500 animate-pulse">Loading settings cockpit...</p></Section>;
+    return <Section title="Account settings"><LoadingSkeleton rows={4} /></Section>;
   }
 
   return (

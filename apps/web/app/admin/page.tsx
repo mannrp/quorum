@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Section, Status, Modal } from "@/components/ui";
+import { Section, Status, Modal, LoadingSkeleton } from "@/components/ui";
 import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
 import { ADMIN_QUERY } from "@/lib/queries";
 import type { Project, Team, User } from "@/types/domain";
@@ -135,7 +135,7 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {loading && <Section title="Loading"><p className="text-xs text-stone-500 animate-pulse">Syncing platform registries...</p></Section>}
+      {loading && <Section title="Admin console"><LoadingSkeleton rows={4} /></Section>}
       {error && <Section title="Error"><p className="text-xs text-rose-500 font-bold">{error}</p></Section>}
 
       {/* Stats row */}

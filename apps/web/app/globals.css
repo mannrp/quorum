@@ -223,6 +223,13 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-app) 16%, transparent);
   }
 
+  .skeleton-block {
+    @apply rounded-sm;
+    background: linear-gradient(90deg, var(--border-subtle) 25%, color-mix(in srgb, var(--surface-raised) 72%, var(--border-subtle)) 50%, var(--border-subtle) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.6s ease-in-out infinite;
+  }
+
   .dashboard-stage {
     animation: page-rise 520ms ease-out both;
   }
@@ -382,6 +389,11 @@
       opacity: 1;
       transform: translateY(0);
     }
+  }
+
+  @keyframes skeleton-shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
   }
 
   @media (prefers-reduced-motion: reduce) {
