@@ -2,6 +2,8 @@
 
 Quorum is a capstone matching workspace for students, teams, project owners, and admins.
 
+> **Auth revision in progress:** the code below still contains the legacy Neon Auth integration. It is not the target architecture and must not be used as a security reference. Implementation work starts with [`docs/auth/STATUS.md`](docs/auth/STATUS.md), follows [`AGENTS.md`](AGENTS.md), and uses the full [`AUTH_ARCHITECTURE_SECURITY_AUDIT.md`](AUTH_ARCHITECTURE_SECURITY_AUDIT.md) as supporting rationale.
+
 Students use Quorum to build a profile around their skills, discipline, availability, links, and resume; find teammates; request to join teams; and apply to real capstone-style projects. Project owners publish opportunities, review applicants, send offers, and manage project assets. Admins review project submissions, keep the marketplace healthy, set deadlines, and audit important actions.
 
 The product is built around the full matching workflow: profiles make students discoverable, teams make collaboration explicit, projects create demand, and applications, offers, messaging, and notifications keep the process moving.
@@ -18,11 +20,15 @@ The product is built around the full matching workflow: profiles make students d
 
 ## Stack
 
-- `apps/web` - Next.js, React, Tailwind, Neon Auth
+- `apps/web` - Next.js, React, Tailwind, legacy Neon Auth pending auth v2
 - `apps/api` - Go, gqlgen GraphQL, Postgres, Cloudflare R2
 - Root workspace - npm workspaces and Turborepo
 
+The approved target keeps a thin Next BFF for browser authentication/sessions, a private service-authenticated Go domain service reached over a confidential/integrity-protected channel, provider-neutral PostgreSQL, and private R2. Better Auth is the preferred candidate only after its acceptance spike passes. GraphQL remains through auth v2 and is benchmarked against typed use-case HTTP later.
+
 ## Setup
+
+The commands in this section describe the current legacy development system. Do not add new Neon-specific auth behavior. The auth-v2 local target and migration rules are in [`docs/auth/OPERATIONS.md`](docs/auth/OPERATIONS.md).
 
 Prerequisites:
 

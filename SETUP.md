@@ -1,6 +1,8 @@
-# Quorum Setup Notes
+# Quorum Legacy Setup Notes
 
-## Product Auth Decision
+> **Legacy-only guide:** this file describes how the current Neon-based code runs before auth v2. It must not be treated as the target security or deployment design. New work follows `AGENTS.md` and the living documents under `docs/auth/`, especially `docs/auth/OPERATIONS.md`. The target local dependency stack is pinned PostgreSQL plus Mailpit in Docker; Better Auth remains acceptance-spike gated.
+
+## Legacy Product Auth Decision
 
 Quorum uses Neon Auth for authentication and session management. The Go backend still owns Quorum authorization and product rules: team leadership, admin checks, project claims, applications, messages, and file signing.
 
