@@ -30,10 +30,21 @@ func TestIntegrationBootstrapIsIdempotentAndLeastPrivilege(t *testing.T) {
 		AuthRuntimePassword: "ci-auth-password-not-for-production",
 		AppRuntimePassword:  "ci-app-password-not-for-production",
 	}
-	for attempt := 0; attempt < 2; attempt++ {
-		if err := Bootstrap(context.Background(), conn, config); err != nil {
-			t.Fatalf("bootstrap attempt %d failed: %v", attempt+1, err)
-		}
+	if err := Bootstrap(context.Background(), conn, config); err != nil {
+		t.Fatalf("initial bootstrap failed: %v", err)
+	}
+	if _, err := conn.Exec(context.Background(), "ALTER ROLE quorum_app_runtime BYPASSRLS"); err != nil {
+		t.Fatal("contaminate app runtime role with BYPASSRLS")
+	}
+	if _, err := conn.Exec(context.Background(), "GRANT CREATE ON SCHEMA public TO quorum_app_runtime"); err != nil {
+		t.Fatal("contaminate app runtime role with public schema CREATE")
+	}
+	defer func() {
+		_, _ = conn.Exec(context.Background(), "ALTER ROLE quorum_app_runtime NOBYPASSRLS")
+		_, _ = conn.Exec(context.Background(), "REVOKE CREATE ON SCHEMA public FROM quorum_app_runtime")
+	}()
+	if err := Bootstrap(context.Background(), conn, config); err != nil {
+		t.Fatalf("repair bootstrap failed: %v", err)
 	}
 
 	for _, role := range []string{"quorum_app_owner", "quorum_auth_owner", "quorum_integration_owner", "quorum_audit_owner"} {
@@ -53,15 +64,15 @@ func TestIntegrationBootstrapIsIdempotentAndLeastPrivilege(t *testing.T) {
 
 func assertRoleAttributes(t *testing.T, conn *pgx.Conn, role string, wantLogin bool) {
 	t.Helper()
-	var login, superuser, createDB, createRole, inherit bool
+	var login, superuser, createDB, createRole, inherit, bypassRLS bool
 	err := conn.QueryRow(context.Background(), `
-		SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolinherit
+		SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolinherit, rolbypassrls
 		FROM pg_roles WHERE rolname = $1
-	`, role).Scan(&login, &superuser, &createDB, &createRole, &inherit)
+	`, role).Scan(&login, &superuser, &createDB, &createRole, &inherit, &bypassRLS)
 	if err != nil {
 		t.Fatalf("inspect role %s: %v", role, err)
 	}
-	if login != wantLogin || superuser || createDB || createRole || inherit {
-		t.Fatalf("unsafe attributes for role %s: login=%v super=%v createdb=%v createrole=%v inherit=%v", role, login, superuser, createDB, createRole, inherit)
+	if login != wantLogin || superuser || createDB || createRole || inherit || bypassRLS {
+		t.Fatalf("unsafe attributes for role %s: login=%v super=%v createdb=%v createrole=%v inherit=%v bypassrls=%v", role, login, superuser, createDB, createRole, inherit, bypassRLS)
 	}
 }

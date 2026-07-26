@@ -59,8 +59,8 @@ func Bootstrap(ctx context.Context, conn *pgx.Conn, config Config) error {
 			return fmt.Errorf("grant database connect to %s: %w", role, err)
 		}
 	}
-	if _, err := conn.Exec(ctx, "REVOKE CREATE ON SCHEMA public FROM PUBLIC"); err != nil {
-		return fmt.Errorf("revoke public schema creation: %w", err)
+	if _, err := conn.Exec(ctx, "REVOKE CREATE ON SCHEMA public FROM PUBLIC, quorum_auth_runtime, quorum_app_runtime"); err != nil {
+		return fmt.Errorf("revoke public schema creation from public and runtime roles: %w", err)
 	}
 	return nil
 }
@@ -71,13 +71,13 @@ func ensureRole(ctx context.Context, conn *pgx.Conn, name string, login bool, pa
 		return fmt.Errorf("inspect role %s: %w", name, err)
 	}
 	identifier := pgx.Identifier{name}.Sanitize()
-	attributes := "NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION"
+	attributes := "NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS"
 	if login {
 		var quotedPassword string
 		if err := conn.QueryRow(ctx, "SELECT quote_literal($1)", password).Scan(&quotedPassword); err != nil {
 			return fmt.Errorf("prepare password for role %s: %w", name, err)
 		}
-		attributes = "LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD " + quotedPassword
+		attributes = "LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD " + quotedPassword
 	}
 	verb := "CREATE ROLE"
 	if exists {
