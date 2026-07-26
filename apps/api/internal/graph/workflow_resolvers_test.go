@@ -732,6 +732,9 @@ func workflowTestResolver(t *testing.T) (context.Context, *Resolver, func()) {
 	t.Helper()
 	dsn := os.Getenv("QUORUM_TEST_DATABASE_URL")
 	if dsn == "" {
+		if os.Getenv("QUORUM_REQUIRE_INTEGRATION") == "true" {
+			t.Fatal("QUORUM_TEST_DATABASE_URL is required when QUORUM_REQUIRE_INTEGRATION=true")
+		}
 		t.Skip("QUORUM_TEST_DATABASE_URL is not set")
 	}
 	ctx := context.Background()

@@ -3,6 +3,7 @@ node_modules
 .next
 .gocache/
 .playwright-mcp/
+.quorum/
 .codex/
 dist
 *.log
@@ -10,6 +11,8 @@ dist
 .planning/DESIGN*
 .planning/
 quorum-e2e-*.png
+test-results/
+playwright-report/
 .env
 .env.*
 !.env.example

@@ -1,0 +1,6 @@
+# Reviewed 2026-07-26: inert example URL; no credential material.
+988f448996589cb1d67d7b03dc9258deedfe50a9:apps/web/.env.example:generic-api-key:8
+
+# Reviewed 2026-07-26: prose containing security terminology, not tokens.
+e21d1e5fc177acd4a74214b4d0370f86d6057450:docs/auth/IMPLEMENTATION.md:generic-api-key:412
+e21d1e5fc177acd4a74214b4d0370f86d6057450:AUTH_ARCHITECTURE_SECURITY_AUDIT.md:generic-api-key:883

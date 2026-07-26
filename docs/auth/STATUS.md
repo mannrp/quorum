@@ -4,7 +4,7 @@
 **Current phase:** after `G1 Contract-ready`  
 **Next task:** `A02 Local/CI/test harness`  
 **Security gate approver:** project owner  
-**Last updated:** 2026-07-24
+**Last updated:** 2026-07-26
 
 ## Allowed states
 
@@ -16,7 +16,7 @@
 |---|---|---|---|---|---|---|
 | A00 Inventory and containment | done | Codex / project owner | none | `codex/auth-v2-rewrite` | [Inventory, runtime trace, containment, and D-032 disposable-data acceptance](evidence/A00_REPOSITORY_INVENTORY.md) complete | 2026-07-24 |
 | A01 Contract approval | done | Codex / project owner | none | `codex/auth-v2-rewrite` | D-018/D-019/D-021/D-027/D-031 accepted; `ViewerBootstrapV1` allowlist recorded; D-024 privileged powers remain closed | 2026-07-24 |
-| A02 Local/CI/test harness | in_progress | Codex / project owner | A00, A01 | `codex/auth-v2-rewrite` | Building deterministic PostgreSQL/Mailpit, migration-safety, test, and CI harness; review pending | 2026-07-24 |
+| A02 Local/CI/test harness | in_review | Codex / project owner | A00, A01 | `codex/auth-v2-rewrite` | Harness implementation and local non-container gates pass; mandatory Linux CI database/reset/role/context evidence and owner review remain | 2026-07-26 |
 | A03 Auth-provider acceptance spike | not_started | unassigned | A02 | — | Better Auth is first candidate; exact version intentionally unselected; task completes only when one provider passes G3 | 2026-07-24 |
 | A04 Schema and identity foundation | not_started | unassigned | A03 | — | — | 2026-07-24 |
 | A05 Authenticated Next-to-Go contract | not_started | unassigned | A03, A04 | — | — | 2026-07-24 |
@@ -50,11 +50,10 @@
 - No deployment configuration successfully deploys the full system today.
 - Legacy conditional Vercel/Fly deployment jobs were removed during A00; CI/build validation remains.
 - Current application auth is still the legacy beta Neon integration.
-- There are no Dockerfiles, Compose files, root `.dockerignore`, or committed Supabase configuration.
-- Canonical product migrations are currently `apps/api/migrations/*.sql` and the Go runner records filenames in `schema_migrations`.
+- A root `.dockerignore` and pinned development Compose file now define PostgreSQL 17.10 and Mailpit 1.30.0; production application Dockerfiles remain A11 scope.
+- Canonical product migrations remain `apps/api/migrations/*.sql`; the A02 runner discovers strict ordered versions, stores SHA-256 checksums, serializes with an advisory lock, and applies transactionally with timeouts.
 - No application is deployed. Read-only A00 verification found a nonempty Neon database whose 461 aggregate rows the owner classified as disposable demo/test data under D-032; Neon remains untouched until an explicitly approved cutover.
-- `package-lock.json` has a pre-existing user-owned modification. Auth-v2 documentation did not modify it.
-- Before A02 dependency work, the owner must preserve/commit or explicitly approve that lockfile diff as the baseline; later manifest/lock changes must remain focused.
+- The owner approved the pre-existing `package-lock.json` diff as the A02 baseline. A02 intentionally adds exact test dependencies and the patched Next 15 release; unrelated normalization remains prohibited.
 
 ## Decision-needed queue
 
@@ -122,3 +121,17 @@ Change: Began the deterministic local/CI/test harness after A00 and A01 reached 
 Tests: Failing-first harness and migration safety tests are required before implementation.  
 Evidence: branch `codex/auth-v2-rewrite`; A02 task card.  
 Notes: The existing user-owned `package-lock.json` diff remains the approved baseline and will not be normalized incidentally.
+
+2026-07-26 — A02 — implementation checkpoint — Codex / project owner
+
+Change: Added pinned PostgreSQL/Mailpit Compose dependencies, hardened canonical migrations, guarded local initialization/reset, least-privilege role bootstrap, mandatory CI database/Mailpit paths, Vitest/Testing Library, Playwright Chromium, Docker-context sentinels, and checksum-pinned Gitleaks history scanning. Upgraded Next within major 15 to the patched 15.5.21 release.
+Tests: `$env:GOCACHE='D:\quorum\.gocache'; go test ./...` passed; `go vet ./...` passed; `npm.cmd run test:web` passed 2 tests; `npm.cmd run test:e2e` passed 1 Chromium test; `npm.cmd run typecheck` passed; `npm.cmd run build` passed with four pre-existing hook warnings; `docker compose -f compose.dev.yml config --quiet` passed; pinned Gitleaks 8.30.1 scanned 47 commits with three reviewed inert false positives fingerprint-allowlisted and then reported no leaks.
+Evidence: `.dockerignore`, `compose.dev.yml`, `.github/workflows/ci-cd.yml`, `apps/api/internal/{migrate,localdb,dbroles}`, `apps/api/cmd/{migrate,localdb,bootstrap-roles}`, `apps/web/vitest.config.ts`, `playwright.config.ts`, `scripts/verify-docker-context.mjs`, `.gitleaksignore`.
+Notes: Local Linux containers cannot start because this Windows host lacks WSL; repository work continues and CI is configured to fail hard unless real PostgreSQL, reset/replay, role, Mailpit, Docker-context, unit, and browser checks pass. Production audit still reports vulnerabilities inherited through the legacy Neon auth wrapper and Next 15 transitive build dependencies; no unsafe forced audit rewrite was applied.
+
+2026-07-26 — A02 — in_progress -> in_review — Codex / project owner
+
+Change: Completed the A02 repository implementation and moved it to review without claiming G2.
+Tests: Clean `npm.cmd ci` passed after stopping only Quorum processes; required Go integration suites failed as designed when their database variables were removed; full Go unit/vet, web unit/component, typecheck, production build, and self-terminating Chromium smoke gates passed.
+Evidence: A02 implementation checkpoint above and the milestone commit on `codex/auth-v2-rewrite`.
+Notes: The project owner must review and pass G2 only after the mandatory Linux CI service-backed jobs are green. Legacy checksum-less migration ledgers fail closed and require an explicit repair decision; disposable local databases use the guarded reset, and the planned clean auth-v2 database needs no repair.

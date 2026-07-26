@@ -11,6 +11,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   NEXT_TELEMETRY_DISABLED: "1"
   NEXT_PUBLIC_API_URL: http://localhost:8080/graphql
@@ -25,9 +28,41 @@ jobs:
     name: Verify
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:17.10-alpine3.24@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_DB: quorum_test
+          POSTGRES_USER: quorum_operator
+          POSTGRES_PASSWORD: quorum-ci-operator-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U quorum_operator -d quorum_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+      mailpit:
+        image: axllent/mailpit:v1.30.0@sha256:0059ef81e492a7192af3816281eed6859eb078bd7bdc58b76757c13e10e53a7d
+        ports:
+          - 1025:1025
+          - 8025:8025
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan repository history for secrets
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --location \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
+            --output /tmp/gitleaks.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks.tar.gz" | sha256sum --check --strict
+          tar --extract --gzip --file /tmp/gitleaks.tar.gz --directory /tmp gitleaks
+          /tmp/gitleaks git --redact --no-banner --max-archive-depth=1
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -45,6 +80,9 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Verify Docker build context exclusions
+        run: npm run test:docker-context
+
       - name: Lint web
         run: npm run lint
 
@@ -58,49 +96,53 @@ jobs:
         working-directory: apps/api
         run: go test ./...
 
-  smoke:
-    name: Smoke
-    runs-on: ubuntu-latest
-    needs: ci
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
-    env:
-      QUORUM_TEST_DATABASE_URL: ${{ secrets.QUORUM_TEST_DATABASE_URL }}
-      NEON_AUTH_ISSUER: ${{ secrets.NEON_AUTH_ISSUER }}
-      NEON_AUTH_JWKS_URL: ${{ secrets.NEON_AUTH_JWKS_URL }}
-      NEON_AUTH_AUDIENCE: ${{ secrets.NEON_AUTH_AUDIENCE }}
-      APP_ORIGIN: ${{ vars.APP_ORIGIN || 'http://localhost:3000' }}
-      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
-      R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
-
-    steps:
-      - name: Skip smoke when secrets are missing
-        if: env.QUORUM_TEST_DATABASE_URL == '' || env.NEON_AUTH_ISSUER == '' || env.NEON_AUTH_JWKS_URL == ''
-        run: echo "::notice::Smoke checks skipped because dedicated test database or Neon Auth secrets are not configured."
-
-      - name: Checkout
-        if: env.QUORUM_TEST_DATABASE_URL != '' && env.NEON_AUTH_ISSUER != '' && env.NEON_AUTH_JWKS_URL != ''
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        if: env.QUORUM_TEST_DATABASE_URL != '' && env.NEON_AUTH_ISSUER != '' && env.NEON_AUTH_JWKS_URL != ''
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: apps/api/go.mod
-          cache-dependency-path: apps/api/go.sum
-
-      - name: Run API migrations against test database
-        if: env.QUORUM_TEST_DATABASE_URL != '' && env.NEON_AUTH_ISSUER != '' && env.NEON_AUTH_JWKS_URL != ''
+      - name: Apply canonical migrations
         working-directory: apps/api
         env:
-          DATABASE_URL: ${{ env.QUORUM_TEST_DATABASE_URL }}
+          MIGRATOR_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
         run: go run ./cmd/migrate
 
-      - name: Run API smoke flow
-        if: env.QUORUM_TEST_DATABASE_URL != '' && env.NEON_AUTH_ISSUER != '' && env.NEON_AUTH_JWKS_URL != ''
+      - name: Initialize guarded local database identity
         working-directory: apps/api
         env:
-          DATABASE_URL: ${{ env.QUORUM_TEST_DATABASE_URL }}
-        run: go run ./cmd/e2e -run-id ci-${{ github.run_id }}-${{ github.run_attempt }}
+          LOCAL_TEST_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
+        run: go run ./cmd/localdb init
+
+      - name: Prove guarded local reset and canonical replay
+        working-directory: apps/api
+        env:
+          LOCAL_TEST_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
+          QUORUM_ALLOW_LOCAL_RESET: "true"
+        run: go run ./cmd/localdb reset
+
+      - name: Prove idempotent role bootstrap
+        working-directory: apps/api
+        env:
+          OPERATOR_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
+          QUORUM_MIGRATOR_PASSWORD: ci-migrator-password-not-for-production
+          QUORUM_AUTH_RUNTIME_PASSWORD: ci-auth-password-not-for-production
+          QUORUM_APP_RUNTIME_PASSWORD: ci-app-password-not-for-production
+        run: |
+          go run ./cmd/bootstrap-roles
+          go run ./cmd/bootstrap-roles
+
+      - name: Test API with required database integration
+        working-directory: apps/api
+        env:
+          QUORUM_REQUIRE_INTEGRATION: "true"
+          QUORUM_TEST_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
+          QUORUM_MIGRATION_TEST_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
+          QUORUM_ROLE_TEST_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
+        run: go test ./...
+
+      - name: Test web units and components
+        run: npm run test:web
+
+      - name: Install Chromium for browser tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Test public browser shell
+        run: npm run test:e2e
+
+      - name: Verify Mailpit readiness
+        run: curl --fail --silent --show-error http://127.0.0.1:8025/readyz
