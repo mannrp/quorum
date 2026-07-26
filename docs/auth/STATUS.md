@@ -16,7 +16,7 @@
 |---|---|---|---|---|---|---|
 | A00 Inventory and containment | done | Codex / project owner | none | `codex/auth-v2-rewrite` | [Inventory, runtime trace, containment, and D-032 disposable-data acceptance](evidence/A00_REPOSITORY_INVENTORY.md) complete | 2026-07-24 |
 | A01 Contract approval | done | Codex / project owner | none | `codex/auth-v2-rewrite` | D-018/D-019/D-021/D-027/D-031 accepted; `ViewerBootstrapV1` allowlist recorded; D-024 privileged powers remain closed | 2026-07-24 |
-| A02 Local/CI/test harness | in_review | Codex / project owner | A00, A01 | `codex/auth-v2-rewrite` | Harness implementation and local non-container gates pass; mandatory Linux CI database/reset/role/context evidence and owner review remain | 2026-07-26 |
+| A02 Local/CI/test harness | in_review | Codex / project owner | A00, A01 | `codex/auth-v2-rewrite` | Docker-backed local migrations/reset/roles/integration/context/Mailpit/browser gates and per-harness negative controls pass after review corrections; mandatory Linux CI and owner review remain | 2026-07-26 |
 | A03 Auth-provider acceptance spike | not_started | unassigned | A02 | — | Better Auth is first candidate; exact version intentionally unselected; task completes only when one provider passes G3 | 2026-07-24 |
 | A04 Schema and identity foundation | not_started | unassigned | A03 | — | — | 2026-07-24 |
 | A05 Authenticated Next-to-Go contract | not_started | unassigned | A03, A04 | — | — | 2026-07-24 |
@@ -51,6 +51,7 @@
 - Legacy conditional Vercel/Fly deployment jobs were removed during A00; CI/build validation remains.
 - Current application auth is still the legacy beta Neon integration.
 - A root `.dockerignore` and pinned development Compose file now define PostgreSQL 17.10 and Mailpit 1.30.0; production application Dockerfiles remain A11 scope.
+- CI/developer toolchain selectors pin Node 22.23.1, npm 11.11.0, and Go 1.25.12 under D-027; this Windows review host itself currently has newer Node 24.18.0, npm 11.16.0, and Go 1.26.5, so the exact baseline still requires the mandatory Linux CI run.
 - Canonical product migrations remain `apps/api/migrations/*.sql`; the A02 runner discovers strict ordered versions, stores SHA-256 checksums, serializes with an advisory lock, and applies transactionally with timeouts.
 - No application is deployed. Read-only A00 verification found a nonempty Neon database whose 461 aggregate rows the owner classified as disposable demo/test data under D-032; Neon remains untouched until an explicitly approved cutover.
 - The owner approved the pre-existing `package-lock.json` diff as the A02 baseline. A02 intentionally adds exact test dependencies and the patched Next 15 release; unrelated normalization remains prohibited.
@@ -135,3 +136,17 @@ Change: Completed the A02 repository implementation and moved it to review witho
 Tests: Clean `npm.cmd ci` passed after stopping only Quorum processes; required Go integration suites failed as designed when their database variables were removed; full Go unit/vet, web unit/component, typecheck, production build, and self-terminating Chromium smoke gates passed.
 Evidence: A02 implementation checkpoint above and the milestone commit on `codex/auth-v2-rewrite`.
 Notes: The project owner must review and pass G2 only after the mandatory Linux CI service-backed jobs are green. Legacy checksum-less migration ledgers fail closed and require an explicit repair decision; disposable local databases use the guarded reset, and the planned clean auth-v2 database needs no repair.
+
+2026-07-26 — A02 — in_review review checkpoint — Codex / project owner
+
+Change: Re-reviewed commits `e21d1e5` and `0b6d58d` plus the clean worktree; retained A02 in review and G2 unpassed because no Linux service-backed CI run or complete per-harness negative-control evidence is available.
+Tests: `$env:GOCACHE='D:\quorum\.gocache'; go test ./...` and `go vet ./...` passed; `npm.cmd run test:web` passed 2 tests; sequential `npm.cmd run lint`, `npm.cmd run typecheck`, `npm.cmd run build`, and `npm.cmd run test:e2e` passed (four pre-existing hook warnings; 1 Chromium test); `docker compose -f compose.dev.yml config --quiet` passed; `QUORUM_REQUIRE_INTEGRATION=true` with all integration database URLs absent failed for the intended missing-database reasons. `npm.cmd run test:docker-context` could not run because the Docker daemon is unavailable; starting `com.docker.service` was denied by the host.
+Evidence: branch `codex/auth-v2-rewrite`; commits `e21d1e5` and `0b6d58d`; A02 task card and G2 gate.
+Notes: An initial parallel web verification raced on the shared `.next` directory; the affected typecheck and Playwright commands were rerun sequentially and passed. A03 remains dependency-blocked until A02 is `done`; no provider dependency, schema, route, or product behavior was changed.
+
+2026-07-26 — A02 — in_review correction checkpoint — Codex / project owner
+
+Change: Corrected Docker Desktop host-port suppression caused by the internal-only Compose network, made the Docker-context launcher shell-free on Windows, repaired two database-backed test harness defects exposed by real PostgreSQL, and pinned the supported Node 22.23.1/Go 1.25.12 patch toolchains.
+Tests: Fresh `docker compose -f compose.dev.yml up -d --wait` created healthy pinned PostgreSQL 17.10 and Mailpit 1.30.0 services with loopback-only host ports; canonical migrate, local identity init, guarded reset/replay, and role bootstrap twice passed. With the documented local-only test URLs and `QUORUM_REQUIRE_INTEGRATION=true`, `go test -count=1 ./...` and `go vet ./...` passed, including migration, role, and GraphQL integration suites. `npm.cmd run test:web`, `npm.cmd run lint`, `npm.cmd run typecheck`, `npm.cmd run build`, `npm.cmd run test:e2e`, `npm.cmd run test:docker-context`, Mailpit `/readyz`, and `git diff --check` passed (2 Vitest tests, 1 Chromium test, four pre-existing hook warnings). Temporary negative controls made Go unit, Vitest, Playwright, required integration with missing/stopped PostgreSQL, stopped-Mailpit readiness, and weakened `.dockerignore` sentinel checks fail for their intended reasons; every mutation was reverted and the clean suites reran green.
+Evidence: `compose.dev.yml`, `.nvmrc`, `.github/workflows/ci-cd.yml`, `apps/api/go.mod`, `apps/api/internal/{graph,migrate}`, `scripts/verify-docker-context.mjs`, and the A02/G2 verification rows.
+Notes: A02 remains `in_review` and G2 remains unpassed. This local branch has no upstream/PR, so the mandatory Ubuntu CI service-backed job has not run; only the project owner may approve G2. A03 remains dependency-blocked and no provider code was started.

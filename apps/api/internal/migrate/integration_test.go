@@ -92,9 +92,11 @@ func TestIntegrationLegacyLedgerFailsClosedWithoutChecksum(t *testing.T) {
 		CREATE TABLE schema_migrations (
 			version TEXT PRIMARY KEY,
 			applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-		);
-		INSERT INTO schema_migrations (version) VALUES ($1)
-	`, migrations[0].Name)
+		)
+	`)
+	if err == nil {
+		_, err = conn.Exec(context.Background(), "INSERT INTO schema_migrations (version) VALUES ($1)", migrations[0].Name)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

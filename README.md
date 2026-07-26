@@ -32,8 +32,8 @@ The commands in this section describe the current legacy development system. Do 
 
 Prerequisites:
 
-- Node.js 22 and npm 11
-- Go 1.25
+- Node.js 22.23.1 and npm 11.11.0
+- Go 1.25.12
 - Postgres or Neon Postgres
 - Neon Auth
 - Cloudflare R2 for upload signing

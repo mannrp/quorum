@@ -18,9 +18,9 @@ try {
   for (const sentinel of sentinels) writeFileSync(sentinel, "must-not-enter-build-context\n", { flag: "wx" });
 
   const build = spawnSync(
-    "docker",
+    process.platform === "win32" ? "docker.exe" : "docker",
     ["buildx", "build", "--file", "scripts/docker-context.Dockerfile", "--output", `type=local,dest=${output}`, "."],
-    { cwd: root, encoding: "utf8", shell: process.platform === "win32" },
+    { cwd: root, encoding: "utf8" },
   );
   if (build.status !== 0) {
     throw new Error(`Docker context build failed:\n${build.stdout}\n${build.stderr}`);

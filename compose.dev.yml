@@ -44,9 +44,10 @@ services:
 
 networks:
   quorum-private:
-    internal: true
+    # Host-run Next and Go need the loopback-only published ports above.
+    # A Docker-internal network suppresses those bindings on Docker Desktop.
+    driver: bridge
 
 volumes:
   quorum-postgres:
   quorum-mailpit:
-

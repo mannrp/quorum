@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/local/quorum/apps/api/internal/auth"
@@ -635,21 +636,21 @@ func TestPermissionFlagsReflectCurrentUser(t *testing.T) {
 	}
 	project := createWorkflowProject(t, ctx, r.Queries, owner, "Permissions Project")
 
-	leadTeam, err := r.team(auth.WithUser(ctx, lead), team)
+	leadTeam, err := r.teamWithOptions(auth.WithUser(ctx, lead), team, teamHydrationOptions{includePermissions: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !leadTeam.Permissions.CanEdit || !leadTeam.Permissions.CanManageMembers || !leadTeam.Permissions.CanInviteMembers || !leadTeam.Permissions.CanArchive || !leadTeam.Permissions.CanApplyToProjects {
 		t.Fatalf("lead team permissions = %+v, want all true", leadTeam.Permissions)
 	}
-	coLeadTeam, err := r.team(auth.WithUser(ctx, coLead), team)
+	coLeadTeam, err := r.teamWithOptions(auth.WithUser(ctx, coLead), team, teamHydrationOptions{includePermissions: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !coLeadTeam.Permissions.CanEdit || !coLeadTeam.Permissions.CanManageMembers || !coLeadTeam.Permissions.CanInviteMembers || coLeadTeam.Permissions.CanArchive || !coLeadTeam.Permissions.CanApplyToProjects {
 		t.Fatalf("co-lead team permissions = %+v, want lead-like except archive", coLeadTeam.Permissions)
 	}
-	memberTeam, err := r.team(auth.WithUser(ctx, member), team)
+	memberTeam, err := r.teamWithOptions(auth.WithUser(ctx, member), team, teamHydrationOptions{includePermissions: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -657,14 +658,14 @@ func TestPermissionFlagsReflectCurrentUser(t *testing.T) {
 		t.Fatalf("member team permissions = %+v, want all false", memberTeam.Permissions)
 	}
 
-	ownerProject, err := r.project(auth.WithUser(ctx, owner), project)
+	ownerProject, err := r.projectWithOptions(auth.WithUser(ctx, owner), project, projectHydrationOptions{includePermissions: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !ownerProject.Permissions.CanEdit || !ownerProject.Permissions.CanReviewApplications || !ownerProject.Permissions.CanSubmitForApproval || !ownerProject.Permissions.CanArchive || ownerProject.Permissions.CanApprove {
 		t.Fatalf("owner project permissions = %+v, want owner actions true and approve false", ownerProject.Permissions)
 	}
-	adminProject, err := r.project(auth.WithUser(ctx, admin), project)
+	adminProject, err := r.projectWithOptions(auth.WithUser(ctx, admin), project, projectHydrationOptions{includePermissions: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -697,7 +698,11 @@ WHERE id = $1`, applicationID); err != nil {
 		t.Fatal(err)
 	}
 
-	mapped, err := r.project(auth.WithUser(ctx, owner), project)
+	mapped, err := r.projectWithOptions(auth.WithUser(ctx, owner), project, projectHydrationOptions{
+		includeApplications:    true,
+		includeApplicationTeam: true,
+		applicationFullTeam:    true,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -738,6 +743,8 @@ func workflowTestResolver(t *testing.T) (context.Context, *Resolver, func()) {
 		t.Skip("QUORUM_TEST_DATABASE_URL is not set")
 	}
 	ctx := context.Background()
+	ctx = graphql.WithOperationContext(ctx, &graphql.OperationContext{Variables: map[string]any{}})
+	ctx = graphql.WithFieldContext(ctx, &graphql.FieldContext{})
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)

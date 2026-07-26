@@ -22,8 +22,8 @@ Email verification is handled by Neon Auth, so Quorum does not need app-owned SM
 
 Prerequisites for local development:
 
-- Node.js 22 with npm 11.
-- Go 1.25, matching `apps/api/go.mod`.
+- Node.js 22.23.1 with npm 11.11.0.
+- Go 1.25.12, matching `apps/api/go.mod`.
 - Postgres locally or a Neon Postgres branch.
 - Neon Auth values from the same Neon branch.
 - Cloudflare R2 credentials for signed upload flows.
