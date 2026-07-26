@@ -47,6 +47,11 @@ func Bootstrap(ctx context.Context, conn *pgx.Conn, config Config) error {
 			return err
 		}
 	}
+	for _, role := range []string{"quorum_auth_runtime", "quorum_app_runtime"} {
+		if err := revokeMemberships(ctx, conn, role); err != nil {
+			return err
+		}
+	}
 
 	var databaseName string
 	if err := conn.QueryRow(ctx, "SELECT current_database()").Scan(&databaseName); err != nil {
@@ -61,6 +66,41 @@ func Bootstrap(ctx context.Context, conn *pgx.Conn, config Config) error {
 	}
 	if _, err := conn.Exec(ctx, "REVOKE CREATE ON SCHEMA public FROM PUBLIC, quorum_auth_runtime, quorum_app_runtime"); err != nil {
 		return fmt.Errorf("revoke public schema creation from public and runtime roles: %w", err)
+	}
+	return nil
+}
+
+func revokeMemberships(ctx context.Context, conn *pgx.Conn, member string) error {
+	rows, err := conn.Query(ctx, `
+		SELECT granted.rolname
+		FROM pg_auth_members membership
+		JOIN pg_roles granted ON granted.oid = membership.roleid
+		JOIN pg_roles grantee ON grantee.oid = membership.member
+		WHERE grantee.rolname = $1
+	`, member)
+	if err != nil {
+		return fmt.Errorf("inspect memberships for role %s: %w", member, err)
+	}
+	var grantedRoles []string
+	for rows.Next() {
+		var granted string
+		if err := rows.Scan(&granted); err != nil {
+			rows.Close()
+			return fmt.Errorf("read membership for role %s: %w", member, err)
+		}
+		grantedRoles = append(grantedRoles, granted)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("list memberships for role %s: %w", member, err)
+	}
+	rows.Close()
+
+	for _, granted := range grantedRoles {
+		statement := fmt.Sprintf("REVOKE %s FROM %s", pgx.Identifier{granted}.Sanitize(), pgx.Identifier{member}.Sanitize())
+		if _, err := conn.Exec(ctx, statement); err != nil {
+			return fmt.Errorf("revoke role %s from %s: %w", granted, member, err)
+		}
 	}
 	return nil
 }

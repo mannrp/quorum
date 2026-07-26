@@ -39,9 +39,13 @@ func TestIntegrationBootstrapIsIdempotentAndLeastPrivilege(t *testing.T) {
 	if _, err := conn.Exec(context.Background(), "GRANT CREATE ON SCHEMA public TO quorum_app_runtime"); err != nil {
 		t.Fatal("contaminate app runtime role with public schema CREATE")
 	}
+	if _, err := conn.Exec(context.Background(), "GRANT quorum_app_owner TO quorum_app_runtime"); err != nil {
+		t.Fatal("contaminate app runtime role with owner-role membership")
+	}
 	defer func() {
 		_, _ = conn.Exec(context.Background(), "ALTER ROLE quorum_app_runtime NOBYPASSRLS")
 		_, _ = conn.Exec(context.Background(), "REVOKE CREATE ON SCHEMA public FROM quorum_app_runtime")
+		_, _ = conn.Exec(context.Background(), "REVOKE quorum_app_owner FROM quorum_app_runtime")
 	}()
 	if err := Bootstrap(context.Background(), conn, config); err != nil {
 		t.Fatalf("repair bootstrap failed: %v", err)
@@ -59,6 +63,13 @@ func TestIntegrationBootstrapIsIdempotentAndLeastPrivilege(t *testing.T) {
 	}
 	if canCreate {
 		t.Fatal("app runtime unexpectedly has CREATE on public schema")
+	}
+	var isOwnerMember bool
+	if err := conn.QueryRow(context.Background(), "SELECT pg_has_role('quorum_app_runtime', 'quorum_app_owner', 'MEMBER')").Scan(&isOwnerMember); err != nil {
+		t.Fatal(err)
+	}
+	if isOwnerMember {
+		t.Fatal("app runtime unexpectedly remains a member of an owner role")
 	}
 }
 
