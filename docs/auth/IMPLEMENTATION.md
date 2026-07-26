@@ -71,7 +71,7 @@ Pass only when:
 
 - a fresh clone can start pinned PostgreSQL and Mailpit deterministically;
 - every migration applies to an empty database;
-- web unit/component, Go unit/integration, and Playwright browser harnesses run in CI;
+- web unit/component, Go unit/integration, and Playwright browser harnesses run in CI, except the project owner may approve the D-033 sequencing exception after complete service-backed local and negative-control evidence;
 - database/browser suites fail rather than skip when infrastructure cannot start;
 - a temporary negative-control mutation/probe for each harness fails for the intended reason, is reverted, and the clean suite reruns green; no intentionally failing test remains committed;
 - Docker build-context archive/sentinel tests provably exclude local secrets. Release-image layer/SBOM/runtime inspection belongs to A11 after Dockerfiles exist.
@@ -80,6 +80,7 @@ Pass only when:
 
 Pass only when one exact stable auth-provider release (Better Auth is the first candidate) proves every `SPIKE-*` row in `VERIFICATION.md`:
 
+- if D-033 was used, the exact pinned Ubuntu A02 workflow is green before framework acceptance;
 - Next version/runtime compatibility and pinned install;
 - migrations in `better_auth`, never Supabase `auth`;
 - deterministic OAuth/OIDC code/PKCE/state/nonce/callback behavior; real Google provider smoke is required at G4, not guessed during a secretless CI run;

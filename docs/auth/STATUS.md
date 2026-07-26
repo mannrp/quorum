@@ -1,8 +1,8 @@
 # Auth v2 status
 
-**Overall state:** `contract_ready`  
-**Current phase:** after `G1 Contract-ready`  
-**Next task:** `A02 Local/CI/test harness`  
+**Overall state:** `framework_spike`
+**Current phase:** after `G2 Harness-ready`; D-033 Ubuntu sequencing exception active
+**Next task:** `A03 Auth-provider acceptance spike`
 **Security gate approver:** project owner  
 **Last updated:** 2026-07-26
 
@@ -16,8 +16,8 @@
 |---|---|---|---|---|---|---|
 | A00 Inventory and containment | done | Codex / project owner | none | `codex/auth-v2-rewrite` | [Inventory, runtime trace, containment, and D-032 disposable-data acceptance](evidence/A00_REPOSITORY_INVENTORY.md) complete | 2026-07-24 |
 | A01 Contract approval | done | Codex / project owner | none | `codex/auth-v2-rewrite` | D-018/D-019/D-021/D-027/D-031 accepted; `ViewerBootstrapV1` allowlist recorded; D-024 privileged powers remain closed | 2026-07-24 |
-| A02 Local/CI/test harness | in_review | Codex / project owner | A00, A01 | `codex/auth-v2-rewrite` | Docker-backed local migrations/reset/roles/integration/context/Mailpit/browser gates and per-harness negative controls pass after review corrections; mandatory Linux CI and owner review remain | 2026-07-26 |
-| A03 Auth-provider acceptance spike | not_started | unassigned | A02 | — | Better Auth is first candidate; exact version intentionally unselected; task completes only when one provider passes G3 | 2026-07-24 |
+| A02 Local/CI/test harness | done | Codex / project owner | A00, A01 | `codex/auth-v2-rewrite` | Owner approved G2 under D-033 from complete service-backed local and negative-control evidence; exact pinned Ubuntu evidence is deferred only until G3 | 2026-07-26 |
+| A03 Auth-provider acceptance spike | in_progress | Codex / project owner | A02 | `codex/auth-v2-rewrite` | Better Auth is first candidate; exact version is selected test-first and task completes only when every SPIKE row plus deferred Ubuntu evidence passes G3 | 2026-07-26 |
 | A04 Schema and identity foundation | not_started | unassigned | A03 | — | — | 2026-07-24 |
 | A05 Authenticated Next-to-Go contract | not_started | unassigned | A03, A04 | — | — | 2026-07-24 |
 | A06 Google vertical slice | not_started | unassigned | A05 | — | — | 2026-07-24 |
@@ -35,7 +35,7 @@
 |---|---|---|---|
 | G0 Contained | done | project owner, 2026-07-24 | A00 evidence; D-032 loss acceptance; legacy deploy jobs removed; no public application or real users |
 | G1 Contract-ready | done | project owner delegated safe-default decisions, 2026-07-24 | Accepted public/session/verification/password defaults and `ViewerBootstrapV1`; privileged operations remain unexposed pending D-024/A08 |
-| G2 Harness-ready | not_started | — | — |
+| G2 Harness-ready | done | project owner, 2026-07-26 | Complete service-backed local/negative-control evidence; D-033 defers the missing exact pinned Ubuntu run to a hard G3 prerequisite |
 | G3 Framework-accepted | not_started | — | — |
 | G4 Google-complete | not_started | — | — |
 | G5 Session-complete | not_started | — | — |
@@ -164,3 +164,17 @@ Change: Extended idempotent role repair to revoke every parent-role membership f
 Tests: Failing first, `$env:QUORUM_REQUIRE_INTEGRATION='true'; go test -count=1 -run TestIntegrationBootstrapIsIdempotentAndLeastPrivilege ./internal/dbroles` failed because a deliberately contaminated `quorum_app_runtime` remained a member of `quorum_app_owner`. After the repair, the focused command passed. With documented local-only integration variables, `go test -count=1 ./...`, `go vet ./...`, and `git diff --check` passed.
 Evidence: `apps/api/internal/dbroles/bootstrap.go`, `apps/api/internal/dbroles/integration_test.go`; branch `codex/auth-v2-rewrite`.
 Notes: The test cleanup revokes its synthetic membership even on failure. A02 remains `in_review`, G2 remains unpassed, and A03 remains dependency-blocked.
+
+2026-07-26 — A02/G2 — in_review -> done — project owner
+
+Change: The project owner explicitly approved G2 and authorized continuation; D-033 records the sequencing exception because GitHub MCP confirms no PR-triggered Ubuntu run exists.
+Tests: Reused the complete pinned Docker/PostgreSQL/Mailpit, migration/reset/role, Go integration/vet, Vitest, lint/typecheck/build, Playwright, Docker-context, and per-harness negative-control evidence recorded above.
+Evidence: D-033; commits `0b6d58d`, `b323153`, `b3c0988`, and `0dc4302`; branch `codex/auth-v2-rewrite`.
+Notes: The exact pinned Ubuntu workflow was deferred, not waived. It is a hard G3 prerequisite; A03 cannot complete and A04/A05 cannot start until it is green.
+
+2026-07-26 — A03 — not_started -> in_progress — Codex / project owner
+
+Change: Began the exact-version auth-provider acceptance spike after A02/G2 owner approval under D-033.
+Tests: A failing acceptance contract test is required before candidate installation or spike implementation.
+Evidence: branch `codex/auth-v2-rewrite`; A03 task card and every `SPIKE-*` verification row.
+Notes: Development/test-only feature flag required; no product roles/workflows, production exposure, second migration history, A04, or A05 work is in scope.

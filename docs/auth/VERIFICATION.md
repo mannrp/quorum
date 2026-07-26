@@ -310,7 +310,7 @@ Representative permanent IDs:
 | Q-REG-01 | OAUTH-GOOGLE-007 and identity provisioning transaction tests | A04/A06 |
 | Q-OBS-01 | stable error/event/correlation assertions and operations evidence | A05-A11 |
 | Q-SUPPLY-01 | removal of beta Neon dependency plus pinned accepted framework evidence | A03/A11 |
-| Q-TEST-01 | G2 mandatory browser/integration gates and no-skip assertion | A02 |
+| Q-TEST-01 | G2 mandatory browser/integration gates and no-skip assertion; when D-033 is used, exact pinned Ubuntu evidence before G3 | A02/A03 |
 | Q-DEPLOY-01 | CONFIG-CLIENT-001, INT-JWS suite, deployed private-topology evidence | A05/A11 |
 
 ## 13. Performance and scalability evidence
