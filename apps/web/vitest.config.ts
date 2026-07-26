@@ -7,7 +7,6 @@ export default defineConfig({
   resolve: { alias: { "@": fileURLToPath(new URL("./", import.meta.url)) } },
   test: {
     environment: "jsdom",
-    exclude: ["**/*.integration.test.ts"],
     setupFiles: ["./vitest.setup.ts"],
     include: ["**/*.test.{ts,tsx}"],
     restoreMocks: true,

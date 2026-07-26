@@ -1,6 +1,6 @@
 # Auth v2 decision register
 
-**Last updated:** 2026-07-24
+**Last updated:** 2026-07-26
 
 This register is append-only in meaning. An accepted decision may be superseded by a new decision entry; do not silently rewrite architecture to match an implementation shortcut.
 
@@ -61,6 +61,7 @@ This register is append-only in meaning. An accepted decision may be superseded 
 | R-004 | REJECTED | Browser-direct Supabase Data API as the product policy boundary | It would move policy into RLS/Data API and contradict the selected Go authorization owner. |
 | R-005 | REJECTED | Run Better Auth and Supabase Auth together | Two identity/session authorities create ambiguous lifecycle, linking, and revocation behavior. |
 | R-006 | REJECTED | Full local Supabase merely for PostgreSQL | It runs unused services, is development-only, and creates migration/operations confusion without improving portability. |
+| R-007 | REJECTED | `better-auth@1.6.25` as the A03 provider | A service-backed negative test proved that a password containing 14 Unicode code points but 15 UTF-16 code units is accepted and persisted under `minPasswordLength: 15`. D-031/PASS-02 require at least 15 Unicode code points and forbid a Quorum plaintext-validation workaround. The candidate also returned the reusable database session token in sign-in JSON before BFF projection and stores that directly reusable token in plaintext, reinforcing that acceptance cannot be inferred from its otherwise successful schema/session tests. |
 
 ## How to change a decision
 
