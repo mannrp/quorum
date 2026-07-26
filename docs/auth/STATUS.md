@@ -1,8 +1,8 @@
 # Auth v2 status
 
 **Overall state:** `framework_spike`
-**Current phase:** after `G2 Harness-ready`; D-033 Ubuntu sequencing exception active
-**Next task:** `A03 Auth-provider acceptance spike`
+**Current phase:** `A03` blocked on owner decision D-034; D-033 Ubuntu sequencing exception active
+**Next task:** `D-034 Password-length enforcement unit`
 **Security gate approver:** project owner  
 **Last updated:** 2026-07-26
 
@@ -17,7 +17,7 @@
 | A00 Inventory and containment | done | Codex / project owner | none | `codex/auth-v2-rewrite` | [Inventory, runtime trace, containment, and D-032 disposable-data acceptance](evidence/A00_REPOSITORY_INVENTORY.md) complete | 2026-07-24 |
 | A01 Contract approval | done | Codex / project owner | none | `codex/auth-v2-rewrite` | D-018/D-019/D-021/D-027/D-031 accepted; `ViewerBootstrapV1` allowlist recorded; D-024 privileged powers remain closed | 2026-07-24 |
 | A02 Local/CI/test harness | done | Codex / project owner | A00, A01 | `codex/auth-v2-rewrite` | Owner approved G2 under D-033 from complete service-backed local and negative-control evidence; exact pinned Ubuntu evidence is deferred only until G3 | 2026-07-26 |
-| A03 Auth-provider acceptance spike | in_progress | Codex / project owner | A02 | `codex/auth-v2-rewrite` | `better-auth@1.6.25` rejected by D-031/PASS-02 Unicode-code-point negative control (R-007); next maintained candidate must be selected and pass every SPIKE row plus deferred Ubuntu evidence | 2026-07-26 |
+| A03 Auth-provider acceptance spike | blocked | Codex / project owner | A02, D-034 | `codex/auth-v2-rewrite` | Better Auth 1.6.25 and Ory Kratos 26.2.0 both reject ASCII-short inputs but accept 14 Unicode code points when one supplementary character increases the encoded length; owner policy decision D-034 required | 2026-07-26 |
 | A04 Schema and identity foundation | not_started | unassigned | A03 | — | — | 2026-07-24 |
 | A05 Authenticated Next-to-Go contract | not_started | unassigned | A03, A04 | — | — | 2026-07-24 |
 | A06 Google vertical slice | not_started | unassigned | A05 | — | — | 2026-07-24 |
@@ -185,3 +185,10 @@ Change: Rejected exact stable `better-auth@1.6.25` and removed its spike route, 
 Tests: Failing first, the service-backed password-policy negative control submitted 13 ASCII code points plus one supplementary Unicode code point (14 code points, 15 JavaScript UTF-16 code units) with `minPasswordLength: 15`. `npm.cmd run test:auth-provider-spike --workspace=@quorum/web` failed exactly because signup returned HTTP 200 instead of 400 and persisted the account; test cleanup removed the synthetic account/message and the other 8 PostgreSQL/Mailpit/schema/route/session checks passed. The candidate implementation uses JavaScript string length at the password boundary and offers no configuration for code-point counting; adding Quorum plaintext validation would violate D-031/PASS-02.
 Evidence: R-007; rejected candidate commit `0394097`; the final isolated run reported 1 intended failure and 8 passes. Before rejection, live checks also established six schema-isolated tables owned by `quorum_auth_owner`, least-privilege `quorum_auth_runtime` operation, `quorum_app_runtime` denial, credential password hashing, Mailpit verification delivery, wrong-origin rejection, secure host-only cookie attributes, projected session JSON, immediate revocation, raw sign-in JSON containing the reusable session token, and the database storing that same directly reusable token. No credential values were recorded.
 Notes: No security rule or test was weakened. The Better Auth artifacts and dependencies are removed rather than leaving an intentionally failing suite or a production-visible spike. The exact pinned Ubuntu workflow remains a hard prerequisite for eventual G3 acceptance under D-033.
+
+2026-07-26 — A03 — in_progress -> blocked — Codex / project owner
+
+Change: Tested and rejected the second maintained provider candidate, exact stable Ory Kratos 26.2.0, then removed its image-backed spike configuration and in-memory identities. Opened D-034 because both candidates fail the same accepted password unit and the next common self-hosted option, SuperTokens, documents backend custom password validators—the plaintext handling D-031/PASS-02 prohibit.
+Tests: The pinned immutable image `oryd/kratos:v26.2.0@sha256:2a13bb8d362c7a7ae33bd7c0f5168aee46921f15c916a06346db91c06dc76643` was configured with `min_password_length: 15`. The automated API-flow test failed because 14 Unicode code points containing one supplementary character returned HTTP 200. A separate non-development-mode run produced the sanitized controls: 14 ASCII code points -> HTTP 400; 14 code points with one supplementary character -> HTTP 200; 15 code points -> HTTP 200. No password value or identity data was logged, and the loopback-only container/in-memory store was removed.
+Evidence: R-008, D-034, Ory Kratos 26.2.0 release/image digest and Apache-2.0 license. SuperTokens' maintained documentation states that replacing its default password rule requires a backend `validate` function, so it was not installed as a third candidate under the current no-custom-credential-handling rule.
+Notes: A03 and G3 are blocked—not passed or in review. A04/A05 remain unstarted. The owner must resolve D-034; the Ubuntu workflow remains independently required before any eventual G3 acceptance.
