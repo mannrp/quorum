@@ -1,10 +1,10 @@
 # Auth v2 status
 
 **Overall state:** `framework_spike`
-**Current phase:** `A03` blocked on owner decision D-034; D-033 Ubuntu sequencing exception active
-**Next task:** `D-034 Password-length enforcement unit`
+**Current phase:** `A03` in progress; D-033 Ubuntu sequencing exception active
+**Next task:** `A03 exact-provider retest under D-034 conservative password thresholds`
 **Security gate approver:** project owner  
-**Last updated:** 2026-07-26
+**Last updated:** 2026-07-27
 
 ## Allowed states
 
@@ -17,7 +17,7 @@
 | A00 Inventory and containment | done | Codex / project owner | none | `codex/auth-v2-rewrite` | [Inventory, runtime trace, containment, and D-032 disposable-data acceptance](evidence/A00_REPOSITORY_INVENTORY.md) complete | 2026-07-24 |
 | A01 Contract approval | done | Codex / project owner | none | `codex/auth-v2-rewrite` | D-018/D-019/D-021/D-027/D-031 accepted; `ViewerBootstrapV1` allowlist recorded; D-024 privileged powers remain closed | 2026-07-24 |
 | A02 Local/CI/test harness | done | Codex / project owner | A00, A01 | `codex/auth-v2-rewrite` | Owner approved G2 under D-033 from complete service-backed local and negative-control evidence; exact pinned Ubuntu evidence is deferred only until G3 | 2026-07-26 |
-| A03 Auth-provider acceptance spike | blocked | Codex / project owner | A02, D-034 | `codex/auth-v2-rewrite` | Better Auth 1.6.25 and Ory Kratos 26.2.0 both reject ASCII-short inputs but accept 14 Unicode code points when one supplementary character increases the encoded length; owner policy decision D-034 required | 2026-07-26 |
+| A03 Auth-provider acceptance spike | in_progress | Codex / project owner | A02 | `codex/auth-v2-rewrite` | D-034 conservatively retains the 15-code-point floor while permitting proven provider-native thresholds of 29 UTF-16 code units or 57 UTF-8 bytes; exact provider retest and every `SPIKE-*` row remain required | 2026-07-27 |
 | A04 Schema and identity foundation | not_started | unassigned | A03 | — | — | 2026-07-24 |
 | A05 Authenticated Next-to-Go contract | not_started | unassigned | A03, A04 | — | — | 2026-07-24 |
 | A06 Google vertical slice | not_started | unassigned | A05 | — | — | 2026-07-24 |
@@ -192,3 +192,10 @@ Change: Tested and rejected the second maintained provider candidate, exact stab
 Tests: The pinned immutable image `oryd/kratos:v26.2.0@sha256:2a13bb8d362c7a7ae33bd7c0f5168aee46921f15c916a06346db91c06dc76643` was configured with `min_password_length: 15`. The automated API-flow test failed because 14 Unicode code points containing one supplementary character returned HTTP 200. A separate non-development-mode run produced the sanitized controls: 14 ASCII code points -> HTTP 400; 14 code points with one supplementary character -> HTTP 200; 15 code points -> HTTP 200. No password value or identity data was logged, and the loopback-only container/in-memory store was removed.
 Evidence: R-008, D-034, Ory Kratos 26.2.0 release/image digest and Apache-2.0 license. SuperTokens' maintained documentation states that replacing its default password rule requires a backend `validate` function, so it was not installed as a third candidate under the current no-custom-credential-handling rule.
 Notes: A03 and G3 are blocked—not passed or in review. A04/A05 remain unstarted. The owner must resolve D-034; the Ubuntu workflow remains independently required before any eventual G3 acceptance.
+
+2026-07-27 - A03/D-034 - blocked -> in_progress - project owner / Codex
+
+Change: The owner delegated D-034 to Codex. The accepted conservative decision retains the 15-Unicode-code-point floor without Quorum plaintext validation and permits provider-native encoded thresholds only at 29 UTF-16 code units or 57 UTF-8 bytes, which exclude every 14-code-point input while accepting at least 64 ASCII characters.
+Tests: Added deterministic unit-specific boundary probes for 14 and 15 maximum-width Unicode code points, 15 ASCII characters, the required 64-character support floor, the 128 target, and the over-target boundary. `npm.cmd run test:auth-spike --workspace=@quorum/web` passed 136 tests in 14 files; `npm.cmd test --workspace=@quorum/web -- --run` passed 138 tests in 15 files; `npm.cmd run typecheck --workspace=@quorum/web` passed; and `git diff --check` passed with only line-ending notices.
+Evidence: D-034; PASS-02; SPIKE-PASSWORD-001; `apps/web/lib/auth-v2/spike/password-policy-probe.ts`.
+Notes: This resolves only the password-unit policy blocker and reopens A03. It does not accept a provider or pass G3. R-007/R-008 remain historical candidate results; the pinned Ubuntu workflow and every `SPIKE-*` row remain required. A04/A05 remain unstarted.

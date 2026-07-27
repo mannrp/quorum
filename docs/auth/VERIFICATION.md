@@ -89,6 +89,7 @@ Every row is pass/fail for the exact pinned candidate. `A03` remains incomplete 
 | Test/evidence ID | Required proof | Method and pass rule |
 |---|---|---|
 | SPIKE-COMPAT-001 | Exact provider version supports pinned Node 22, Next version, PostgreSQL 17, runtime, license, and plugins | Clean install/build/typecheck; no ignored peer error; advisories reviewed |
+| SPIKE-PASSWORD-001 | Provider configuration enforces PASS-02 without Quorum plaintext handling | Prove the actual measurement unit and normalization order; reject 14 maximum-width Unicode code points, accept 15 code points where the configured unit permits and at least 64 ASCII characters, cover the 128 target/over-limit boundary, common/breached screening, Unicode/space, paste/password-manager input, and no truncation. Encoded-unit configurations meet D-034's conservative threshold. |
 | SPIKE-SCHEMA-001 | Generated objects land only in `better_auth`; migration is reviewable and canonical | Generate against isolated `search_path=better_auth,pg_catalog,pg_temp`; inspect catalogs; fail on any auth object in `public` or Supabase `auth` |
 | SPIKE-OAUTH-001 | Maintained code/PKCE/state/nonce/exact callback/one-use behavior | Deterministic local OAuth/OIDC provider or transport harness covers success and negative cases; no provider secret in CI |
 | SPIKE-ROUTES-001 | Every mounted auth route/method has an allowlisted purpose and projected response | Route inventory contract test; unknown/unwanted routes return 404/405; no generic token endpoint is exposed |

@@ -82,6 +82,7 @@ Pass only when one exact stable auth-provider release (Better Auth is the first 
 
 - if D-033 was used, the exact pinned Ubuntu A02 workflow is green before framework acceptance;
 - Next version/runtime compatibility and pinned install;
+- password policy and normalization behavior satisfy PASS-02/D-034 without custom plaintext handling;
 - migrations in `better_auth`, never Supabase `auth`;
 - deterministic OAuth/OIDC code/PKCE/state/nonce/callback behavior; real Google provider smoke is required at G4, not guessed during a secretless CI run;
 - opaque `HttpOnly` cookie with no reusable credential in browser JSON/storage;

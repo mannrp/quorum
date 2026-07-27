@@ -1,4 +1,37 @@
-type PasswordProbeExpectation = "accept" | "reject";
+type PasswordProbeExpectation =
+  | "accept"
+  | "accept-if-code-point-native"
+  | "reject";
+
+export type PasswordLengthUnit =
+  | "unicode-code-points"
+  | "utf-16-code-units"
+  | "utf-8-bytes";
+
+export function conservativeMinimumFor(unit: PasswordLengthUnit): number {
+  switch (unit) {
+    case "unicode-code-points":
+      return 15;
+    case "utf-16-code-units":
+      return 29;
+    case "utf-8-bytes":
+      return 57;
+  }
+}
+
+export function measuredPasswordLength(
+  value: string,
+  unit: PasswordLengthUnit,
+): number {
+  switch (unit) {
+    case "unicode-code-points":
+      return Array.from(value).length;
+    case "utf-16-code-units":
+      return value.length;
+    case "utf-8-bytes":
+      return new TextEncoder().encode(value).byteLength;
+  }
+}
 
 export type PasswordPolicyProbe = Readonly<{
   id: string;
@@ -30,7 +63,9 @@ export const PASSWORD_POLICY_PROBES: readonly PasswordPolicyProbe[] =
       `${"a".repeat(13)}\u{1F512}`,
       "reject",
     ),
-    probe("minimum", "a".repeat(15), "accept"),
+    probe("below-minimum-maximum-width", "\u{1F512}".repeat(14), "reject"),
+    probe("minimum-ascii", "a".repeat(15), "accept-if-code-point-native"),
+    probe("minimum-maximum-width", "\u{1F512}".repeat(15), "accept"),
     probe("required-supported-length", "a".repeat(64), "accept"),
     probe("target-maximum", "a".repeat(128), "accept"),
     probe("above-target-maximum", "a".repeat(129), "reject"),
