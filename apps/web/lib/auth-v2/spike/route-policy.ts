@@ -40,15 +40,37 @@ export function authorizeSpikeRoute(
     : { allowed: false, status: 405 };
 }
 
-const TOP_LEVEL_SAFE_FIELDS = new Set(["ok", "count", "next"]);
-const USER_SAFE_FIELDS = new Set(["id", "email", "emailVerified", "name", "image"]);
-const SESSION_SAFE_FIELDS = new Set([
-  "id",
-  "createdAt",
-  "updatedAt",
-  "expiresAt",
-  "current",
-]);
+type SafeFieldRules = Readonly<
+  Record<string, (value: unknown) => boolean>
+>;
+
+const isBoolean = (value: unknown) => typeof value === "boolean";
+const isNonemptyString = (value: unknown) =>
+  typeof value === "string" && value.length > 0;
+const isNullableString = (value: unknown) =>
+  value === null || typeof value === "string";
+const isNonnegativeInteger = (value: unknown) =>
+  Number.isInteger(value) && (value as number) >= 0;
+
+const TOP_LEVEL_SAFE_FIELDS: SafeFieldRules = {
+  ok: isBoolean,
+  count: isNonnegativeInteger,
+  next: isNullableString,
+};
+const USER_SAFE_FIELDS: SafeFieldRules = {
+  id: isNonemptyString,
+  email: isNonemptyString,
+  emailVerified: isBoolean,
+  name: isNullableString,
+  image: isNullableString,
+};
+const SESSION_SAFE_FIELDS: SafeFieldRules = {
+  id: isNonemptyString,
+  createdAt: isNonemptyString,
+  updatedAt: isNonemptyString,
+  expiresAt: isNonemptyString,
+  current: isBoolean,
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -56,14 +78,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function projectFields(
   value: unknown,
-  allowedFields: ReadonlySet<string>,
+  allowedFields: SafeFieldRules,
 ): Record<string, unknown> | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
 
   return Object.fromEntries(
-    Object.entries(value).filter(([key]) => allowedFields.has(key)),
+    Object.entries(value).filter(
+      ([key, fieldValue]) => allowedFields[key]?.(fieldValue) === true,
+    ),
   );
 }
 
@@ -73,7 +97,9 @@ export function projectCredentialSafeJson(value: unknown): Record<string, unknow
   }
 
   const projected = Object.fromEntries(
-    Object.entries(value).filter(([key]) => TOP_LEVEL_SAFE_FIELDS.has(key)),
+    Object.entries(value).filter(
+      ([key, fieldValue]) => TOP_LEVEL_SAFE_FIELDS[key]?.(fieldValue) === true,
+    ),
   );
   const user = projectFields(value.user, USER_SAFE_FIELDS);
   const session = projectFields(value.session, SESSION_SAFE_FIELDS);

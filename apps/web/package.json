@@ -9,6 +9,7 @@
     "lint": "next lint",
     "typecheck": "node ../../node_modules/typescript/bin/tsc --noEmit",
     "test": "vitest run",
+    "test:auth-spike": "vitest run lib/auth-v2/spike",
     "test:watch": "vitest",
     "clear": "npx rimraf .next"
   },
@@ -29,6 +30,8 @@
     "eslint": "^8.57.0",
     "eslint-config-next": "^15.1.0",
     "jsdom": "29.1.1",
+    "oidc-provider": "9.11.0",
+    "openid-client": "6.8.4",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.7",
     "typescript": "^5.5.4",

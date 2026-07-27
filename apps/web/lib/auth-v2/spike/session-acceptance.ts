@@ -77,6 +77,8 @@ export type RefreshContext = Readonly<{
 }>;
 
 type RefreshRejectionReason =
+  | "invalid-refresh-evidence"
+  | "authentication-context-missing"
   | "credential-not-rotated"
   | "authenticated-at-changed"
   | "creation-time-changed"
@@ -99,6 +101,31 @@ export function assessRefreshContinuity(
   before: RefreshContext,
   after: RefreshContext,
 ): RefreshContinuityAssessment {
+  const timestamps = [
+    before.createdAtMs,
+    before.absoluteExpiresAtMs,
+    before.authenticatedAtMs,
+    after.createdAtMs,
+    after.absoluteExpiresAtMs,
+    after.authenticatedAtMs,
+  ];
+  if (
+    before.credentialFingerprint.length === 0 ||
+    after.credentialFingerprint.length === 0 ||
+    timestamps.some((timestamp) => !Number.isFinite(timestamp)) ||
+    before.absoluteExpiresAtMs <= before.createdAtMs ||
+    after.absoluteExpiresAtMs <= after.createdAtMs
+  ) {
+    return { accepted: false, reason: "invalid-refresh-evidence" };
+  }
+  if (
+    before.authenticationMethods.length === 0 ||
+    after.authenticationMethods.length === 0 ||
+    before.assurance.length === 0 ||
+    after.assurance.length === 0
+  ) {
+    return { accepted: false, reason: "authentication-context-missing" };
+  }
   if (before.credentialFingerprint === after.credentialFingerprint) {
     return { accepted: false, reason: "credential-not-rotated" };
   }

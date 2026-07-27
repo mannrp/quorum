@@ -89,6 +89,15 @@ describe("session cookie acceptance policy", () => {
       "__Host-session=opaque; Path=/; Secure; HttpOnly; SameSite=None",
       "invalid-same-site",
     ],
+    ["__Host-=opaque; Path=/; Secure; HttpOnly; SameSite=Lax", "invalid-name"],
+    [
+      "__Host-session=opaque; Path=/; Path=/other; Secure; HttpOnly; SameSite=Lax",
+      "ambiguous-attribute",
+    ],
+    [
+      "__Host-session=opaque; Path=/; Secure; HttpOnly; SameSite=Lax; SameSite=None",
+      "ambiguous-attribute",
+    ],
   ])("rejects %s", (cookie, reason) => {
     expect(assessSessionCookie(cookie)).toEqual({ accepted: false, reason });
   });

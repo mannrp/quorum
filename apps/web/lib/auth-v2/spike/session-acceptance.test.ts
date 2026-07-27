@@ -108,4 +108,33 @@ describe("refresh/rotation context acceptance", () => {
       }),
     ).toEqual({ accepted: false, reason });
   });
+
+  it("rejects missing authentication context", () => {
+    expect(
+      assessRefreshContinuity(
+        { ...before, authenticationMethods: [] },
+        {
+          ...before,
+          credentialFingerprint: "fingerprint-after",
+          authenticationMethods: [],
+        },
+      ),
+    ).toEqual({ accepted: false, reason: "authentication-context-missing" });
+  });
+
+  it("rejects incomplete or temporally invalid evidence", () => {
+    expect(
+      assessRefreshContinuity(
+        { ...before, credentialFingerprint: "" },
+        { ...before, credentialFingerprint: "fingerprint-after" },
+      ),
+    ).toEqual({ accepted: false, reason: "invalid-refresh-evidence" });
+    expect(
+      assessRefreshContinuity(before, {
+        ...before,
+        credentialFingerprint: "fingerprint-after",
+        absoluteExpiresAtMs: Number.NaN,
+      }),
+    ).toEqual({ accepted: false, reason: "invalid-refresh-evidence" });
+  });
 });

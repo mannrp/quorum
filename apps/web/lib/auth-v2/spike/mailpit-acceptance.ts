@@ -163,8 +163,12 @@ export class MailpitAcceptanceClient {
           message.to.includes(input.recipient),
       );
       if (summary) {
-        const exercised = await input.exercise(await this.#getMessage(summary));
-        return { delivered: true, exercised };
+        try {
+          const exercised = await input.exercise(await this.#getMessage(summary));
+          return { delivered: true, exercised };
+        } catch {
+          throw new Error("Mailpit message exercise failed");
+        }
       }
       await this.#sleep(
         Math.min(this.#pollIntervalMs, Math.max(1, deadline - this.#now())),

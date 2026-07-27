@@ -52,6 +52,8 @@ export type SessionCookieAssessment =
       accepted: false;
       reason:
         | "missing-host-prefix"
+        | "invalid-name"
+        | "ambiguous-attribute"
         | "missing-secure"
         | "missing-http-only"
         | "invalid-path"
@@ -63,9 +65,30 @@ export function assessSessionCookie(cookie: string): SessionCookieAssessment {
   const [nameValue = "", ...rawAttributes] = cookie.split(";");
   const name = nameValue.trim().split("=", 1)[0];
   const attributes = rawAttributes.map((attribute) => attribute.trim().toLowerCase());
+  const protectedAttributeNames = new Set([
+    "secure",
+    "httponly",
+    "path",
+    "domain",
+    "samesite",
+  ]);
+  const attributeNames = attributes.map((attribute) =>
+    attribute.split("=", 1)[0] ?? "",
+  );
 
   if (!name.startsWith("__Host-")) {
     return { accepted: false, reason: "missing-host-prefix" };
+  }
+  if (name.length === "__Host-".length) {
+    return { accepted: false, reason: "invalid-name" };
+  }
+  if (
+    [...protectedAttributeNames].some(
+      (protectedName) =>
+        attributeNames.filter((name) => name === protectedName).length > 1,
+    )
+  ) {
+    return { accepted: false, reason: "ambiguous-attribute" };
   }
   if (!attributes.includes("secure")) {
     return { accepted: false, reason: "missing-secure" };

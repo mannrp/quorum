@@ -109,4 +109,46 @@ describe("Mailpit acceptance client", () => {
 
     await expect(client.listMessages()).rejects.toThrow("Mailpit request failed");
   });
+
+  it("replaces secret-bearing exercise errors with a fixed safe failure", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          messages: [
+            {
+              ID: "message-1",
+              Subject: "Reset your password",
+              From: { Address: "no-reply@quorum.example.test" },
+              To: [{ Address: "member@example.test" }],
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ID: "message-1",
+          Subject: "Reset your password",
+          From: { Address: "no-reply@quorum.example.test" },
+          To: [{ Address: "member@example.test" }],
+          Text: "https://quorum.example.test/reset?token=secret-token",
+          HTML: "",
+        }),
+      );
+    const client = new MailpitAcceptanceClient({
+      apiUrl: "http://127.0.0.1:8025",
+      fetch,
+    });
+
+    await expect(
+      client.waitForAndExercise({
+        recipient: "member@example.test",
+        subject: "Reset your password",
+        timeoutMs: 100,
+        exercise: async (message) => {
+          throw new Error(message.text);
+        },
+      }),
+    ).rejects.toThrow("Mailpit message exercise failed");
+  });
 });
