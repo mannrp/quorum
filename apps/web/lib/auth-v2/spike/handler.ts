@@ -34,6 +34,7 @@ export type SpikeProvider = Readonly<{
 export type SpikeHandlerResponse = Readonly<{
   status: number;
   body: Record<string, unknown>;
+  headers: Readonly<{ "cache-control": "no-store" }>;
   setCookies?: readonly string[];
 }>;
 
@@ -47,7 +48,11 @@ function errorResponse(
   status: number,
   error: string,
 ): SpikeHandlerResponse {
-  return { status, body: { error } };
+  return {
+    status,
+    body: { error },
+    headers: { "cache-control": "no-store" },
+  };
 }
 
 export function createSpikeHandler(configuration: SpikeHandlerConfiguration) {
@@ -95,6 +100,7 @@ export function createSpikeHandler(configuration: SpikeHandlerConfiguration) {
       const projected: SpikeHandlerResponse = {
         status: response.status,
         body: projectCredentialSafeJson(response.body),
+        headers: { "cache-control": "no-store" },
       };
 
       return response.setCookies

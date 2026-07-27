@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createSpikeHandler, type SpikeProvider } from "./handler";
 
 const trustedOrigin = "https://quorum.example.test";
+const noStore = { headers: { "cache-control": "no-store" } } as const;
 
 function request(
   method: string,
@@ -36,7 +37,11 @@ describe("provider-neutral auth spike handler", () => {
 
     await expect(
       handle(request("POST", "/api/auth-v2/spike/sign-in")),
-    ).resolves.toEqual({ status: 404, body: { error: "not-found" } });
+    ).resolves.toEqual({
+      status: 404,
+      body: { error: "not-found" },
+      ...noStore,
+    });
     expect(loadProvider).not.toHaveBeenCalled();
   });
 
@@ -50,7 +55,11 @@ describe("provider-neutral auth spike handler", () => {
 
     await expect(
       handle(request("GET", "/api/auth-v2/spike/get-access-token")),
-    ).resolves.toEqual({ status: 404, body: { error: "not-found" } });
+    ).resolves.toEqual({
+      status: 404,
+      body: { error: "not-found" },
+      ...noStore,
+    });
     expect(loadProvider).not.toHaveBeenCalled();
   });
 
@@ -70,7 +79,11 @@ describe("provider-neutral auth spike handler", () => {
           "https://attacker.example.test",
         ),
       ),
-    ).resolves.toEqual({ status: 403, body: { error: "forbidden" } });
+    ).resolves.toEqual({
+      status: 403,
+      body: { error: "forbidden" },
+      ...noStore,
+    });
     expect(loadProvider).not.toHaveBeenCalled();
   });
 
@@ -96,6 +109,7 @@ describe("provider-neutral auth spike handler", () => {
         user: { id: "user-1", email: "member@example.test" },
         session: { id: "session-1" },
       },
+      ...noStore,
       setCookies: [
         "__Host-quorum_session=opaque; Path=/; Secure; HttpOnly; SameSite=Lax",
       ],
@@ -117,7 +131,11 @@ describe("provider-neutral auth spike handler", () => {
 
     await expect(
       handle(request("POST", "/api/auth-v2/spike/sign-in")),
-    ).resolves.toEqual({ status: 502, body: { error: "provider-rejected" } });
+    ).resolves.toEqual({
+      status: 502,
+      body: { error: "provider-rejected" },
+      ...noStore,
+    });
   });
 
   it("allows safe reads without requiring mutation headers", async () => {
@@ -133,6 +151,7 @@ describe("provider-neutral auth spike handler", () => {
     ).resolves.toEqual({
       status: 200,
       body: { sessions: [{ id: "session-1", current: true }] },
+      ...noStore,
     });
   });
 });
