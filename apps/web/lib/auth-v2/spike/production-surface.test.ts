@@ -51,7 +51,7 @@ describe("auth spike production absence", () => {
     expect(packageJson.dependencies).not.toHaveProperty("oidc-provider");
     expect(packageJson.dependencies).not.toHaveProperty("openid-client");
     expect(packageJson.devDependencies).toMatchObject({
-      "oidc-provider": "9.11.0",
+      "oidc-provider": "9.11.1",
       "openid-client": "6.8.4",
     });
   });

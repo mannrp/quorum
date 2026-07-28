@@ -13,7 +13,7 @@ evidence from one accepted application auth provider and the pinned Ubuntu job.
 
 | Package | Exact version | Use | License | Integrity source |
 | --- | --- | --- | --- | --- |
-| `oidc-provider` | `9.11.0` | Loopback-only maintained OAuth/OIDC authorization server | MIT | `package-lock.json` (`sha512-EsVImw...`) |
+| `oidc-provider` | `9.11.1` | Loopback-only maintained OAuth/OIDC authorization server | MIT | `package-lock.json` |
 | `openid-client` | `6.8.4` | Maintained discovery, state, nonce, PKCE, callback, token, and ID-token validation | MIT | `package-lock.json` (`sha512-QSw0BA...`) |
 
 The OIDC fixture uses a public client (`token_endpoint_auth_method=none`), so CI
@@ -109,3 +109,7 @@ unrelated dependencies and violate the focused-lockfile rule.
 
 Application-provider schema/session upgrade testing is separate and remains a
 pending `SPIKE-UPGRADE-001` requirement.
+
+## Better Auth candidate checkpoint (2026-07-27)
+
+Exact current stable `better-auth@1.6.25` is installed as a development-only candidate. Service-backed tests use the reviewed transient schema fixture and pinned loopback PostgreSQL; they prove the conservative D-034 boundary, credential hashing, schema isolation, runtime grants, origin rejection, signed-cookie-only session reuse, shared database rate limiting, and fail-closed rate-store behavior. This is a checkpoint, not provider or G3 acceptance; all remaining `SPIKE-*` evidence and pinned Ubuntu CI remain mandatory.
