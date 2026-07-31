@@ -86,6 +86,7 @@ export async function startLocalOidcProvider(input: {
     claims: {
       openid: ["sub"],
       email: ["email", "email_verified"],
+      profile: ["name"],
     },
     findAccount: async () => ({
       accountId: "fixture-subject",
@@ -93,6 +94,7 @@ export async function startLocalOidcProvider(input: {
         sub: "fixture-subject",
         email: "fixture-user@example.test",
         email_verified: true,
+        name: "Fixture User",
       }),
     }),
     pkce: { required: () => true },

@@ -216,7 +216,7 @@ export async function runOidcProtocolAcceptance(
   );
 
   const expired = await prepareAuthorization(harness);
-  await new Promise((resolve) => setTimeout(resolve, 1_100));
+  await new Promise((resolve) => setTimeout(resolve, 2_100));
   const expiredCodeDenied = await denied(
     () => exchange(expired),
     "invalid-grant",

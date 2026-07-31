@@ -10,7 +10,7 @@ describe("maintained OAuth/OIDC protocol acceptance flow", () => {
     const provider = await startLocalOidcProvider({
       callbackUrl:
         "http://127.0.0.1:3000/api/auth-v2/spike/oauth/callback",
-      authorizationCodeTtlSeconds: 1,
+      authorizationCodeTtlSeconds: 2,
     });
 
     try {
