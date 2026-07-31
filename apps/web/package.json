@@ -12,7 +12,7 @@
     "test:auth-spike": "vitest run lib/auth-v2/spike --exclude **/*.integration.test.ts",
     "test:watch": "vitest",
     "clear": "npx rimraf .next",
-    "test:auth-provider-spike": "vitest run --config vitest.auth-provider.final.config.ts"
+    "test:auth-provider-spike": "node ../../scripts/run-auth-provider-spike.mjs"
   },
   "dependencies": {
     "@neondatabase/auth": "^0.4.1-beta",
