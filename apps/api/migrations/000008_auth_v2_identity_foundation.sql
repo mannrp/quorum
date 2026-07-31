@@ -8,7 +8,8 @@ BEGIN
     'quorum_integration_owner',
     'quorum_audit_owner',
     'quorum_auth_runtime',
-    'quorum_app_runtime'
+    'quorum_app_runtime',
+    'quorum_audit_reader'
   ]
   LOOP
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = required_role) THEN
@@ -47,7 +48,7 @@ BEGIN
 END
 $$;
 
-CREATE TABLE "user" (
+CREATE TABLE better_auth."user" (
   "id" text PRIMARY KEY,
   "name" text NOT NULL,
   "email" text NOT NULL UNIQUE,
@@ -58,7 +59,7 @@ CREATE TABLE "user" (
   "twoFactorEnabled" boolean
 );
 
-CREATE TABLE "session" (
+CREATE TABLE better_auth."session" (
   "id" text PRIMARY KEY,
   "expiresAt" timestamptz NOT NULL,
   "token" text NOT NULL UNIQUE,
@@ -66,7 +67,7 @@ CREATE TABLE "session" (
   "updatedAt" timestamptz NOT NULL,
   "ipAddress" text,
   "userAgent" text,
-  "userId" text NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+  "userId" text NOT NULL REFERENCES better_auth."user" ("id") ON DELETE CASCADE,
   "absoluteExpiresAt" timestamptz NOT NULL,
   "assurance" text NOT NULL,
   "authenticatedAt" timestamptz NOT NULL,
@@ -74,11 +75,11 @@ CREATE TABLE "session" (
   "lastSeenAt" timestamptz NOT NULL
 );
 
-CREATE TABLE "account" (
+CREATE TABLE better_auth."account" (
   "id" text PRIMARY KEY,
   "accountId" text NOT NULL,
   "providerId" text NOT NULL,
-  "userId" text NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+  "userId" text NOT NULL REFERENCES better_auth."user" ("id") ON DELETE CASCADE,
   "accessToken" text,
   "refreshToken" text,
   "idToken" text,
@@ -90,7 +91,7 @@ CREATE TABLE "account" (
   "updatedAt" timestamptz NOT NULL
 );
 
-CREATE TABLE "verification" (
+CREATE TABLE better_auth."verification" (
   "id" text PRIMARY KEY,
   "identifier" text NOT NULL,
   "value" text NOT NULL,
@@ -99,28 +100,28 @@ CREATE TABLE "verification" (
   "updatedAt" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE "twoFactor" (
+CREATE TABLE better_auth."twoFactor" (
   "id" text PRIMARY KEY,
   "secret" text NOT NULL,
   "backupCodes" text NOT NULL,
-  "userId" text NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+  "userId" text NOT NULL REFERENCES better_auth."user" ("id") ON DELETE CASCADE,
   "verified" boolean,
   "failedVerificationCount" integer,
   "lockedUntil" timestamptz
 );
 
-CREATE TABLE "rateLimit" (
+CREATE TABLE better_auth."rateLimit" (
   "id" text PRIMARY KEY,
   "key" text NOT NULL UNIQUE,
   "count" integer NOT NULL,
   "lastRequest" bigint NOT NULL
 );
 
-CREATE INDEX "session_userId_idx" ON "session" ("userId");
-CREATE INDEX "account_userId_idx" ON "account" ("userId");
-CREATE INDEX "verification_identifier_idx" ON "verification" ("identifier");
-CREATE INDEX "twoFactor_secret_idx" ON "twoFactor" ("secret");
-CREATE INDEX "twoFactor_userId_idx" ON "twoFactor" ("userId");
+CREATE INDEX "session_userId_idx" ON better_auth."session" ("userId");
+CREATE INDEX "account_userId_idx" ON better_auth."account" ("userId");
+CREATE INDEX "verification_identifier_idx" ON better_auth."verification" ("identifier");
+CREATE INDEX "twoFactor_secret_idx" ON better_auth."twoFactor" ("secret");
+CREATE INDEX "twoFactor_userId_idx" ON better_auth."twoFactor" ("userId");
 
 GRANT USAGE ON SCHEMA better_auth TO quorum_auth_runtime;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA better_auth TO quorum_auth_runtime;
@@ -128,11 +129,24 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA better_auth
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO quorum_auth_runtime;
 
 RESET ROLE;
+GRANT USAGE ON SCHEMA public TO quorum_app_owner, quorum_audit_owner, quorum_app_runtime;
 GRANT REFERENCES ON public.users TO quorum_app_owner, quorum_audit_owner;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO quorum_app_runtime;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO quorum_app_runtime;
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC, quorum_auth_runtime;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC, quorum_auth_runtime;
+ALTER DEFAULT PRIVILEGES FOR ROLE quorum_migrator IN SCHEMA public
+  REVOKE ALL ON TABLES FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES FOR ROLE quorum_migrator IN SCHEMA public
+  REVOKE ALL ON SEQUENCES FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES FOR ROLE quorum_migrator IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO quorum_app_runtime;
+ALTER DEFAULT PRIVILEGES FOR ROLE quorum_migrator IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO quorum_app_runtime;
 SET LOCAL ROLE quorum_app_owner;
 SET LOCAL search_path = app, public, pg_catalog, pg_temp;
 
-CREATE TABLE identity_realms (
+CREATE TABLE app.identity_realms (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   realm_key text NOT NULL UNIQUE,
   auth_system text NOT NULL CHECK (auth_system IN ('BETTER_AUTH')),
@@ -143,10 +157,10 @@ CREATE TABLE identity_realms (
   CHECK (issuer IS NULL OR (issuer = btrim(issuer) AND issuer <> ''))
 );
 
-CREATE TABLE user_identities (
+CREATE TABLE app.user_identities (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES public.users (id) ON DELETE RESTRICT,
-  realm_id uuid NOT NULL REFERENCES identity_realms (id) ON DELETE RESTRICT,
+  realm_id uuid NOT NULL REFERENCES app.identity_realms (id) ON DELETE RESTRICT,
   identity_subject text NOT NULL,
   verified_email text,
   email_verified_at timestamptz,
@@ -166,7 +180,7 @@ CREATE TABLE user_identities (
   CHECK ((verified_email IS NULL) = (email_verified_at IS NULL))
 );
 
-CREATE TABLE account_states (
+CREATE TABLE app.account_states (
   user_id uuid PRIMARY KEY REFERENCES public.users (id) ON DELETE RESTRICT,
   status text NOT NULL DEFAULT 'ACTIVE'
     CHECK (status IN ('ACTIVE', 'SUSPENDED', 'DEACTIVATED', 'DELETED')),
@@ -184,7 +198,7 @@ CREATE TABLE account_states (
   CHECK ((status = 'DELETED') = (deleted_at IS NOT NULL))
 );
 
-CREATE TABLE role_grants (
+CREATE TABLE app.role_grants (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES public.users (id) ON DELETE RESTRICT,
   role text NOT NULL CHECK (role IN ('STUDENT', 'SPONSOR', 'PROFESSOR', 'ADMIN')),
@@ -200,10 +214,10 @@ CREATE TABLE role_grants (
 );
 
 CREATE UNIQUE INDEX role_grants_one_active_role
-  ON role_grants (user_id, role)
+  ON app.role_grants (user_id, role)
   WHERE revoked_at IS NULL;
 
-CREATE TABLE role_invitations (
+CREATE TABLE app.role_invitations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   role text NOT NULL CHECK (role IN ('PROFESSOR', 'ADMIN')),
   token_digest bytea NOT NULL UNIQUE CHECK (octet_length(token_digest) >= 32),
@@ -222,11 +236,11 @@ CREATE TABLE role_invitations (
   CHECK ((status = 'REVOKED') = (revoked_at IS NOT NULL))
 );
 
-CREATE INDEX user_identities_user_id_idx ON user_identities (user_id);
-CREATE INDEX user_identities_sync_idx ON user_identities (sync_status, reconcile_after);
-CREATE INDEX account_states_status_idx ON account_states (status, reconcile_after);
-CREATE INDEX role_grants_user_active_idx ON role_grants (user_id, revoked_at);
-CREATE INDEX role_invitations_status_expiry_idx ON role_invitations (status, expires_at);
+CREATE INDEX user_identities_user_id_idx ON app.user_identities (user_id);
+CREATE INDEX user_identities_sync_idx ON app.user_identities (sync_status, reconcile_after);
+CREATE INDEX account_states_status_idx ON app.account_states (status, reconcile_after);
+CREATE INDEX role_grants_user_active_idx ON app.role_grants (user_id, revoked_at);
+CREATE INDEX role_invitations_status_expiry_idx ON app.role_invitations (status, expires_at);
 
 GRANT USAGE ON SCHEMA app TO quorum_app_runtime;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA app TO quorum_app_runtime;
@@ -236,13 +250,13 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA app
 ALTER DEFAULT PRIVILEGES IN SCHEMA app
   GRANT USAGE, SELECT ON SEQUENCES TO quorum_app_runtime;
 GRANT USAGE ON SCHEMA app TO quorum_integration_owner;
-GRANT REFERENCES ON identity_realms TO quorum_integration_owner;
+GRANT REFERENCES ON app.identity_realms TO quorum_integration_owner;
 
 RESET ROLE;
 SET LOCAL ROLE quorum_integration_owner;
 SET LOCAL search_path = integration, app, public, pg_catalog, pg_temp;
 
-CREATE TABLE outbox_events (
+CREATE TABLE integration.outbox_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   aggregate_type text NOT NULL,
   aggregate_id text NOT NULL,
@@ -266,7 +280,7 @@ CREATE TABLE outbox_events (
   CHECK (idempotency_key = btrim(idempotency_key) AND idempotency_key <> '')
 );
 
-CREATE TABLE inbox_events (
+CREATE TABLE integration.inbox_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   source text NOT NULL,
   external_event_id text NOT NULL,
@@ -286,7 +300,7 @@ CREATE TABLE inbox_events (
   CHECK (external_event_id = btrim(external_event_id) AND external_event_id <> '')
 );
 
-CREATE TABLE reconciliation_state (
+CREATE TABLE integration.reconciliation_state (
   realm_id uuid NOT NULL REFERENCES app.identity_realms (id) ON DELETE CASCADE,
   identity_subject text NOT NULL,
   expected_version bigint NOT NULL DEFAULT 0 CHECK (expected_version >= 0),
@@ -303,12 +317,12 @@ CREATE TABLE reconciliation_state (
   CHECK (identity_subject = btrim(identity_subject) AND identity_subject <> '')
 );
 
-CREATE INDEX outbox_events_claim_idx ON outbox_events (status, available_at, created_at);
-CREATE INDEX inbox_events_claim_idx ON inbox_events (status, received_at);
-CREATE INDEX reconciliation_state_due_idx ON reconciliation_state (status, next_attempt_at);
+CREATE INDEX outbox_events_claim_idx ON integration.outbox_events (status, available_at, created_at);
+CREATE INDEX inbox_events_claim_idx ON integration.inbox_events (status, received_at);
+CREATE INDEX reconciliation_state_due_idx ON integration.reconciliation_state (status, next_attempt_at);
 
 GRANT USAGE ON SCHEMA integration TO quorum_app_runtime, quorum_auth_runtime;
-GRANT SELECT, INSERT ON outbox_events TO quorum_app_runtime, quorum_auth_runtime;
+GRANT SELECT, INSERT ON integration.outbox_events TO quorum_app_runtime, quorum_auth_runtime;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA integration TO quorum_app_runtime, quorum_auth_runtime;
 ALTER DEFAULT PRIVILEGES IN SCHEMA integration REVOKE ALL ON TABLES FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES IN SCHEMA integration REVOKE ALL ON SEQUENCES FROM PUBLIC;
@@ -317,7 +331,7 @@ RESET ROLE;
 SET LOCAL ROLE quorum_audit_owner;
 SET LOCAL search_path = audit, app, public, pg_catalog, pg_temp;
 
-CREATE TABLE events (
+CREATE TABLE audit.events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   occurred_at timestamptz NOT NULL DEFAULT now(),
   actor_kind text NOT NULL CHECK (actor_kind IN ('USER', 'SYSTEM', 'WORKER', 'OPERATOR', 'ANONYMOUS')),
@@ -335,14 +349,17 @@ CREATE TABLE events (
 );
 
 CREATE UNIQUE INDEX audit_events_source_event_idx
-  ON events (source_event_id)
+  ON audit.events (source_event_id)
   WHERE source_event_id IS NOT NULL;
-CREATE INDEX audit_events_target_idx ON events (target_type, target_id, occurred_at DESC);
-CREATE INDEX audit_events_actor_idx ON events (actor_user_id, occurred_at DESC);
+CREATE INDEX audit_events_target_idx ON audit.events (target_type, target_id, occurred_at DESC);
+CREATE INDEX audit_events_actor_idx ON audit.events (actor_user_id, occurred_at DESC);
 
-GRANT USAGE ON SCHEMA audit TO quorum_app_runtime, quorum_auth_runtime;
-GRANT INSERT ON events TO quorum_app_runtime, quorum_auth_runtime;
+GRANT USAGE ON SCHEMA audit TO quorum_app_runtime, quorum_auth_runtime, quorum_audit_reader;
+GRANT INSERT ON audit.events TO quorum_app_runtime, quorum_auth_runtime;
+GRANT SELECT ON audit.events TO quorum_audit_reader;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA audit TO quorum_app_runtime, quorum_auth_runtime;
+ALTER DEFAULT PRIVILEGES IN SCHEMA audit
+  GRANT SELECT ON TABLES TO quorum_audit_reader;
 ALTER DEFAULT PRIVILEGES IN SCHEMA audit REVOKE ALL ON TABLES FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES IN SCHEMA audit REVOKE ALL ON SEQUENCES FROM PUBLIC;
 
@@ -350,21 +367,89 @@ RESET ROLE;
 SET LOCAL ROLE quorum_auth_owner;
 REVOKE ALL ON ALL TABLES IN SCHEMA better_auth FROM PUBLIC;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA better_auth FROM PUBLIC;
+DO $$
+DECLARE
+  data_api_role text;
+BEGIN
+  FOREACH data_api_role IN ARRAY ARRAY['anon', 'authenticated', 'service_role']
+  LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = data_api_role) THEN
+      EXECUTE format('REVOKE ALL ON SCHEMA better_auth FROM %I', data_api_role);
+      EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA better_auth FROM %I', data_api_role);
+      EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA better_auth FROM %I', data_api_role);
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA better_auth REVOKE ALL ON TABLES FROM %I', data_api_role);
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA better_auth REVOKE ALL ON SEQUENCES FROM %I', data_api_role);
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA better_auth REVOKE ALL ON FUNCTIONS FROM %I', data_api_role);
+    END IF;
+  END LOOP;
+END
+$$;
 
 RESET ROLE;
 SET LOCAL ROLE quorum_app_owner;
 REVOKE ALL ON ALL TABLES IN SCHEMA app FROM PUBLIC;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA app FROM PUBLIC;
+DO $$
+DECLARE
+  data_api_role text;
+BEGIN
+  FOREACH data_api_role IN ARRAY ARRAY['anon', 'authenticated', 'service_role']
+  LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = data_api_role) THEN
+      EXECUTE format('REVOKE ALL ON SCHEMA app FROM %I', data_api_role);
+      EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA app FROM %I', data_api_role);
+      EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA app FROM %I', data_api_role);
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA app REVOKE ALL ON TABLES FROM %I', data_api_role);
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA app REVOKE ALL ON SEQUENCES FROM %I', data_api_role);
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA app REVOKE ALL ON FUNCTIONS FROM %I', data_api_role);
+    END IF;
+  END LOOP;
+END
+$$;
 
 RESET ROLE;
 SET LOCAL ROLE quorum_integration_owner;
 REVOKE ALL ON ALL TABLES IN SCHEMA integration FROM PUBLIC;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA integration FROM PUBLIC;
+DO $$
+DECLARE
+  data_api_role text;
+BEGIN
+  FOREACH data_api_role IN ARRAY ARRAY['anon', 'authenticated', 'service_role']
+  LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = data_api_role) THEN
+      EXECUTE format('REVOKE ALL ON SCHEMA integration FROM %I', data_api_role);
+      EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA integration FROM %I', data_api_role);
+      EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA integration FROM %I', data_api_role);
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA integration REVOKE ALL ON TABLES FROM %I', data_api_role);
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA integration REVOKE ALL ON SEQUENCES FROM %I', data_api_role);
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA integration REVOKE ALL ON FUNCTIONS FROM %I', data_api_role);
+    END IF;
+  END LOOP;
+END
+$$;
 
 RESET ROLE;
 SET LOCAL ROLE quorum_audit_owner;
 REVOKE ALL ON ALL TABLES IN SCHEMA audit FROM PUBLIC;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA audit FROM PUBLIC;
+DO $$
+DECLARE
+  data_api_role text;
+BEGIN
+  FOREACH data_api_role IN ARRAY ARRAY['anon', 'authenticated', 'service_role']
+  LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = data_api_role) THEN
+      EXECUTE format('REVOKE ALL ON SCHEMA audit FROM %I', data_api_role);
+      EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA audit FROM %I', data_api_role);
+      EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA audit FROM %I', data_api_role);
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA audit REVOKE ALL ON TABLES FROM %I', data_api_role);
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA audit REVOKE ALL ON SEQUENCES FROM %I', data_api_role);
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA audit REVOKE ALL ON FUNCTIONS FROM %I', data_api_role);
+    END IF;
+  END LOOP;
+END
+$$;
 
 RESET ROLE;
 SET LOCAL search_path = public, pg_catalog, pg_temp;

@@ -113,7 +113,9 @@ func reset(ctx context.Context, conn *pgx.Conn, markerFile, migrationDir string)
 		DROP SCHEMA IF EXISTS audit CASCADE;
 		DROP SCHEMA IF EXISTS public CASCADE;
 		CREATE SCHEMA public;
-	`)
+		REVOKE ALL ON SCHEMA public FROM PUBLIC, quorum_auth_runtime, quorum_app_runtime, quorum_audit_reader;
+		GRANT USAGE, CREATE ON SCHEMA public TO quorum_migrator;
+		GRANT USAGE ON SCHEMA public TO quorum_app_owner, quorum_audit_owner, quorum_app_runtime;	`)
 	if err != nil {
 		_ = tx.Rollback(ctx)
 		return fmt.Errorf("reset local schemas: %w", err)

@@ -5,11 +5,20 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/local/quorum/apps/api/internal/dbroles"
 )
 
 func TestIntegrationAuthV2FoundationPrivileges(t *testing.T) {
 	ctx := context.Background()
 	conn := newIntegrationDatabase(t)
+	if err := dbroles.Bootstrap(ctx, conn, dbroles.Config{
+		OperatorURL:         conn.Config().ConnString(),
+		MigratorPassword:    "privilege-test-migrator-only",
+		AuthRuntimePassword: "privilege-test-auth-only",
+		AppRuntimePassword:  "privilege-test-app-only",
+	}); err != nil {
+		t.Fatalf("bootstrap isolated database roles: %v", err)
+	}
 	if err := Apply(ctx, conn, canonicalMigrations(t)); err != nil {
 		t.Fatalf("apply canonical migrations: %v", err)
 	}
@@ -38,6 +47,12 @@ func TestIntegrationAuthV2FoundationPrivileges(t *testing.T) {
 	assertSchemaPrivilege(t, conn, "quorum_auth_runtime", "app", "USAGE", false)
 	assertSchemaPrivilege(t, conn, "quorum_app_runtime", "app", "USAGE", true)
 	assertSchemaPrivilege(t, conn, "quorum_app_runtime", "better_auth", "USAGE", false)
+	assertSchemaPrivilege(t, conn, "quorum_app_runtime", "public", "USAGE", true)
+	assertSchemaPrivilege(t, conn, "quorum_auth_runtime", "public", "USAGE", false)
+	for _, privilege := range []string{"SELECT", "INSERT", "UPDATE", "DELETE"} {
+		assertTablePrivilege(t, conn, "quorum_app_runtime", "public", "users", privilege, true)
+		assertTablePrivilege(t, conn, "quorum_auth_runtime", "public", "users", privilege, false)
+	}
 	for _, schema := range []string{"better_auth", "app", "integration", "audit"} {
 		assertPublicSchemaPrivilege(t, conn, schema, "USAGE", false)
 		assertSchemaPrivilege(t, conn, "quorum_auth_runtime", schema, "CREATE", false)
@@ -55,6 +70,12 @@ func TestIntegrationAuthV2FoundationPrivileges(t *testing.T) {
 			assertTablePrivilege(t, conn, "quorum_app_runtime", "app", table, privilege, true)
 			assertTablePrivilege(t, conn, "quorum_auth_runtime", "app", table, privilege, false)
 		}
+	}
+	assertSchemaPrivilege(t, conn, "quorum_audit_reader", "audit", "USAGE", true)
+	assertTablePrivilege(t, conn, "quorum_audit_reader", "audit", "events", "SELECT", true)
+	assertTablePrivilege(t, conn, "quorum_audit_reader", "audit", "events", "INSERT", false)
+	for _, schema := range []string{"better_auth", "app", "integration"} {
+		assertSchemaPrivilege(t, conn, "quorum_audit_reader", schema, "USAGE", false)
 	}
 	for _, role := range []string{"quorum_auth_runtime", "quorum_app_runtime"} {
 		assertTablePrivilege(t, conn, role, "integration", "outbox_events", "SELECT", true)

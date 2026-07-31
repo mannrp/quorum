@@ -42,6 +42,7 @@ type Querier interface {
 	ExpireOtherTeamInvitations(ctx context.Context, arg ExpireOtherTeamInvitationsParams) error
 	ExpireProjectOffer(ctx context.Context, id pgtype.UUID) (ProjectApplication, error)
 	ExpireTeamInvitation(ctx context.Context, id pgtype.UUID) (TeamInvitation, error)
+	GetIdentityRealmByKey(ctx context.Context, realmKey string) (AppIdentityRealm, error)
 	GetJoinRequest(ctx context.Context, id pgtype.UUID) (TeamJoinRequest, error)
 	GetJoinRequestForUserTeam(ctx context.Context, arg GetJoinRequestForUserTeamParams) (TeamJoinRequest, error)
 	GetMessage(ctx context.Context, id pgtype.UUID) (Message, error)
@@ -57,7 +58,9 @@ type Querier interface {
 	GetUser(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserByAuthID(ctx context.Context, authUserID string) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	GetUserIdentityByRealmSubject(ctx context.Context, arg GetUserIdentityByRealmSubjectParams) (AppUserIdentity, error)
 	IsAdmin(ctx context.Context, userID pgtype.UUID) (bool, error)
+	ListActiveRoleGrantsForUser(ctx context.Context, userID pgtype.UUID) ([]AppRoleGrant, error)
 	ListAdminUsers(ctx context.Context) ([]User, error)
 	ListAuditLogs(ctx context.Context, limit int32) ([]AuditLog, error)
 	ListInboxUsers(ctx context.Context, senderID pgtype.UUID) ([]User, error)

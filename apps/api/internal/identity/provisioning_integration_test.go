@@ -28,6 +28,25 @@ func TestIntegrationProvisionIsIdempotentAndCollisionSafe(t *testing.T) {
 		VerifiedEmail:   "verified@example.test",
 	}
 
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO better_auth."user" (
+		  "id", "name", "email", "emailVerified", "createdAt", "updatedAt"
+		)
+		VALUES ($1, 'Provider User', $2, true, now(), now())
+	`, input.IdentitySubject, input.VerifiedEmail); err != nil {
+		t.Fatalf("create accepted-provider user fixture: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO better_auth."account" (
+		  "id", "accountId", "providerId", "userId", "createdAt", "updatedAt"
+		)
+		VALUES
+		  ('provider-method-google', 'google-subject-owned-by-provider', 'google', $1, now(), now()),
+		  ('provider-method-password', $2, 'credential', $1, now(), now())
+	`, input.IdentitySubject, input.VerifiedEmail); err != nil {
+		t.Fatalf("create accepted-provider account fixtures: %v", err)
+	}
+
 	results := make(chan ProvisionResult, 2)
 	errorsSeen := make(chan error, 2)
 	var wait sync.WaitGroup
@@ -71,6 +90,7 @@ func TestIntegrationProvisionIsIdempotentAndCollisionSafe(t *testing.T) {
 	assertCount(t, pool, `SELECT count(*) FROM app.role_grants WHERE user_id::text = $1 AND revoked_at IS NULL`, 1, userID)
 	assertCount(t, pool, `SELECT count(*) FROM integration.outbox_events WHERE aggregate_id = $1`, 1, userID)
 	assertCount(t, pool, `SELECT count(*) FROM audit.events WHERE target_id = $1`, 1, userID)
+	assertCount(t, pool, `SELECT count(DISTINCT "providerId") FROM better_auth."account" WHERE "userId" = $1`, 2, input.IdentitySubject)
 
 	retry, err := service.Provision(ctx, ProvisionInput{
 		RealmKey:        input.RealmKey,

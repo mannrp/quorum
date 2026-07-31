@@ -51,7 +51,7 @@ func TestIntegrationBootstrapIsIdempotentAndLeastPrivilege(t *testing.T) {
 		t.Fatalf("repair bootstrap failed: %v", err)
 	}
 
-	for _, role := range []string{"quorum_app_owner", "quorum_auth_owner", "quorum_integration_owner", "quorum_audit_owner"} {
+	for _, role := range []string{"quorum_app_owner", "quorum_auth_owner", "quorum_integration_owner", "quorum_audit_owner", "quorum_audit_reader"} {
 		assertRoleAttributes(t, conn, role, false)
 	}
 	for _, role := range []string{"quorum_migrator", "quorum_auth_runtime", "quorum_app_runtime"} {

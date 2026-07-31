@@ -8,9 +8,45 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type AdminUser struct {
+type AppIdentityRealm struct {
+	ID         pgtype.UUID        `json:"id"`
+	RealmKey   string             `json:"realm_key"`
+	AuthSystem string             `json:"auth_system"`
+	Issuer     pgtype.Text        `json:"issuer"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AppRoleGrant struct {
+	ID        pgtype.UUID        `json:"id"`
 	UserID    pgtype.UUID        `json:"user_id"`
+	Role      string             `json:"role"`
+	Source    string             `json:"source"`
+	GrantedBy pgtype.UUID        `json:"granted_by"`
 	GrantedAt pgtype.Timestamptz `json:"granted_at"`
+	RevokedBy pgtype.UUID        `json:"revoked_by"`
+	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
+	Reason    pgtype.Text        `json:"reason"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AppUserIdentity struct {
+	ID              pgtype.UUID        `json:"id"`
+	UserID          pgtype.UUID        `json:"user_id"`
+	RealmID         pgtype.UUID        `json:"realm_id"`
+	IdentitySubject string             `json:"identity_subject"`
+	VerifiedEmail   pgtype.Text        `json:"verified_email"`
+	EmailVerifiedAt pgtype.Timestamptz `json:"email_verified_at"`
+	AuthVersion     int64              `json:"auth_version"`
+	SyncStatus      string             `json:"sync_status"`
+	LinkedAt        pgtype.Timestamptz `json:"linked_at"`
+	LastSeenAt      pgtype.Timestamptz `json:"last_seen_at"`
+	LastSyncedAt    pgtype.Timestamptz `json:"last_synced_at"`
+	ReconcileAfter  pgtype.Timestamptz `json:"reconcile_after"`
+	UnlinkedAt      pgtype.Timestamptz `json:"unlinked_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
 type AuditLog struct {
@@ -181,9 +217,4 @@ type User struct {
 	ProfileComplete       bool               `json:"profile_complete"`
 	DeactivatedAt         pgtype.Timestamptz `json:"deactivated_at"`
 	ArchivedAt            pgtype.Timestamptz `json:"archived_at"`
-}
-
-type UserTag struct {
-	UserID pgtype.UUID `json:"user_id"`
-	TagID  pgtype.UUID `json:"tag_id"`
 }

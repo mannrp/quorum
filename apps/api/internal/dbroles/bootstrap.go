@@ -33,7 +33,7 @@ func Bootstrap(ctx context.Context, conn *pgx.Conn, config Config) error {
 	if err := config.Validate(); err != nil {
 		return err
 	}
-	for _, role := range []string{"quorum_app_owner", "quorum_auth_owner", "quorum_integration_owner", "quorum_audit_owner"} {
+	for _, role := range []string{"quorum_app_owner", "quorum_auth_owner", "quorum_integration_owner", "quorum_audit_owner", "quorum_audit_reader"} {
 		if err := ensureRole(ctx, conn, role, false, ""); err != nil {
 			return err
 		}
@@ -47,12 +47,12 @@ func Bootstrap(ctx context.Context, conn *pgx.Conn, config Config) error {
 			return err
 		}
 	}
-	for _, role := range []string{"quorum_migrator", "quorum_auth_runtime", "quorum_app_runtime"} {
+	for _, role := range []string{"quorum_migrator", "quorum_auth_runtime", "quorum_app_runtime", "quorum_audit_reader"} {
 		if err := revokeMemberships(ctx, conn, role); err != nil {
 			return err
 		}
 	}
-	for _, owner := range []string{"quorum_app_owner", "quorum_auth_owner", "quorum_integration_owner", "quorum_audit_owner"} {
+	for _, owner := range []string{"quorum_app_owner", "quorum_auth_owner", "quorum_integration_owner", "quorum_audit_owner", "quorum_audit_reader"} {
 		statement := fmt.Sprintf("GRANT %s TO quorum_migrator", pgx.Identifier{owner}.Sanitize())
 		if _, err := conn.Exec(ctx, statement); err != nil {
 			return fmt.Errorf("grant owner role %s to migrator: %w", owner, err)
@@ -76,11 +76,33 @@ func Bootstrap(ctx context.Context, conn *pgx.Conn, config Config) error {
 	if _, err := conn.Exec(ctx, fmt.Sprintf("REVOKE CREATE ON DATABASE %s FROM quorum_auth_runtime, quorum_app_runtime", databaseIdentifier)); err != nil {
 		return fmt.Errorf("revoke database creation from runtime roles: %w", err)
 	}
-	if _, err := conn.Exec(ctx, "REVOKE CREATE ON SCHEMA public FROM PUBLIC, quorum_auth_runtime, quorum_app_runtime"); err != nil {
-		return fmt.Errorf("revoke public schema creation from public and runtime roles: %w", err)
+	if _, err := conn.Exec(ctx, "REVOKE ALL ON SCHEMA public FROM PUBLIC, quorum_auth_runtime, quorum_app_runtime, quorum_audit_reader"); err != nil {
+		return fmt.Errorf("revoke public schema access from public and runtime roles: %w", err)
 	}
 	if _, err := conn.Exec(ctx, "GRANT USAGE, CREATE ON SCHEMA public TO quorum_migrator"); err != nil {
 		return fmt.Errorf("grant canonical public-schema migration rights: %w", err)
+	}
+	if _, err := conn.Exec(ctx, "GRANT USAGE ON SCHEMA public TO quorum_app_owner, quorum_audit_owner, quorum_app_runtime"); err != nil {
+		return fmt.Errorf("grant scoped public-schema product access: %w", err)
+	}
+	for _, role := range []string{"anon", "authenticated", "service_role"} {
+		var exists bool
+		if err := conn.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)", role).Scan(&exists); err != nil {
+			return fmt.Errorf("inspect optional Data API role %s: %w", role, err)
+		}
+		if !exists {
+			continue
+		}
+		identifier := pgx.Identifier{role}.Sanitize()
+		for _, statement := range []string{
+			fmt.Sprintf("REVOKE ALL ON SCHEMA public FROM %s", identifier),
+			fmt.Sprintf("REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %s", identifier),
+			fmt.Sprintf("REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %s", identifier),
+		} {
+			if _, err := conn.Exec(ctx, statement); err != nil {
+				return fmt.Errorf("revoke public access from optional Data API role %s: %w", role, err)
+			}
+		}
 	}
 	return nil
 }

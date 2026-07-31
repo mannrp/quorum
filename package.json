@@ -25,6 +25,7 @@
     "db:init:local": "cd apps/api && go run ./cmd/localdb init",
     "db:reset:local": "cd apps/api && go run ./cmd/localdb reset",
     "db:bootstrap-roles": "cd apps/api && go run ./cmd/bootstrap-roles",
+    "db:generate": "cd apps/api && go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate",
     "migrate:api": "npm run db:migrate",
     "smoke:api": "cd apps/api && go run ./cmd/e2e",
     "smoke": "npm run smoke:api"

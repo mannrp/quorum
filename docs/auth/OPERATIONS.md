@@ -207,6 +207,8 @@ This is completed before A04 creates auth-v2 schema, not deferred to release. Th
 - explicit forward-fix/rollback notes and N-1 compatibility metadata;
 - empty-database replay and previous-version upgrade tests.
 
+After changing the canonical schema or SQL queries, regenerate checked-in Go database artifacts with `npm run db:generate`. The script pins `sqlc@v1.31.1`; CI reruns it and fails on generated drift. Do not hand-edit `apps/api/internal/db`.
+
 The default runner executes each migration transactionally and rejects migrations declared nontransactional. If a future operation cannot run in a transaction, add a separate reviewed execution path and failure-recovery ADR; do not silently bypass the wrapper.
 
 ### Cluster role bootstrap and ownership
