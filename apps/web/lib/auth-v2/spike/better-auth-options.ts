@@ -45,9 +45,56 @@ export function buildBetterAuthSpikeOptions({
       disableOriginCheck: false,
       useSecureCookies: true,
     },
+    account: {
+      accountLinking: {
+        allowDifferentEmails: false,
+        allowUnlinkingAll: false,
+        disableImplicitLinking: true,
+        enabled: true,
+        requireLocalEmailVerified: true,
+        updateUserInfoOnLink: false,
+      },
+    },
     appName: "Quorum Auth V2 Acceptance Spike",
     baseURL,
     database,
+    databaseHooks: {
+      session: {
+        create: {
+          before: async (session, context) => {
+            const now = new Date();
+            const existing = session as typeof session & {
+              absoluteExpiresAt?: Date;
+              assurance?: string;
+              authenticatedAt?: Date;
+              authenticationMethods?: string;
+            };
+            const stepUp = context?.path === "/two-factor/verify-totp";
+            return {
+              data: {
+                ...session,
+                absoluteExpiresAt:
+                  existing.absoluteExpiresAt ??
+                  new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000),
+                assurance: stepUp ? "aal2" : existing.assurance ?? "aal1",
+                authenticatedAt: stepUp
+                  ? now
+                  : existing.authenticatedAt ?? now,
+                authenticationMethods: stepUp
+                  ? '["password","totp"]'
+                  : existing.authenticationMethods ?? '["password"]',
+                lastSeenAt: now,
+              },
+            };
+          },
+        },
+        update: {
+          before: async (session) => ({
+            data: { ...session, lastSeenAt: new Date() },
+          }),
+        },
+      },
+    },
     emailAndPassword: {
       enabled: true,
       // Better Auth measures JavaScript UTF-16 code units. D-034 proves that
@@ -89,8 +136,19 @@ export function buildBetterAuthSpikeOptions({
     secret,
     session: {
       cookieCache: { enabled: false },
-      expiresIn: 28_800,
-      freshAge: 300,
+      additionalFields: {
+        absoluteExpiresAt: { input: false, required: true, type: "date" },
+        assurance: { input: false, required: true, type: "string" },
+        authenticatedAt: { input: false, required: true, type: "date" },
+        authenticationMethods: {
+          input: false,
+          required: true,
+          type: "string",
+        },
+        lastSeenAt: { input: false, required: true, type: "date" },
+      },
+      expiresIn: 86_400,
+      freshAge: 600,
       updateAge: 900,
     },
     trustedOrigins: [...trustedOrigins],
