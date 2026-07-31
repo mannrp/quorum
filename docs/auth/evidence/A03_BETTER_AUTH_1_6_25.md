@@ -78,6 +78,6 @@ No password, session token, cookie, OAuth code, state, verifier, nonce, email bo
 
 The job passed repository-history secret scanning, pinned Node and Go setup, clean dependency installation, Docker-context verification, lint, typecheck, production build, API unit tests, canonical migrations, guarded local identity/reset/replay, idempotent role bootstrap, required database integrations, the exact provider spike, web tests, Chromium Playwright, and Mailpit readiness. No secret or credential value is recorded.
 
-## Remaining before A03/G3 acceptance
+## G3 approval
 
-1. Project-owner review and explicit G3 approval. A04/A05 remain blocked until then.
+The project owner explicitly approved G3 on 2026-07-31 after final pinned Ubuntu run `30670530686` passed at commit `f7018cd`.

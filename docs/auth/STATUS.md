@@ -1,8 +1,8 @@
 # Auth v2 status
 
-**Overall state:** `framework_spike`
-**Current phase:** `A03` in review; G3 awaits project-owner approval
-**Next task:** project-owner G3 review; A04/A05 remain blocked
+**Overall state:** `identity_foundation`
+**Current phase:** `A04` in progress
+**Next task:** A04 canonical schema and identity foundation
 **Security gate approver:** project owner  
 **Last updated:** 2026-07-31
 
@@ -17,8 +17,8 @@
 | A00 Inventory and containment | done | Codex / project owner | none | `codex/auth-v2-rewrite` | [Inventory, runtime trace, containment, and D-032 disposable-data acceptance](evidence/A00_REPOSITORY_INVENTORY.md) complete | 2026-07-24 |
 | A01 Contract approval | done | Codex / project owner | none | `codex/auth-v2-rewrite` | D-018/D-019/D-021/D-027/D-031 accepted; `ViewerBootstrapV1` allowlist recorded; D-024 privileged powers remain closed | 2026-07-24 |
 | A02 Local/CI/test harness | done | Codex / project owner | A00, A01 | `codex/auth-v2-rewrite` | Owner approved G2 under D-033 from complete service-backed local and negative-control evidence; exact pinned Ubuntu evidence is deferred only until G3 | 2026-07-26 |
-| A03 Auth-provider acceptance spike | in_review | Codex / project owner | A02 | `codex/auth-v2-rewrite`; draft PR #10 | Exact `better-auth@1.6.25` passes every `SPIKE-*` row locally and in pinned Ubuntu run `30670240145`; owner G3 approval remains required | 2026-07-31 |
-| A04 Schema and identity foundation | not_started | unassigned | A03 | — | — | 2026-07-24 |
+| A03 Auth-provider acceptance spike | done | Codex / project owner | A02 | `codex/auth-v2-rewrite`; draft PR #10 | Owner approved G3 after every `SPIKE-*` row and final pinned Ubuntu run `30670530686` passed | 2026-07-31 |
+| A04 Schema and identity foundation | in_progress | Codex / project owner | A03 | `codex/auth-v2-rewrite`; draft PR #10 | Test-first canonical schema, role isolation, identity provisioning, integration/audit foundations, and dump/restore evidence in progress | 2026-07-31 |
 | A05 Authenticated Next-to-Go contract | not_started | unassigned | A03, A04 | — | — | 2026-07-24 |
 | A06 Google vertical slice | not_started | unassigned | A05 | — | — | 2026-07-24 |
 | A07 Email/password and session lifecycle | not_started | unassigned | A06 | — | Production email provider remains open | 2026-07-24 |
@@ -36,7 +36,7 @@
 | G0 Contained | done | project owner, 2026-07-24 | A00 evidence; D-032 loss acceptance; legacy deploy jobs removed; no public application or real users |
 | G1 Contract-ready | done | project owner delegated safe-default decisions, 2026-07-24 | Accepted public/session/verification/password defaults and `ViewerBootstrapV1`; privileged operations remain unexposed pending D-024/A08 |
 | G2 Harness-ready | done | project owner, 2026-07-26 | Complete service-backed local/negative-control evidence; D-033 defers the missing exact pinned Ubuntu run to a hard G3 prerequisite |
-| G3 Framework-accepted | in_review | — | [Better Auth 1.6.25 matrix](evidence/A03_BETTER_AUTH_1_6_25.md); pinned Ubuntu run `30670240145` green |
+| G3 Framework-accepted | done | project owner, 2026-07-31 | [Better Auth 1.6.25 matrix](evidence/A03_BETTER_AUTH_1_6_25.md); final pinned Ubuntu run `30670530686` green |
 | G4 Google-complete | not_started | — | — |
 | G5 Session-complete | not_started | — | — |
 | G5A Privileged-auth complete | not_started | — | — |
@@ -218,3 +218,17 @@ Change: Accepted exact `better-auth@1.6.25` as the proposed D-008 framework conf
 Tests: GitHub Actions run `30670240145`, job `91286223141` (`Verify`), passed in 3m03s on the pinned Ubuntu workflow. It passed repository-history secret scanning, clean dependency installation, Docker-context verification, lint, typecheck, production build, API unit tests, canonical migrations, guarded local identity/reset/replay, idempotent role bootstrap, required database integrations, the exact auth-provider spike, web Vitest, Chromium Playwright, and Mailpit readiness. The preceding consolidated local evidence also remains green.
 Evidence: draft PR `mannrp/quorum#10`; `docs/auth/evidence/A03_BETTER_AUTH_1_6_25.md`; commits `a140d7b` and `bac81a5`.
 Notes: A03 and G3 are `in_review`, not done. Only the project owner may pass G3. A04/A05 remain unstarted until that explicit approval.
+
+2026-07-31 - A03/G3 - in_review -> done - project owner
+
+Change: The project owner explicitly approved G3 after reviewing the complete exact `better-auth@1.6.25` acceptance evidence and green pinned Ubuntu workflow.
+Tests: Final PR-tip GitHub Actions run `30670530686`, job `91287105971` (`Verify`), passed in 2m54s with every mandatory service-backed step green.
+Evidence: project-owner statement "I approve G3"; draft PR `mannrp/quorum#10`; `docs/auth/evidence/A03_BETTER_AUTH_1_6_25.md`; commit `f7018cd`.
+Notes: A03 and G3 are done. This accepts only the reviewed framework/configuration boundary; provider upgrades reopen D-008/A03 evidence requirements.
+
+2026-07-31 - A04 - not_started -> in_progress - Codex / project owner
+
+Change: Began the additive canonical schema and identity foundation after A03/G3 completion, with Codex as implementer and the project owner as reviewer on `codex/auth-v2-rewrite`.
+Tests: A failing A04 migration/provisioning test is required before schema or domain implementation.
+Evidence: A04 task card; ID-01 through ID-08, SYNC-01/SYNC-02, DATA-01 through DATA-03, SES-04, and MIG-01.
+Notes: A05 remains unstarted. A04 does not mount production authentication, alter product roles/workflows, drop legacy columns, or move every legacy table from `public`.
