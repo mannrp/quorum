@@ -1,10 +1,10 @@
 # Auth v2 status
 
 **Overall state:** `framework_spike`
-**Current phase:** `A03` in progress; D-033 Ubuntu sequencing exception active
-**Next task:** `A03 exact-provider retest under D-034 conservative password thresholds`
+**Current phase:** `A03` in review; G3 awaits project-owner approval
+**Next task:** project-owner G3 review; A04/A05 remain blocked
 **Security gate approver:** project owner  
-**Last updated:** 2026-07-27
+**Last updated:** 2026-07-31
 
 ## Allowed states
 
@@ -17,7 +17,7 @@
 | A00 Inventory and containment | done | Codex / project owner | none | `codex/auth-v2-rewrite` | [Inventory, runtime trace, containment, and D-032 disposable-data acceptance](evidence/A00_REPOSITORY_INVENTORY.md) complete | 2026-07-24 |
 | A01 Contract approval | done | Codex / project owner | none | `codex/auth-v2-rewrite` | D-018/D-019/D-021/D-027/D-031 accepted; `ViewerBootstrapV1` allowlist recorded; D-024 privileged powers remain closed | 2026-07-24 |
 | A02 Local/CI/test harness | done | Codex / project owner | A00, A01 | `codex/auth-v2-rewrite` | Owner approved G2 under D-033 from complete service-backed local and negative-control evidence; exact pinned Ubuntu evidence is deferred only until G3 | 2026-07-26 |
-| A03 Auth-provider acceptance spike | in_progress | Codex / project owner | A02 | `codex/auth-v2-rewrite` | D-034 conservatively retains the 15-code-point floor while permitting proven provider-native thresholds of 29 UTF-16 code units or 57 UTF-8 bytes; exact provider retest and every `SPIKE-*` row remain required | 2026-07-27 |
+| A03 Auth-provider acceptance spike | in_review | Codex / project owner | A02 | `codex/auth-v2-rewrite`; draft PR #10 | Exact `better-auth@1.6.25` passes every `SPIKE-*` row locally and in pinned Ubuntu run `30670240145`; owner G3 approval remains required | 2026-07-31 |
 | A04 Schema and identity foundation | not_started | unassigned | A03 | — | — | 2026-07-24 |
 | A05 Authenticated Next-to-Go contract | not_started | unassigned | A03, A04 | — | — | 2026-07-24 |
 | A06 Google vertical slice | not_started | unassigned | A05 | — | — | 2026-07-24 |
@@ -36,7 +36,7 @@
 | G0 Contained | done | project owner, 2026-07-24 | A00 evidence; D-032 loss acceptance; legacy deploy jobs removed; no public application or real users |
 | G1 Contract-ready | done | project owner delegated safe-default decisions, 2026-07-24 | Accepted public/session/verification/password defaults and `ViewerBootstrapV1`; privileged operations remain unexposed pending D-024/A08 |
 | G2 Harness-ready | done | project owner, 2026-07-26 | Complete service-backed local/negative-control evidence; D-033 defers the missing exact pinned Ubuntu run to a hard G3 prerequisite |
-| G3 Framework-accepted | not_started | — | — |
+| G3 Framework-accepted | in_review | — | [Better Auth 1.6.25 matrix](evidence/A03_BETTER_AUTH_1_6_25.md); pinned Ubuntu run `30670240145` green |
 | G4 Google-complete | not_started | — | — |
 | G5 Session-complete | not_started | — | — |
 | G5A Privileged-auth complete | not_started | — | — |
@@ -212,3 +212,9 @@ Change: Added exact `better-auth@1.6.25` generic OAuth authorization/callback ac
 Tests: Failing first, the exact OAuth test exposed a schema-assertion column mismatch; after correcting the assertion to the canonical quoted provider column, the focused test passed. With the sanitized local Docker operator URL supplied only to the process, `npm.cmd run test:auth-provider-spike --workspace=@quorum/web` passed 19 tests in 13 files; `npm.cmd run test:auth-spike --workspace=@quorum/web` passed 144 tests in 19 files; web typecheck and `git diff --check` passed. The exact flow proved state plus S256 PKCE generation, exact callback, persisted account/session, modified-state denial, and code-replay denial without recording protocol or credential values.
 Evidence: `docs/auth/evidence/A03_BETTER_AUTH_1_6_25.md`; `apps/web/lib/auth-v2/spike/better-auth-oauth.integration.test.ts`; commit `a140d7b` for the preceding provider milestone.
 Notes: The consolidated local gates also passed: full web Vitest (146 tests in 20 files), lint (four pre-existing hook warnings), typecheck, Next 15.5.21 production build with no auth-v2 spike route, one Chromium Playwright test, Docker-context verification, required PostgreSQL-backed Go migration/role/GraphQL/auth/localdb/storage tests, Go vet, and patch integrity. A03/G3 remain in progress only for publication plus the D-033 pinned Ubuntu workflow and formal acceptance updates. A04/A05 remain unstarted.
+2026-07-31 - A03 - in_progress -> in_review - Codex / project owner
+
+Change: Accepted exact `better-auth@1.6.25` as the proposed D-008 framework configuration after every `SPIKE-*` row passed; opened draft PR #10 and retained the provider only behind the development/test spike boundary. No product role, domain workflow, production route, second migration history, A04, or A05 work was added.
+Tests: GitHub Actions run `30670240145`, job `91286223141` (`Verify`), passed in 3m03s on the pinned Ubuntu workflow. It passed repository-history secret scanning, clean dependency installation, Docker-context verification, lint, typecheck, production build, API unit tests, canonical migrations, guarded local identity/reset/replay, idempotent role bootstrap, required database integrations, the exact auth-provider spike, web Vitest, Chromium Playwright, and Mailpit readiness. The preceding consolidated local evidence also remains green.
+Evidence: draft PR `mannrp/quorum#10`; `docs/auth/evidence/A03_BETTER_AUTH_1_6_25.md`; commits `a140d7b` and `bac81a5`.
+Notes: A03 and G3 are `in_review`, not done. Only the project owner may pass G3. A04/A05 remain unstarted until that explicit approval.

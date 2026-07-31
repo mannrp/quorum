@@ -1,6 +1,6 @@
 # Auth v2 decision register
 
-**Last updated:** 2026-07-26
+**Last updated:** 2026-07-31
 
 This register is append-only in meaning. An accepted decision may be superseded by a new decision entry; do not silently rewrite architecture to match an implementation shortcut.
 
@@ -24,7 +24,7 @@ This register is append-only in meaning. An accepted decision may be superseded 
 | D-005 | ACCEPTED | Professor and Admin are distinct controlled grants. Professor is invite/approval only; Admin is an audited administrative grant only. | Never derive either role from email, profile input, or OAuth metadata. Exact professor powers must be approved before `G6`. |
 | D-006 | ACCEPTED | Sponsor-created projects start as drafts and require server-owned publication approval. | Open sponsor signup must not create an automatic publishing capability. |
 | D-007 | ACCEPTED | POC login methods are Google and email/password. Microsoft/Entra is deferred but must remain possible through the external-identity model. | No provider-specific subject may be the product user primary key. |
-| D-008 | SPIKE_GATED | Prefer an exact stable Better Auth release in Next, with database-backed opaque sessions. | Task `A03` must prove every acceptance item. Rejecting Better Auth does not complete `A03`; remove the candidate, record rejection, select/test another maintained provider, and keep downstream tasks blocked until one provider passes `G3`. |
+| D-008 | ACCEPTED | Use exact `better-auth@1.6.25` in Next with the reviewed D-034 password configuration, database-backed opaque sessions, signed host-only cookies, explicit account linking, and the retained A03 regression suite. | Reopen on provider upgrade, advisory, failed regression, inability to preserve response projection/session policy, or a change to the accepted password/session/linking/MFA requirements. A04/A05 remain blocked until the project owner passes G3. |
 | D-009 | ACCEPTED | Use provider-neutral PostgreSQL through ordinary server connections. Managed Supabase PostgreSQL is a deployment candidate, not an application API commitment. | Disable/unexpose Supabase Data APIs; do not use Supabase Auth alongside Better Auth. |
 | D-010 | ACCEPTED | Default local dependencies are a pinned PostgreSQL container and Mailpit, not the full Supabase CLI stack. | The full local Supabase stack is introduced only if Quorum deliberately adopts a Supabase platform capability. Docker portability comes from SQL and app images, not `supabase start`. |
 | D-011 | ACCEPTED | `apps/api/migrations` remains the one canonical SQL migration history during auth v2. | Better Auth SQL is generated, reviewed, and incorporated there. Do not create parallel `supabase/migrations` or run framework auto-migrations in production. |
@@ -62,7 +62,7 @@ This register is append-only in meaning. An accepted decision may be superseded 
 | R-004 | REJECTED | Browser-direct Supabase Data API as the product policy boundary | It would move policy into RLS/Data API and contradict the selected Go authorization owner. |
 | R-005 | REJECTED | Run Better Auth and Supabase Auth together | Two identity/session authorities create ambiguous lifecycle, linking, and revocation behavior. |
 | R-006 | REJECTED | Full local Supabase merely for PostgreSQL | It runs unused services, is development-only, and creates migration/operations confusion without improving portability. |
-| R-007 | REJECTED | `better-auth@1.6.25` as the A03 provider | A service-backed negative test proved that a password containing 14 Unicode code points but 15 UTF-16 code units is accepted and persisted under `minPasswordLength: 15`. D-031/PASS-02 require at least 15 Unicode code points and forbid a Quorum plaintext-validation workaround. The candidate also returned the reusable database session token in sign-in JSON before BFF projection and stores that directly reusable token in plaintext, reinforcing that acceptance cannot be inferred from its otherwise successful schema/session tests. |
+| R-007 | REJECTED | Pre-D-034 `better-auth@1.6.25` configuration with `minPasswordLength: 15` | A service-backed negative test proved that a password containing 14 Unicode code points but 15 UTF-16 code units is accepted and persisted under `minPasswordLength: 15`. D-031/PASS-02 require at least 15 Unicode code points and forbid a Quorum plaintext-validation workaround. The candidate also returned the reusable database session token in sign-in JSON before BFF projection and stores that directly reusable token in plaintext, reinforcing that acceptance cannot be inferred from its otherwise successful schema/session tests. |
 | R-008 | REJECTED | `oryd/kratos:v26.2.0@sha256:2a13bb8d362c7a7ae33bd7c0f5168aee46921f15c916a06346db91c06dc76643` as the A03 provider | Both automated and non-development live controls with `min_password_length: 15` rejected 14 ASCII code points, accepted 14 code points containing one supplementary Unicode character, and accepted the 15-code-point control. This proves encoded-length rather than Unicode-code-point enforcement. Candidate container/configuration artifacts were removed. |
 
 ## How to change a decision
