@@ -64,12 +64,40 @@ func TestIntegrationBootstrapIsIdempotentAndLeastPrivilege(t *testing.T) {
 	if canCreate {
 		t.Fatal("app runtime unexpectedly has CREATE on public schema")
 	}
+	if err := conn.QueryRow(context.Background(), "SELECT has_schema_privilege('quorum_migrator', 'public', 'CREATE')").Scan(&canCreate); err != nil {
+		t.Fatal(err)
+	}
+	if !canCreate {
+		t.Fatal("migrator cannot create canonical legacy objects in public schema")
+	}
 	var isOwnerMember bool
 	if err := conn.QueryRow(context.Background(), "SELECT pg_has_role('quorum_app_runtime', 'quorum_app_owner', 'MEMBER')").Scan(&isOwnerMember); err != nil {
 		t.Fatal(err)
 	}
 	if isOwnerMember {
 		t.Fatal("app runtime unexpectedly remains a member of an owner role")
+	}
+	for _, owner := range []string{"quorum_app_owner", "quorum_auth_owner", "quorum_integration_owner", "quorum_audit_owner"} {
+		var migratorIsMember bool
+		if err := conn.QueryRow(context.Background(), "SELECT pg_has_role('quorum_migrator', $1, 'MEMBER')", owner).Scan(&migratorIsMember); err != nil {
+			t.Fatal(err)
+		}
+		if !migratorIsMember {
+			t.Fatalf("migrator cannot SET ROLE to required owner %s", owner)
+		}
+	}
+	for role, wantCreate := range map[string]bool{
+		"quorum_migrator":     true,
+		"quorum_auth_runtime": false,
+		"quorum_app_runtime":  false,
+	} {
+		var canCreateDatabaseObjects bool
+		if err := conn.QueryRow(context.Background(), "SELECT has_database_privilege($1, current_database(), 'CREATE')", role).Scan(&canCreateDatabaseObjects); err != nil {
+			t.Fatal(err)
+		}
+		if canCreateDatabaseObjects != wantCreate {
+			t.Fatalf("database CREATE for %s = %v, want %v", role, canCreateDatabaseObjects, wantCreate)
+		}
 	}
 }
 

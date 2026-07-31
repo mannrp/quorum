@@ -96,10 +96,21 @@ jobs:
         working-directory: apps/api
         run: go test ./...
 
+      - name: Prove idempotent role bootstrap
+        working-directory: apps/api
+        env:
+          OPERATOR_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
+          QUORUM_MIGRATOR_PASSWORD: ci-migrator-password-not-for-production
+          QUORUM_AUTH_RUNTIME_PASSWORD: ci-auth-password-not-for-production
+          QUORUM_APP_RUNTIME_PASSWORD: ci-app-password-not-for-production
+        run: |
+          go run ./cmd/bootstrap-roles
+          go run ./cmd/bootstrap-roles
+
       - name: Apply canonical migrations
         working-directory: apps/api
         env:
-          MIGRATOR_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
+          MIGRATOR_DATABASE_URL: postgres://quorum_migrator:ci-migrator-password-not-for-production@127.0.0.1:5432/quorum_test?sslmode=disable
         run: go run ./cmd/migrate
 
       - name: Initialize guarded local database identity
@@ -115,16 +126,6 @@ jobs:
           QUORUM_ALLOW_LOCAL_RESET: "true"
         run: go run ./cmd/localdb reset
 
-      - name: Prove idempotent role bootstrap
-        working-directory: apps/api
-        env:
-          OPERATOR_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
-          QUORUM_MIGRATOR_PASSWORD: ci-migrator-password-not-for-production
-          QUORUM_AUTH_RUNTIME_PASSWORD: ci-auth-password-not-for-production
-          QUORUM_APP_RUNTIME_PASSWORD: ci-app-password-not-for-production
-        run: |
-          go run ./cmd/bootstrap-roles
-          go run ./cmd/bootstrap-roles
 
       - name: Test API with required database integration
         working-directory: apps/api

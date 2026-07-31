@@ -47,9 +47,15 @@ func Bootstrap(ctx context.Context, conn *pgx.Conn, config Config) error {
 			return err
 		}
 	}
-	for _, role := range []string{"quorum_auth_runtime", "quorum_app_runtime"} {
+	for _, role := range []string{"quorum_migrator", "quorum_auth_runtime", "quorum_app_runtime"} {
 		if err := revokeMemberships(ctx, conn, role); err != nil {
 			return err
+		}
+	}
+	for _, owner := range []string{"quorum_app_owner", "quorum_auth_owner", "quorum_integration_owner", "quorum_audit_owner"} {
+		statement := fmt.Sprintf("GRANT %s TO quorum_migrator", pgx.Identifier{owner}.Sanitize())
+		if _, err := conn.Exec(ctx, statement); err != nil {
+			return fmt.Errorf("grant owner role %s to migrator: %w", owner, err)
 		}
 	}
 
@@ -64,8 +70,17 @@ func Bootstrap(ctx context.Context, conn *pgx.Conn, config Config) error {
 			return fmt.Errorf("grant database connect to %s: %w", role, err)
 		}
 	}
+	if _, err := conn.Exec(ctx, fmt.Sprintf("GRANT CREATE ON DATABASE %s TO quorum_migrator", databaseIdentifier)); err != nil {
+		return fmt.Errorf("grant database creation to migrator: %w", err)
+	}
+	if _, err := conn.Exec(ctx, fmt.Sprintf("REVOKE CREATE ON DATABASE %s FROM quorum_auth_runtime, quorum_app_runtime", databaseIdentifier)); err != nil {
+		return fmt.Errorf("revoke database creation from runtime roles: %w", err)
+	}
 	if _, err := conn.Exec(ctx, "REVOKE CREATE ON SCHEMA public FROM PUBLIC, quorum_auth_runtime, quorum_app_runtime"); err != nil {
 		return fmt.Errorf("revoke public schema creation from public and runtime roles: %w", err)
+	}
+	if _, err := conn.Exec(ctx, "GRANT USAGE, CREATE ON SCHEMA public TO quorum_migrator"); err != nil {
+		return fmt.Errorf("grant canonical public-schema migration rights: %w", err)
 	}
 	return nil
 }
