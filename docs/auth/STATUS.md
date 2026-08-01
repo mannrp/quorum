@@ -1,7 +1,7 @@
 # Auth V2 status
 
-**State:** P1 locally accepted; pinned Ubuntu verification pending
-**Active work:** verify P1 on Ubuntu; P2 queued
+**State:** P1 complete; P2 account lifecycle in progress
+**Active work:** P2.1 Google and explicit linking
 **Branch:** `codex/auth-v2-rewrite`
 **Pull request:** `mannrp/quorum#10` (draft)
 **Updated:** 2026-08-01
@@ -25,8 +25,8 @@ Quorum now has one browser authentication path: Better Auth `1.6.25` mounted by 
 | Phase | Status | Remaining result |
 |---|---|---|
 | C0 Cleanup | done | Lean contract, status, implementation plan, and operations guide |
-| P1 Authentication cutover and viewer | in review | Local acceptance complete; exact pushed commit must pass pinned Ubuntu |
-| P2 Google and account lifecycle | pending | Google, recovery/email changes, explicit linking, and session management |
+| P1 Authentication cutover and viewer | done | Local and pinned Ubuntu acceptance green |
+| P2 Google and account lifecycle | in progress | Google, recovery/email changes, explicit linking, and session management |
 | P3 Product operation migration | pending | Registered typed operations replace arbitrary browser GraphQL |
 | P4 Files and release | pending | Private files, protected deployment, final deletion, and release evidence |
 
@@ -51,7 +51,7 @@ Repository scans found no active Neon Auth dependency/configuration, demo identi
 
 ## Real blockers and next work
 
-P1 behavior is locally complete. The sole P1 closure condition is a green pinned Ubuntu workflow on the exact pushed milestone commit. CI now restores runtime-role credentials after rotation tests and runs the service-backed handler plus authenticated Chromium journey with no skip path.
+P1 completed on exact commit `2a00f4f` with pinned Ubuntu CI run `30712246442` green in 2m15s. The workflow ran the service-backed handler and authenticated Chromium journey with no skip path. P2.1 is now active.
 
 After P1, execute P2, P3, then P4 in `IMPLEMENTATION.md`. Production host/transport, transactional email, and retention choices do not block local P1-P3 work. Admin stays disabled.
 
