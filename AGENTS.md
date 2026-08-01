@@ -1,102 +1,63 @@
-# Quorum implementation-agent instructions
+# Quorum contributor rules
 
-These instructions apply to the entire repository. They are written for human contributors and coding agents.
+These rules apply to the repository. Keep changes small, readable, and tied to a working product path.
 
-## Mandatory reading order
+## Read before auth work
 
-Before changing authentication, sessions, users, roles, authorization, GraphQL exposure, files, database privileges, Docker, CI, or deployment, read these files in order:
+Read, in order:
 
-1. `docs/auth/STATUS.md`
-2. `docs/auth/DECISIONS.md`
-3. `docs/auth/AUTH_V2_CONTRACT.md`
-4. The task card in `docs/auth/IMPLEMENTATION.md`
-5. The relevant rows in `docs/auth/VERIFICATION.md`
-6. `docs/auth/OPERATIONS.md` for infrastructure or operational work
+1. `docs/auth/STATUS.md` - what is true now.
+2. `docs/auth/AUTH_V2_CONTRACT.md` - durable security rules.
+3. The active slice in `docs/auth/IMPLEMENTATION.md` - what to build next.
+4. `docs/auth/OPERATIONS.md` only for database, Docker, CI, or deployment work.
 
-`AUTH_ARCHITECTURE_SECURITY_AUDIT.md` is supporting evidence and rationale. It is not the day-to-day task queue. Files under `.planning/` are historical and ignored by git; they do not override the auth-v2 documents.
+If code and docs disagree, report the discrepancy in `STATUS.md` and fix the source of truth. Do not add another planning document.
 
-If two documents conflict, stop only the affected work and add a `DECISION-NEEDED` entry to `docs/auth/STATUS.md`. Do not choose the weaker security rule.
+## How to work
 
-## Source-of-truth precedence
+- Work on the single active slice in `IMPLEMENTATION.md`.
+- Start behavior changes with a focused failing test.
+- Prefer one end-to-end vertical path over disconnected frameworks or speculative abstractions.
+- Run the focused tests and the slice's listed acceptance commands.
+- Keep `STATUS.md` concise: current capability, latest verified commands, and real blockers only. Git history is the detailed log.
+- Commit substantial tested milestones. Preserve unrelated user changes.
 
-From strongest to weakest:
+## Security boundaries
 
-1. Current user instruction that is within the accepted security/policy contract
-2. This `AGENTS.md`
-3. Accepted decisions in `docs/auth/DECISIONS.md`
-4. Invariants in `docs/auth/AUTH_V2_CONTRACT.md`
-5. Approved authorization rows in that contract
-6. Task and gate definitions in `docs/auth/IMPLEMENTATION.md`
-7. Verification requirements in `docs/auth/VERIFICATION.md`
-8. Operational procedures in `docs/auth/OPERATIONS.md`
-9. The dated audit
-10. Existing implementation and historical planning files
-
-Existing code is evidence of current behavior, not proof that the behavior is desired or secure. A user request that explicitly changes product/security policy may supersede an accepted decision only through a recorded decision plus contract, verification, migration, and owner-approval updates. A task-level request such as “temporarily expose Go” or “skip this test” does not silently override an invariant; pause only the affected work and request a superseding decision.
-
-## Work protocol
-
-1. Work on exactly one `ready` task ID unless the task explicitly allows a grouped change.
-2. Confirm every dependency is `done` in `docs/auth/STATUS.md`.
-3. Read the task's in-scope, out-of-scope, invariants, risk IDs, tests, and rollback notes.
-4. Mark the task `in_progress`, name the implementer and reviewer, and record the branch before any scoped repository or external-system mutation.
-5. Add or identify a failing test first. The failure must be for the intended missing behavior.
-6. Make the smallest dependency-respecting change.
-7. Run the focused tests and every required gate command. Required tests must fail—not skip—when infrastructure is unavailable.
-8. Record exact commands and concise results in `docs/auth/STATUS.md`. Never record secrets, tokens, cookies, OAuth codes, personal documents, or raw production data.
-9. Move the task to `in_review`. The designated reviewer—not the implementer—marks the task `done`. Only the named project owner may mark a security phase gate passed.
-10. After review, append a dated status-log entry. Never rewrite status history to hide a correction.
-
-## Non-negotiable prohibitions
-
-- Do not weaken an invariant to make a test pass.
-- Do not implement authentication, OAuth, password hashing, session-token generation, or recovery cryptography from scratch.
-- Do not combine the auth rewrite, domain rewrite, and GraphQL removal in one work package.
-- Do not trust browser-provided identity, email, role, account state, ownership, approval, or capability data.
-- Do not authorize by editable email, `ADMIN_EMAILS`, profile role, or identity-provider display metadata.
-- Do not expose reusable credentials in JSON, HTML, URLs, browser-readable storage, logs, analytics, or screenshots.
-- Do not let browser code call Go, PostgreSQL, Supabase Data APIs, or object storage as the product-policy authority.
-- Do not forward arbitrary browser GraphQL documents to Go.
-- Do not put Better Auth tables in Supabase's reserved `auth` schema. The target schema is `better_auth`.
-- Do not add a demo/test bypass, impersonation header, silent fallback, placeholder secret, or production fail-open behavior.
-- Do not make a security-relevant test conditional on optional CI secrets. Use deterministic local/CI dependencies or fail the gate.
-- Do not create a second migration history. Canonical Quorum SQL migrations remain in `apps/api/migrations` unless an accepted ADR replaces that system.
-- Do not apply schema changes manually through a hosted database dashboard.
-- Do not expose Go or PostgreSQL publicly merely because a host makes that convenient.
-- Do not make files public by URL. Store object keys and authorize each short-lived download.
-- Do not commit `.env` files, credentials, private keys, dumps, test mail containing secrets, or personal data.
-- Do not modify `package-lock.json` incidentally. Before `A02`, the owner must preserve/commit or explicitly baseline the current user-owned diff. A dependency task must show focused manifest plus lockfile changes and must not normalize unrelated lock entries.
-- Do not use destructive database reset/cutover steps until inventory, backup, and the no-real-users prerequisite are recorded.
-- Do not leave an unowned `TODO`. Use a task ID, decision ID, owner, and phase.
-
-## Architecture boundary
-
-The selected target is:
-
-```text
-Browser -> public Next.js BFF -> authenticated confidential/integrity-protected channel -> private Go service -> PostgreSQL / private R2
-```
-
-Next owns browser authentication, opaque sessions, CSRF/origin enforcement, SSR, and UI-shaped composition. Go owns the authoritative product principal, authorization, workflows, transactions, and application writes. A private network reduces exposure but does not replace service authentication or protected transport. Production uses a restrictive Unix-domain socket, mTLS, or a provider transport explicitly proven to supply confidentiality and integrity; public/cross-provider ingress additionally requires HTTPS.
+- Browser authentication is owned by public Next.js. Product authorization is owned by private Go using current PostgreSQL state.
+- The browser never supplies authoritative identity, email, role, account state, ownership, approval, or capability data.
+- Browser code never calls Go, PostgreSQL, object storage, or a Data API directly.
+- Browser credentials are opaque `Secure`, `HttpOnly`, host-only cookies. Never expose reusable credentials in JSON, HTML, URLs, logs, analytics, screenshots, or browser storage.
+- Use maintained authentication and JOSE libraries. Do not implement passwords, OAuth, sessions, token generation, or recovery cryptography from scratch.
+- Next-to-Go assertions are short-lived and contain identity context only-never roles, permissions, email authority, or ownership.
+- Go resolves the product user and permissions from current database state and fails closed for unknown, inactive, stale, or ambiguous identities.
+- Browser-facing server operations are typed and allowlisted. Do not forward arbitrary GraphQL or URLs.
+- Only Next is public. Production Next-to-Go traffic requires a restrictive Unix socket, mTLS, or another reviewed confidential and integrity-protected transport.
+- Better Auth objects stay in `better_auth`, never `public` or Supabase `auth`.
+- Canonical SQL migrations stay in `apps/api/migrations`; never create a second migration history or edit an applied migration.
+- Files stay private and require authorization for each short-lived access grant.
+- Admin remains disabled until MFA and recovery are implemented and tested.
+- Security tests fail when required infrastructure is unavailable; they are not skipped or weakened.
 
 ## Repository care
 
-- Preserve unrelated user changes and dirty files.
-- Use additive database migrations. Never edit an already-applied migration without an explicit migration-repair decision.
-- Keep transports thin. Domain packages must not import Next, HTTP, gqlgen, Better Auth, or generated sqlc row types.
-- Regenerate generated code through documented commands; do not hand-edit generated files.
-- Prefer server-only environment variables. A value prefixed `NEXT_PUBLIC_` is browser-visible by design.
-- Before introducing Docker image builds, add and verify a root `.dockerignore`; local ignored env files exist on disk and must not enter build contexts.
+- Use `npm run db:generate` after changing SQL queries; never hand-edit generated sqlc files.
+- Keep transports thin. Domain packages do not import Next, HTTP, gqlgen, Better Auth, or generated sqlc rows.
+- Server secrets are never prefixed `NEXT_PUBLIC_`.
+- Keep `.env` files, credentials, keys, dumps, test mail containing secrets, and personal data out of git.
+- Verify `.dockerignore` whenever build contexts change.
+- Use additive migrations and recoverable operations. Never reset or delete a non-local database.
 
-## Baseline verification
-
-Run the commands required by the active task. The current general baseline is:
+## Baseline commands
 
 ```sh
 npm run lint
 npm run typecheck
 npm run build
+npm run test:web
+npm run test:e2e
+npm run test:docker-context
 cd apps/api && go test ./...
 ```
 
-Auth-v2 tasks will add deterministic integration and browser commands. Do not claim those gates until the scripts exist and run successfully.
+Use the service-backed commands in `docs/auth/OPERATIONS.md` when the active slice touches PostgreSQL or email.

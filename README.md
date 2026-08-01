@@ -2,7 +2,7 @@
 
 Quorum is a capstone matching workspace for students, teams, project owners, and admins.
 
-> **Auth revision in progress:** the code below still contains the legacy Neon Auth integration. It is not the target architecture and must not be used as a security reference. Implementation work starts with [`docs/auth/STATUS.md`](docs/auth/STATUS.md), follows [`AGENTS.md`](AGENTS.md), and uses the full [`AUTH_ARCHITECTURE_SECURITY_AUDIT.md`](AUTH_ARCHITECTURE_SECURITY_AUDIT.md) as supporting rationale.
+> **Auth V2 is not wired yet:** the running code still uses legacy Neon Auth. Current facts and the lean replacement plan start in [`docs/auth/README.md`](docs/auth/README.md).
 
 Students use Quorum to build a profile around their skills, discipline, availability, links, and resume; find teammates; request to join teams; and apply to real capstone-style projects. Project owners publish opportunities, review applicants, send offers, and manage project assets. Admins review project submissions, keep the marketplace healthy, set deadlines, and audit important actions.
 
@@ -24,7 +24,7 @@ The product is built around the full matching workflow: profiles make students d
 - `apps/api` - Go, gqlgen GraphQL, Postgres, Cloudflare R2
 - Root workspace - npm workspaces and Turborepo
 
-The approved target keeps a thin Next BFF for browser authentication/sessions, a private service-authenticated Go domain service reached over a confidential/integrity-protected channel, provider-neutral PostgreSQL, and private R2. Better Auth is the preferred candidate only after its acceptance spike passes. GraphQL remains through auth v2 and is benchmarked against typed use-case HTTP later.
+The target uses Better Auth in Next for browser sessions, a protected private Go service for product authorization, PostgreSQL, and private R2. Browser-facing operations are migrated to typed allowlisted routes as the UI needs them; arbitrary GraphQL forwarding is removed rather than benchmarked.
 
 ## Setup
 
