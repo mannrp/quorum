@@ -53,6 +53,17 @@ Detailed experimental code and duplicated evidence were removed during C0. Git h
 
 Only one slice is active at a time. Acceptance criteria and commands live beside each slice in `IMPLEMENTATION.md`; there are no separate ceremonial phase gates.
 
+## Finish-plan defaults
+
+The final execution plan was expanded in place on 2026-07-31:
+
+- P1 directly replaces Neon Auth; there is no long-lived dual-auth or spike route.
+- Current package targets are Better Auth `1.6.25`, PostgreSQL client `8.22.0`, Nodemailer `9.0.3`, and Next `16.2.12`, subject to clean install/build/audit evidence when implemented.
+- Existing Go GraphQL may remain private internally, but browser query text is temporary and must be replaced by registered operations in P3.
+- Admin and unused Professor invitation features remain disabled instead of blocking ordinary-user Auth V2.
+- The default release topology is one host with only Next public and a restrictive Unix-domain socket to Go; use mTLS only if the selected host cannot support that shape.
+
+P1-P3 are development/test integration and are not production-releaseable until P4 completes the transport, provider smoke, file, backup/rollback, and deletion checks.
 ## Open release choices
 
 These do not block P1:
