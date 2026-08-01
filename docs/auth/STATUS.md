@@ -82,14 +82,18 @@ P1.1 is implemented and the first P1.2 runtime seam is mounted:
 - Server configuration rejects weak secrets, unsafe origins, non-PostgreSQL URLs, public-schema fallback, implicit same-email linking, and insecure production cookies.
 - Better Auth uses the canonical origin, exact trusted origin, host-only HttpOnly cookie, accepted password/session limits, database rate limiting, and a PostgreSQL connection restricted to better_auth.
 - The existing /api/auth/[...path] now mounts the real Better Auth handler. Mail callbacks use the server-only SMTP adapter.
-- Auth UI, GraphQL identity, Go middleware, and legacy Neon dependencies are not cut over yet; the product flow is therefore still incomplete.
+- Login, registration, onboarding session lookup, and logout now use the Better Auth browser client. Registration stops after verification mail instead of performing the legacy profile mutation.
+- The real PostgreSQL/Mailpit handler test covers register, delivery, one-use verification, login, opaque host-only HttpOnly cookie, logout, and wrong-origin denial.
+- GraphQL identity, Go middleware, enrollment/viewer, and legacy Neon dependencies are not cut over yet; the product flow is therefore still incomplete.
 
 Verified 2026-07-31:
 
     npm run lint                         PASS
     npm run typecheck                    PASS
     npm run build                        PASS
-    npm run test:web                     PASS (4 files, 12 tests)
+    npm run test:web                     PASS (5 files, 14 tests)
+    npm run test:e2e                     PASS (Chromium, 1 test)
+    npm run test:integration             PASS (PostgreSQL + Mailpit, 2 tests)
     npm run test:docker-context          PASS
 
 npm audit --omit=dev still reports seven production findings. The critical Better Auth findings are confined to the nested legacy @neondatabase/auth dependency that P1.4 removes. Current Next 16.2.12 also carries transitive PostCSS/sharp advisories with no non-breaking patched Next release reported by npm. These remain release blockers, not skipped checks.

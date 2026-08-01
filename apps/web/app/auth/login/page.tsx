@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Section } from "@/components/ui";
 import { authDestination } from "@/lib/auth-routing";
 import { userFacingError } from "@/lib/graphql";
-import { signInWithNeonEmail, signInWithNeonOAuth } from "@/lib/neon-auth";
+import { signInWithEmail } from "@/lib/auth-v2/client-actions";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,7 +20,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await signInWithNeonEmail(email, password);
+      await signInWithEmail(email, password);
       router.push(await authDestination());
     } catch (err) {
       setError(userFacingError(err));
@@ -29,41 +29,11 @@ export default function LoginPage() {
     }
   };
 
-  const triggerSSO = async (provider: string) => {
-    setError(null);
-    setLoading(true);
-    try {
-      if (provider !== "google") {
-        throw new Error("Unsupported OAuth provider.");
-      }
-      await signInWithNeonOAuth(provider, "/auth/complete");
-    } catch (err) {
-      setError(userFacingError(err));
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="max-w-md mx-auto py-8">
       <Section title="Sign In to Quorum" className="shadow-none">
         <div className="space-y-4 pt-2">
-          {/* SSO Integrations */}
-          <div className="space-y-2">
-            <button
-              onClick={() => void triggerSSO("google")}
-              disabled={loading}
-              className="w-full inline-flex items-center justify-center gap-2.5 rounded-none border border-[var(--border-app)] bg-[var(--surface-app)] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-[var(--text-app)] hover:bg-[var(--bg-app)] transition cursor-pointer"
-            >
-              <span>Continue with Google</span>
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between py-2">
-            <div className="h-[1px] w-full bg-[var(--border-subtle)]"></div>
-            <span className="px-3 text-[10px] text-stone-400 font-bold uppercase tracking-wider font-mono">or</span>
-            <div className="h-[1px] w-full bg-[var(--border-subtle)]"></div>
-          </div>
-
           {/* Email / Password Form */}
           <form className="space-y-3" onSubmit={handleCredentialsLogin}>
             <div className="space-y-1">

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Section, Combobox, LoadingSkeleton } from "@/components/ui";
 import { authDestination } from "@/lib/auth-routing";
 import { graphqlRequest, uploadToSignedPost, userFacingError } from "@/lib/graphql";
-import { getCurrentNeonUser } from "@/lib/neon-auth";
+import { getCurrentUser } from "@/lib/auth-v2/client-actions";
 import { DISCIPLINE_OPTIONS, SKILL_OPTIONS } from "@/lib/policy";
 import { AUTH_STATE_QUERY } from "@/lib/queries";
 import type { AuthState, UploadSignature } from "@/types/domain";
@@ -28,7 +28,7 @@ export default function OnboardingPage() {
       try {
         const [stateRes, neonUser] = await Promise.all([
           graphqlRequest<{ authState: AuthState }>(AUTH_STATE_QUERY, {}, { auth: true }),
-          getCurrentNeonUser().catch(() => null),
+          getCurrentUser().catch(() => null),
         ]);
         const state = stateRes.authState;
         if (!state.authenticated) {

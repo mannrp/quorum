@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { resolve } from "node:path";
-import next from "../apps/web/node_modules/next/dist/server/next.js";
+import next from "next";
 
 const hostname = "127.0.0.1";
 const port = 3000;

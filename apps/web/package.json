@@ -10,6 +10,7 @@
     "typecheck": "node ../../node_modules/typescript/bin/tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "clear": "npx rimraf .next"
   },
   "dependencies": {

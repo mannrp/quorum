@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useState, useEffect, useCallback } from "react";
 import { clearGraphQLCache, graphqlRequest, userFacingError } from "@/lib/graphql";
-import { signOutOfNeonAuth } from "@/lib/neon-auth";
+import { signOut } from "@/lib/auth-v2/client-actions";
 import { DEMO_PERSONAS, DemoPersona, demoModeEnabled, demoPersonaFromAuthUserId, demoResetEnabled } from "@/lib/demo";
 import { SHELL_AUTH_QUERY, SHELL_COUNTS_QUERY } from "@/lib/queries";
 import type { AuthState, User } from "@/types/domain";
@@ -81,7 +81,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [fetchSession]);
 
   const handleLogout = async () => {
-    await signOutOfNeonAuth().catch(() => undefined);
+    await signOut().catch(() => undefined);
     if (demoEnabled) {
       await fetch("/api/demo/persona", { method: "DELETE" }).catch(() => undefined);
     }
