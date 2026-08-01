@@ -46,7 +46,7 @@ Detailed experimental code and duplicated evidence were removed during C0. Git h
 | Slice | Status | Outcome |
 |---|---|---|
 | C0 Cleanup | done | Remove retired spike/planning bloat; leave one accurate contract, status, plan, and operations guide |
-| P1 Usable login and viewer | pending | Real Better Auth email/password session reaches typed `ViewerBootstrapV1` through Next and Go |
+| P1 Usable login and viewer | in progress | Real Better Auth email/password session reaches typed `ViewerBootstrapV1` through Next and Go |
 | P2 Complete sign-in lifecycle | pending | Google, verification/reset, logout, session management, linking, and inactive-account denial |
 | P3 Protect used product operations | pending | Replace arbitrary browser GraphQL with typed operations and Go authorization for UI features actually in use |
 | P4 Files, cutover, and release | pending | Private files, one protected deployment topology, operational checks, and removal of every legacy auth path |
@@ -73,21 +73,23 @@ These do not block P1:
 - Initial Admin bootstrap process. Admin stays disabled until MFA/recovery exists.
 - File/account retention periods. File and deletion features stay disabled until selected.
 
-## Latest cleanup facts
+## Latest verified work
 
-- Removed the 49-file, 5,722-line provider spike and its synthetic helpers.
-- Removed its dedicated runner/configuration and 90 spike-only npm packages.
-- Removed duplicated long-form audit/evidence documents.
-- Removed the uncommitted, unwired principal-resolution experiment; it will be rebuilt only inside P1's real vertical route.
-- Retained migrations, database safety, identity provisioning, and the compact assertion signer/verifier.
-Cleanup verification passed:
+P1.1 is implemented and the first P1.2 runtime seam is mounted:
 
-- stale-reference, encoding, whitespace, and lockfile consistency checks;
-- lint and typecheck;
-- production build;
-- 4 maintained web tests and the anonymous Playwright smoke;
-- Docker-context sentinel;
-- all Go packages without service requirements;
-- all PostgreSQL migration/reset/role/identity/dump/restore tests with integration required.
+- Next 16.2.12, Better Auth 1.6.25, pg 8.22.0, and Nodemailer 9.0.3 are direct exact dependencies.
+- The Next 16 ESLint CLI migration, typecheck, and production build pass.
+- Server configuration rejects weak secrets, unsafe origins, non-PostgreSQL URLs, public-schema fallback, implicit same-email linking, and insecure production cookies.
+- Better Auth uses the canonical origin, exact trusted origin, host-only HttpOnly cookie, accepted password/session limits, database rate limiting, and a PostgreSQL connection restricted to better_auth.
+- The existing /api/auth/[...path] now mounts the real Better Auth handler. Mail callbacks use the server-only SMTP adapter.
+- Auth UI, GraphQL identity, Go middleware, and legacy Neon dependencies are not cut over yet; the product flow is therefore still incomplete.
 
-`npm audit --omit=dev` reports seven existing production findings through legacy `@neondatabase/auth` and the current Next dependency tree. There is no deployed Auth V2 surface, but these findings block release. P1 must use a patched Better Auth/Next set; P4 removes Neon entirely.
+Verified 2026-07-31:
+
+    npm run lint                         PASS
+    npm run typecheck                    PASS
+    npm run build                        PASS
+    npm run test:web                     PASS (4 files, 12 tests)
+    npm run test:docker-context          PASS
+
+npm audit --omit=dev still reports seven production findings. The critical Better Auth findings are confined to the nested legacy @neondatabase/auth dependency that P1.4 removes. Current Next 16.2.12 also carries transitive PostCSS/sharp advisories with no non-breaking patched Next release reported by npm. These remain release blockers, not skipped checks.

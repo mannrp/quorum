@@ -1,15 +1,11 @@
-import { getAuth } from "@/lib/auth/server";
+import { getAuth } from "@/lib/auth-v2/server";
 
-type AuthRouteContext = {
-  params: Promise<{ path: string[] }>;
-};
-
-function authHandler(method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH") {
-  return (request: Request, context: AuthRouteContext) => getAuth().handler()[method](request, context);
+function authHandler(request: Request): Promise<Response> {
+  return getAuth().handler(request);
 }
 
-export const GET = authHandler("GET");
-export const POST = authHandler("POST");
-export const PUT = authHandler("PUT");
-export const DELETE = authHandler("DELETE");
-export const PATCH = authHandler("PATCH");
+export const GET = authHandler;
+export const POST = authHandler;
+export const PUT = authHandler;
+export const DELETE = authHandler;
+export const PATCH = authHandler;
