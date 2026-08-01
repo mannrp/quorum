@@ -8,6 +8,7 @@ const externalEmail = `auth-v2-external-${Date.now()}@example.test`;
 const unverifiedEmail = `auth-v2-unverified-${Date.now()}@example.test`;
 const expiredEmail = `auth-v2-expired-${Date.now()}@example.test`;
 const linkEmail = "oidc-link@example.test";
+const resetEmail = `auth-v2-reset-${Date.now()}@example.test`;
 const password = "correct horse battery staple 123";
 let handler: (request: Request) => Promise<Response>;
 
@@ -29,14 +30,14 @@ function post(path: string, body: unknown, cookie?: string) {
   }));
 }
 
-async function waitForVerificationURL(targetEmail = email): Promise<string> {
+async function waitForVerificationURL(targetEmail = email, subject = "Verify your Quorum email"): Promise<string> {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
     const list = await fetch(`${mailpitURL}/api/v1/messages`, { cache: "no-store" });
     if (!list.ok) throw new Error(`Mailpit list failed: ${list.status}`);
     const value = await list.json() as { messages?: Array<{ ID: string; Subject: string; To: Array<{ Address: string }> }> };
     const summary = value.messages?.find((message) =>
-      message.Subject === "Verify your Quorum email" &&
+      message.Subject === subject &&
       message.To.some((recipient) => recipient.Address === targetEmail),
     );
     if (summary) {
@@ -202,7 +203,7 @@ describe("real Better Auth handler", () => {
       connectionString: process.env.AUTH_DATABASE_URL,
       options: "-c search_path=better_auth,pg_catalog,pg_temp",
     });
-    await pool.query('DELETE FROM "user" WHERE email = ANY($1::text[])', [[email, externalEmail, unverifiedEmail, expiredEmail, linkEmail]]);
+    await pool.query('DELETE FROM "user" WHERE email = ANY($1::text[])', [[email, externalEmail, unverifiedEmail, expiredEmail, linkEmail, resetEmail]]);
     await pool.query('DELETE FROM "rateLimit"');
     await pool.end();
   });
@@ -512,6 +513,69 @@ describe("real Better Auth handler", () => {
     }));
     expect(remainingAccounts.status).toBe(200);
     expect(await remainingAccounts.json()).toEqual([{ providerId: "credential" }]);
+  });
+  it("resets a password once, revokes old sessions, and remains enumeration-safe", async () => {
+    await clearRateLimits();
+    const registration = await post("/sign-up/email", {
+      callbackURL: "/auth/complete",
+      email: resetEmail,
+      name: "Password Reset User",
+      password,
+    });
+    expect(registration.status).toBe(200);
+    const verification = await handler(new Request(await waitForVerificationURL(resetEmail), {
+      headers: { origin },
+      redirect: "manual",
+    }));
+    expect([200, 302]).toContain(verification.status);
+
+    const firstSignIn = await post("/sign-in/email", { email: resetEmail, password });
+    const secondSignIn = await post("/sign-in/email", { email: resetEmail, password });
+    expect(firstSignIn.status).toBe(200);
+    expect(secondSignIn.status).toBe(200);
+    const oldCookies = [sessionCookie(firstSignIn), sessionCookie(secondSignIn)];
+
+    await clearRateLimits();
+    const unknown = await post("/request-password-reset", {
+      email: `missing-${Date.now()}@example.test`,
+      redirectTo: "/auth/reset-password",
+    });
+    await clearRateLimits();
+    const known = await post("/request-password-reset", {
+      email: resetEmail,
+      redirectTo: "/auth/reset-password",
+    });
+    expect(known.status).toBe(200);
+    expect(unknown.status).toBe(200);
+    expect(await known.clone().text()).toBe(await unknown.clone().text());
+
+    const resetMailURL = await waitForVerificationURL(resetEmail, "Reset your Quorum password");
+    expect(new URL(resetMailURL).origin).toBe(origin);
+    const exchange = await handler(new Request(resetMailURL, { headers: { origin }, redirect: "manual" }));
+    expect(exchange.status).toBe(302);
+    const resetFormURL = new URL(exchange.headers.get("location")!, origin);
+    expect(resetFormURL.pathname).toBe("/auth/reset-password");
+    const resetToken = resetFormURL.searchParams.get("token");
+    expect(resetToken).toBeTruthy();
+
+    const newPassword = "new correct horse battery staple 456";
+    const reset = await post("/reset-password", { token: resetToken, newPassword });
+    expect(reset.status).toBe(200);
+    const replay = await post("/reset-password", { token: resetToken, newPassword: password });
+    expect(replay.status).toBeGreaterThanOrEqual(400);
+
+    for (const cookie of oldCookies) {
+      const staleSession = await handler(new Request(`${origin}/api/auth/get-session`, { headers: { cookie, origin } }));
+      expect(staleSession.status).toBe(200);
+      expect(await staleSession.json()).toBeNull();
+    }
+
+    await clearRateLimits();
+    const oldPassword = await post("/sign-in/email", { email: resetEmail, password });
+    expect(oldPassword.status).toBeGreaterThanOrEqual(400);
+    const newPasswordLogin = await post("/sign-in/email", { email: resetEmail, password: newPassword });
+    expect(newPasswordLogin.status).toBe(200);
+    expect(newPasswordLogin.headers.get("set-cookie") ?? "").toContain("quorum.session_token=");
   });
   it("rejects wrong origin, wrong content type, and an external callback", async () => {
     const unverifiedRegistration = await post("/sign-up/email", {

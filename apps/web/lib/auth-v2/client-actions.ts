@@ -73,3 +73,12 @@ export async function unlinkGoogle(): Promise<void> {
   });
   if (result.error) throw new Error(authErrorMessage(result.error));
 }
+export async function requestPasswordResetEmail(email: string): Promise<void> {
+  const result = await authClient.requestPasswordReset({ email, redirectTo: "/auth/reset-password" });
+  if (result.error) throw new Error(authErrorMessage(result.error));
+}
+
+export async function resetPasswordWithToken(token: string, newPassword: string): Promise<void> {
+  const result = await authClient.resetPassword({ token, newPassword });
+  if (result.error) throw new Error(authErrorMessage(result.error));
+}

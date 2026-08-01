@@ -10,6 +10,8 @@ const signOut = vi.fn();
 const listAccounts = vi.fn();
 const linkSocial = vi.fn();
 const unlinkAccount = vi.fn();
+const requestPasswordReset = vi.fn();
+const resetPassword = vi.fn();
 
 vi.mock("./client", () => ({
   authClient: {
@@ -20,6 +22,8 @@ vi.mock("./client", () => ({
     listAccounts,
     linkSocial,
     unlinkAccount,
+    requestPasswordReset,
+    resetPassword,
   },
 }));
 
@@ -105,4 +109,20 @@ describe("Auth V2 client actions", () => {
       errorCallbackURL: "/settings/account?link=error",
     });
     expect(unlinkAccount).toHaveBeenCalledWith({ providerId: "google" });
+  });
+  it("requests and completes password reset through reviewed relative routes", async () => {
+    requestPasswordReset.mockResolvedValue({ data: { status: true }, error: null });
+    resetPassword.mockResolvedValue({ data: { status: true }, error: null });
+    const { requestPasswordResetEmail, resetPasswordWithToken } = await import("./client-actions");
+
+    await requestPasswordResetEmail("user@example.test");
+    await resetPasswordWithToken("one-time-token", "n".repeat(29));
+    expect(requestPasswordReset).toHaveBeenCalledWith({
+      email: "user@example.test",
+      redirectTo: "/auth/reset-password",
+    });
+    expect(resetPassword).toHaveBeenCalledWith({
+      token: "one-time-token",
+      newPassword: "n".repeat(29),
+    });
   });});

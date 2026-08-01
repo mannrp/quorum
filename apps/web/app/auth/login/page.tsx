@@ -15,8 +15,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("oauth") === "error") {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("oauth") === "error") {
       setError("Google sign-in was cancelled or could not be completed.");
+    }
+    if (query.get("reset") === "complete") {
+      setError("Password updated. Sign in with your new password.");
     }
   }, []);
 
@@ -77,7 +81,7 @@ export default function LoginPage() {
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <label htmlFor="login-password" className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Password</label>
-                <a href="#reset" className="text-[9px] text-[var(--accent-app)] hover:underline">Forgot password?</a>
+                <Link href="/auth/forgot-password" className="text-[9px] text-[var(--accent-app)] hover:underline">Forgot password?</Link>
               </div>
               <input
                 id="login-password"

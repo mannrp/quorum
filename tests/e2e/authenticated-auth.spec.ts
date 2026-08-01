@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 const integration = process.env.QUORUM_REQUIRE_INTEGRATION === "true";
 const mailpitURL = process.env.MAILPIT_API_URL;
 
-async function verificationURL(email: string): Promise<string> {
+async function verificationURL(email: string, subject = "Verify your Quorum email"): Promise<string> {
   if (!mailpitURL) throw new Error("MAILPIT_API_URL is required.");
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
@@ -11,7 +11,7 @@ async function verificationURL(email: string): Promise<string> {
     if (!list.ok) throw new Error(`Mailpit list failed: ${list.status}`);
     const body = await list.json() as { messages?: Array<{ ID: string; Subject: string; To?: Array<{ Address: string }> }> };
     const summary = body.messages?.find((message) =>
-      message.Subject === "Verify your Quorum email" &&
+      message.Subject === subject &&
       message.To?.some((recipient) => recipient.Address === email),
     );
     if (summary) {
@@ -123,4 +123,36 @@ test("Google-style OAuth user reaches the same Sponsor enrollment and logout flo
   await page.getByRole("button", { name: "Logout" }).click();
   await expect(page).toHaveURL(/^http:\/\/127\.0\.0\.1:3000\/(?:auth\/login)?$/);
   expect(await page.evaluate(() => fetch("/api/v1/viewer").then((response) => response.status))).toBe(401);
+});
+test("password reset email replaces credentials without retaining the token URL", async ({ page }) => {
+  test.skip(!integration, "requires pinned PostgreSQL and Mailpit services");
+
+  const email = `auth-reset-browser-${Date.now()}@example.test`;
+  const password = "correct horse battery staple 123";
+  const newPassword = "new correct horse battery staple 456";
+
+  await page.goto("/auth/register");
+  await page.getByLabel("Full name").fill("Reset Browser");
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.goto(await verificationURL(email));
+
+  await page.goto("/auth/forgot-password");
+  await page.getByLabel("Email address").fill(email);
+  await page.getByRole("button", { name: "Send reset link" }).click();
+  await expect(page.getByText("If an eligible account exists, a password reset link has been sent.")).toBeVisible();
+
+  await page.goto(await verificationURL(email, "Reset your Quorum password"));
+  await expect(page).toHaveURL(/\/auth\/reset-password\?token=/);
+  await page.getByLabel("New password").fill(newPassword);
+  await page.getByRole("button", { name: "Update password" }).click();
+  await expect(page).toHaveURL(/\/auth\/login\?reset=complete$/);
+  expect(page.url()).not.toContain("token=");
+  await expect(page.getByText("Password updated. Sign in with your new password.")).toBeVisible();
+
+  await page.getByLabel("Email Address").fill(email);
+  await page.getByLabel("Password").fill(newPassword);
+  await page.getByRole("button", { name: "Connect Session" }).click();
+  await expect(page).toHaveURL(/\/onboarding$/);
 });
