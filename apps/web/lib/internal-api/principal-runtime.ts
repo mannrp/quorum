@@ -52,6 +52,11 @@ async function buildRuntime() {
     };
   };
 
+  const anonymousHeaders = async () => {
+    const correlationId = randomUUID();
+    const assertion = await signer.anonymous({ correlationId, assertionId: randomUUID() });
+    return { "X-Correlation-ID": correlationId, "X-Quorum-Assertion": assertion };
+  };
   const assertionHeaders = async (headers: Headers) => {
     const current = await session(headers);
     if (!current?.user.emailVerified) throw new AuthenticationRequiredError();
@@ -81,6 +86,7 @@ async function buildRuntime() {
       assertionId: randomUUID,
       session,
     }),
+    anonymousHeaders,
     assertionHeaders,
   };
 }
@@ -93,4 +99,8 @@ export async function getPrincipalClient() {
 export async function getInternalAssertionHeaders(headers: Headers) {
   runtimePromise ??= buildRuntime();
   return (await runtimePromise).assertionHeaders(headers);
+}
+export async function getAnonymousAssertionHeaders() {
+  runtimePromise ??= buildRuntime();
+  return (await runtimePromise).anonymousHeaders();
 }

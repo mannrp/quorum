@@ -1,0 +1,47 @@
+import { NextResponse } from "next/server";
+import { readSameOriginJSON } from "@/lib/auth-v2/browser-request";
+import { getAnonymousAssertionHeaders } from "@/lib/internal-api/principal-runtime";
+import { resolveOperation } from "@/lib/operations/registry";
+
+export const dynamic = "force-dynamic";
+
+function graphqlURL(): string {
+  const raw = process.env.INTERNAL_API_BASE_URL?.trim();
+  if (!raw) throw new Error("INTERNAL_API_BASE_URL is required.");
+  const url = new URL(raw);
+  if (url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
+    throw new Error("INTERNAL_API_BASE_URL must contain only scheme, host, and optional port.");
+  }
+  return url.origin + "/graphql";
+}
+
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ operationId: string }> },
+): Promise<Response> {
+  try {
+    const { operationId } = await context.params;
+    const variables = await readSameOriginJSON(request, process.env.BETTER_AUTH_URL ?? "");
+    const operation = resolveOperation(operationId, variables);
+    const assertionHeaders = operation.auth === "anonymous" ? await getAnonymousAssertionHeaders() : {};
+    const response = await fetch(graphqlURL(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...assertionHeaders },
+      body: JSON.stringify({ query: operation.document, variables: operation.variables }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+    return new NextResponse(await response.text(), {
+      status: response.status,
+      headers: {
+        "Content-Type": response.headers.get("content-type") ?? "application/json",
+        "Cache-Control": "private, no-store",
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error && error.message === "Operation is not registered."
+      ? "operation_not_found"
+      : "invalid_operation_request";
+    return NextResponse.json({ error: message }, { status: message === "operation_not_found" ? 404 : 400 });
+  }
+}

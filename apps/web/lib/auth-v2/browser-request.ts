@@ -1,7 +1,7 @@
 import "server-only";
 import type { SelfServiceRole } from "./viewer-contract";
 
-async function readSameOriginJSON(request: Request, canonicalOrigin: string): Promise<Record<string, unknown>> {
+export async function readSameOriginJSON(request: Request, canonicalOrigin: string): Promise<Record<string, unknown>> {
   if (request.headers.get("origin") !== new URL(canonicalOrigin).origin) throw new Error("Request origin rejected.");
   if (request.headers.get("sec-fetch-site") !== "same-origin") throw new Error("Cross-site request rejected.");
   const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();

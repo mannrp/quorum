@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { Section, Status, Badge, LoadingSkeleton } from "@/components/ui";
-import { useGraphQL } from "@/lib/graphql";
-import { HOME_QUERY } from "@/lib/queries";
-import type { Project, Team } from "@/types/domain";
+import { useOperation } from "@/lib/operations/client";
+import type { Project } from "@/types/domain";
 
 export default function HomePage() {
-  const { data, error, loading } = useGraphQL<{ teams: Team[]; projects: Project[] }>(HOME_QUERY);
+  const { data, error, loading } = useOperation<{ projects: Project[] }>("PublicHomeV1", {});
   const projects = data?.projects || [];
 
   return (

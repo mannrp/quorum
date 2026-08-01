@@ -155,12 +155,6 @@ export const PROJECT_LIST_FIELDS = `
   approvalState
 `;
 
-export const HOME_QUERY = `
-  query Home {
-    projects { ${PROJECT_LIST_FIELDS} }
-  }
-`;
-
 export const TEAMS_QUERY = `
   query Teams($search: String) {
     teams(search: $search) { ${TEAM_LIST_FIELDS} }
