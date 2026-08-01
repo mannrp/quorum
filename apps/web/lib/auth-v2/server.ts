@@ -1,5 +1,6 @@
 import "server-only";
 import { betterAuth } from "better-auth";
+import { isRecentSession, projectAccountMethods } from "./account-policy";
 import { Pool } from "pg";
 import { parseAuthEnvironment } from "./config";
 import { createAuthMailer } from "./mail";
@@ -11,12 +12,14 @@ type Auth = ReturnType<typeof betterAuth>;
 let authInstance: Auth | undefined;
 let verificationTokens: VerificationTokenStore | undefined;
 let canonicalOrigin: string | undefined;
+let recentAuthSeconds: number | undefined;
 
 export function getAuth(): Auth {
   if (authInstance) return authInstance;
 
   const config = parseAuthEnvironment(process.env);
   canonicalOrigin = config.baseURL;
+  recentAuthSeconds = config.session.recentAuthSeconds;
   const database = new Pool({
     connectionString: config.databaseURL,
     options: "-c search_path=better_auth,pg_catalog,pg_temp",
@@ -47,7 +50,7 @@ function projectAuthValue(value: unknown): unknown {
     .map(([key, field]) => [key, projectAuthValue(field)]));
 }
 
-async function projectAuthResponse(response: Response): Promise<Response> {
+async function projectAuthResponse(response: Response, pathname: string): Promise<Response> {
   if (!response.headers.get("content-type")?.toLowerCase().startsWith("application/json")) return response;
   const body = await response.clone().text();
   if (!body) return response;
@@ -59,7 +62,10 @@ async function projectAuthResponse(response: Response): Promise<Response> {
   }
   const headers = new Headers(response.headers);
   headers.delete("content-length");
-  return Response.json(projectAuthValue(value), { status: response.status, statusText: response.statusText, headers });
+  const projected = pathname === "/api/auth/list-accounts"
+    ? projectAccountMethods(value)
+    : projectAuthValue(value);
+  return Response.json(projected, { status: response.status, statusText: response.statusText, headers });
 }
 
 export async function handleAuthRequest(request: Request): Promise<Response> {
@@ -76,6 +82,13 @@ export async function handleAuthRequest(request: Request): Promise<Response> {
   }
   const url = new URL(request.url);
 
+  if (request.method === "POST" && url.pathname === "/api/auth/link-social") {
+    const current = await auth.api.getSession({ headers: request.headers });
+    if (!current) return Response.json({ error: "Authentication required." }, { status: 401 });
+    if (!isRecentSession(current.session.createdAt, recentAuthSeconds ?? 0)) {
+      return Response.json({ error: "Recent authentication required." }, { status: 403 });
+    }
+  }
   if (request.method === "GET" && url.pathname === "/api/auth/verify-email") {
     const token = url.searchParams.get("token");
     if (!token || !verificationTokens || !(await verificationTokens.consume(token))) {
@@ -83,5 +96,5 @@ export async function handleAuthRequest(request: Request): Promise<Response> {
     }
   }
 
-  return projectAuthResponse(await auth.handler(request));
+  return projectAuthResponse(await auth.handler(request), url.pathname);
 }

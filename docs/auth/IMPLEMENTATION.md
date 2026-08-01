@@ -147,6 +147,8 @@ Also run the PostgreSQL/Mailpit integration flow with missing infrastructure con
 
 ### P2.1 Google and linking
 
+**Status:** done
+
 1. Configure Better Auth Google using the canonical origin and one exact callback.
 2. Reintroduce a deterministic local OIDC provider only for the real route test.
 3. Implement Google login/cancellation/error UI and reviewed relative redirects. A first-time Google user continues through the same verified Student/Sponsor enrollment flow as email/password.
@@ -160,6 +162,8 @@ Tests:
 - Same-email different account collides safely; explicit link/unlink and last-login-method protection work.
 
 ### P2.2 Password, email, and sessions
+
+**Status:** in progress
 
 1. Implement forgot/reset password, password change, email change/re-verification, session list, revoke-one, revoke-others, and logout-all using Better Auth APIs.
 2. Preserve real `authenticated_at`, `amr`, and assurance across refresh/rotation.

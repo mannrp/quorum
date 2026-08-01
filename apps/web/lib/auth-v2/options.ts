@@ -68,6 +68,18 @@ export function buildBetterAuthOptions({
         redirectURI: config.google.callbackURL,
         scope: ["openid", "email", "profile"],
         accessType: "online",
+        ...(config.testOIDC ? {
+          verifyIdToken: async (token: string) => token === "quorum-test-google-link-token",
+          getUserInfo: async () => ({
+            user: {
+              id: "deterministic-google-link-subject",
+              email: "oidc-link@example.test",
+              emailVerified: true,
+              name: "OIDC Link User",
+            },
+            data: {},
+          }),
+        } : {}),
       },
     } : undefined,
     advanced: {

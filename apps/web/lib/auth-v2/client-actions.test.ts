@@ -7,6 +7,9 @@ const oauth2SignIn = vi.fn();
 const emailSignUp = vi.fn();
 const getSession = vi.fn();
 const signOut = vi.fn();
+const listAccounts = vi.fn();
+const linkSocial = vi.fn();
+const unlinkAccount = vi.fn();
 
 vi.mock("./client", () => ({
   authClient: {
@@ -14,6 +17,9 @@ vi.mock("./client", () => ({
     signUp: { email: emailSignUp },
     getSession,
     signOut,
+    listAccounts,
+    linkSocial,
+    unlinkAccount,
   },
 }));
 
@@ -72,4 +78,31 @@ describe("Auth V2 client actions", () => {
     });
     expect(emailSignIn).not.toHaveBeenCalled();
   });
-});
+
+  it("projects linked accounts to reviewed sign-in methods", async () => {
+    listAccounts.mockResolvedValue({
+      data: [
+        { providerId: "credential", accountId: "private-password-id", userId: "private-user-id" },
+        { providerId: "google", accountId: "private-google-id", userId: "private-user-id" },
+      ],
+      error: null,
+    });
+    const { listSignInMethods } = await import("./client-actions");
+
+    await expect(listSignInMethods()).resolves.toEqual(["password", "google"]);
+  });
+
+  it("links and unlinks Google with reviewed relative callbacks", async () => {
+    linkSocial.mockResolvedValue({ data: { redirect: true }, error: null });
+    unlinkAccount.mockResolvedValue({ data: { status: true }, error: null });
+    const { linkGoogle, unlinkGoogle } = await import("./client-actions");
+
+    await linkGoogle();
+    await unlinkGoogle();
+    expect(linkSocial).toHaveBeenCalledWith({
+      provider: "google",
+      callbackURL: "/settings/account?linked=google",
+      errorCallbackURL: "/settings/account?link=error",
+    });
+    expect(unlinkAccount).toHaveBeenCalledWith({ providerId: "google" });
+  });});

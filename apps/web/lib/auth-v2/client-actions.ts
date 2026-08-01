@@ -42,3 +42,34 @@ export async function signOut(): Promise<void> {
   const result = await authClient.signOut();
   if (result.error) throw new Error(authErrorMessage(result.error));
 }
+export type SignInMethod = "password" | "google";
+
+export async function listSignInMethods(): Promise<SignInMethod[]> {
+  const result = await authClient.listAccounts();
+  if (result.error) throw new Error(authErrorMessage(result.error));
+  const methods = new Set<SignInMethod>();
+  for (const account of result.data ?? []) {
+    if (account.providerId === "credential") methods.add("password");
+    if (account.providerId === "google" || account.providerId === "quorum-test-oidc") methods.add("google");
+  }
+  return (["password", "google"] as const).filter((method) => methods.has(method));
+}
+
+export async function linkGoogle(): Promise<void> {
+  if (process.env.NEXT_PUBLIC_AUTH_TEST_OIDC === "true") {
+    throw new Error("Google linking is unavailable in the deterministic browser harness.");
+  }
+  const result = await authClient.linkSocial({
+    provider: "google",
+    callbackURL: "/settings/account?linked=google",
+    errorCallbackURL: "/settings/account?link=error",
+  });
+  if (result.error) throw new Error(authErrorMessage(result.error));
+}
+
+export async function unlinkGoogle(): Promise<void> {
+  const result = await authClient.unlinkAccount({
+    providerId: process.env.NEXT_PUBLIC_AUTH_TEST_OIDC === "true" ? "quorum-test-oidc" : "google",
+  });
+  if (result.error) throw new Error(authErrorMessage(result.error));
+}

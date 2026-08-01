@@ -82,7 +82,12 @@ describe("Better Auth production options", () => {
     expect(options.rateLimit).toMatchObject({ enabled: true, storage: "database" });
     expect(options.onAPIError).toMatchObject({ errorURL: "/auth/login?oauth=error" });
     expect(options.plugins).toHaveLength(1);
-    expect(options.socialProviders?.google).toMatchObject({
+    const googleOptions = options.socialProviders?.google;
+    expect(googleOptions).toBeTypeOf("object");
+    if (!googleOptions || typeof googleOptions === "function") throw new Error("Expected static Google options.");
+    expect(googleOptions.verifyIdToken).toBeTypeOf("function");
+    expect(googleOptions.getUserInfo).toBeTypeOf("function");
+    expect(googleOptions).toMatchObject({
       clientId: "google-client",
       clientSecret: "google-secret",
       redirectURI: "https://quorum.example/api/auth/callback/google",

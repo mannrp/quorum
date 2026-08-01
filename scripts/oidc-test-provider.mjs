@@ -11,6 +11,7 @@ const codes = new Map();
 const accessTokens = new Set();
 const identitySuffix = randomBytes(8).toString("hex");
 let lastAuthorization;
+let userInfoRequests = 0;
 
 function json(response, status, value) {
   response.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
@@ -97,11 +98,13 @@ const server = createServer(async (request, response) => {
     const authorization = request.headers.authorization ?? "";
     const token = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
     if (!accessTokens.has(token)) return reject(response, 401, "invalid_token");
+    userInfoRequests += 1;
+    const returning = userInfoRequests > 1;
     return json(response, 200, {
       sub: "deterministic-google-subject",
-      email: "oidc-user@example.test",
+      email: returning ? "oidc-user-renamed@example.test" : "oidc-user@example.test",
       email_verified: true,
-      name: "OIDC Test User",
+      name: returning ? "OIDC Renamed User" : "OIDC Test User",
     });
   }
 
@@ -110,6 +113,7 @@ const server = createServer(async (request, response) => {
       authorization: lastAuthorization ?? null,
       pendingAuthorizationCodes: codes.size,
       issuedAccessTokens: accessTokens.size,
+      userInfoRequests,
     });
   }
 

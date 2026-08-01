@@ -73,6 +73,8 @@ Object.assign(childEnv, {
   AUTH_TEST_OIDC_CLIENT_ID: oidcClientId,
   AUTH_TEST_OIDC_CLIENT_SECRET: oidcClientSecret,
   NEXT_PUBLIC_AUTH_TEST_OIDC: "true",
+  GOOGLE_CLIENT_ID: "quorum-link-test-client",
+  GOOGLE_CLIENT_SECRET: "quorum-link-test-secret",
 });
 const oidcProvider = spawnChild(process.execPath, ["scripts/oidc-test-provider.mjs"], {
   cwd: process.cwd(),

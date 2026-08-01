@@ -5,6 +5,7 @@ import { Section, Modal, LoadingSkeleton } from "@/components/ui";
 import { graphqlRequest, userFacingError } from "@/lib/graphql";
 import { ME_QUERY } from "@/lib/queries";
 import type { User } from "@/types/domain";
+import { linkGoogle, listSignInMethods, unlinkGoogle, type SignInMethod } from "@/lib/auth-v2/client-actions";
 
 export default function AccountSettingsPage() {
   const router = useRouter();
@@ -13,6 +14,8 @@ export default function AccountSettingsPage() {
   const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
+  const [signInMethods, setSignInMethods] = useState<SignInMethod[]>([]);
+  const [updatingMethods, setUpdatingMethods] = useState(false);
 
   useEffect(() => {
     const checkUser = async () => {
@@ -23,6 +26,7 @@ export default function AccountSettingsPage() {
           return;
         }
         setMe(res.me);
+        setSignInMethods(await listSignInMethods());
       } catch (err) {
         setNotice(userFacingError(err));
       } finally {
@@ -32,6 +36,30 @@ export default function AccountSettingsPage() {
     void checkUser();
   }, [router]);
 
+  const handleLinkGoogle = async () => {
+    setUpdatingMethods(true);
+    setNotice(null);
+    try {
+      await linkGoogle();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not link Google.");
+      setUpdatingMethods(false);
+    }
+  };
+
+  const handleUnlinkGoogle = async () => {
+    setUpdatingMethods(true);
+    setNotice(null);
+    try {
+      await unlinkGoogle();
+      setSignInMethods(await listSignInMethods());
+      setNotice("Google sign-in disconnected.");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not unlink Google.");
+    } finally {
+      setUpdatingMethods(false);
+    }
+  };
   const handleDeleteAccount = async () => {
     setDeleting(true);
     setNotice(null);
@@ -84,6 +112,45 @@ export default function AccountSettingsPage() {
         </div>
       </Section>
 
+      <Section title="Sign-in methods">
+        <div className="space-y-3 text-sm">
+          <div className="flex items-center justify-between border border-[var(--border-subtle)] px-3 py-3">
+            <div>
+              <p className="font-semibold text-[var(--text-app)]">Email and password</p>
+              <p className="text-xs text-stone-500">{signInMethods.includes("password") ? "Connected" : "Not connected"}</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-4 border border-[var(--border-subtle)] px-3 py-3">
+            <div>
+              <p className="font-semibold text-[var(--text-app)]">Google</p>
+              <p className="text-xs text-stone-500">{signInMethods.includes("google") ? "Connected" : "Not connected"}</p>
+            </div>
+            {signInMethods.includes("google") ? (
+              <button
+                type="button"
+                className="btn-secondary py-2 text-xs"
+                disabled={updatingMethods || signInMethods.length < 2}
+                onClick={() => void handleUnlinkGoogle()}
+                title={signInMethods.length < 2 ? "Add another sign-in method before disconnecting Google." : undefined}
+              >
+                {updatingMethods ? "Updating..." : "Disconnect"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-secondary py-2 text-xs"
+                disabled={updatingMethods}
+                onClick={() => void handleLinkGoogle()}
+              >
+                {updatingMethods ? "Connecting..." : "Connect Google"}
+              </button>
+            )}
+          </div>
+          {signInMethods.length === 1 && (
+            <p className="text-xs text-stone-500">Keep at least one sign-in method connected to avoid losing access.</p>
+          )}
+        </div>
+      </Section>
       <Section title="Danger Zone" className="border-l-4 border-l-[var(--color-danger)]">
         <div className="space-y-4">
           <div className="space-y-1">
