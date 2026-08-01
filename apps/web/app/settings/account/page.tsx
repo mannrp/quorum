@@ -6,6 +6,7 @@ import { graphqlRequest, userFacingError } from "@/lib/graphql";
 import { ME_QUERY } from "@/lib/queries";
 import type { User } from "@/types/domain";
 import { linkGoogle, listSignInMethods, unlinkGoogle, type SignInMethod } from "@/lib/auth-v2/client-actions";
+import { sessionClient, type BrowserSession } from "@/lib/auth-v2/session-client";
 
 export default function AccountSettingsPage() {
   const router = useRouter();
@@ -16,6 +17,8 @@ export default function AccountSettingsPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [signInMethods, setSignInMethods] = useState<SignInMethod[]>([]);
   const [updatingMethods, setUpdatingMethods] = useState(false);
+  const [sessions, setSessions] = useState<BrowserSession[]>([]);
+  const [updatingSessions, setUpdatingSessions] = useState(false);
 
   useEffect(() => {
     const checkUser = async () => {
@@ -26,7 +29,9 @@ export default function AccountSettingsPage() {
           return;
         }
         setMe(res.me);
-        setSignInMethods(await listSignInMethods());
+        const [methods, activeSessions] = await Promise.all([listSignInMethods(), sessionClient.list()]);
+        setSignInMethods(methods);
+        setSessions(activeSessions);
       } catch (err) {
         setNotice(userFacingError(err));
       } finally {
@@ -36,6 +41,25 @@ export default function AccountSettingsPage() {
     void checkUser();
   }, [router]);
 
+  const handleSessionRevocation = async (
+    input: { scope: "ONE"; sessionId: string } | { scope: "OTHERS" | "ALL" },
+  ) => {
+    setUpdatingSessions(true);
+    setNotice(null);
+    try {
+      const result = await sessionClient.revoke(input);
+      if (result.revokedCurrent) {
+        window.location.assign("/auth/login");
+        return;
+      }
+      setSessions(await sessionClient.list());
+      setNotice("Session access updated.");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not update sessions.");
+    } finally {
+      setUpdatingSessions(false);
+    }
+  };
   const handleLinkGoogle = async () => {
     setUpdatingMethods(true);
     setNotice(null);
@@ -99,7 +123,28 @@ export default function AccountSettingsPage() {
           <p className="text-xs text-stone-500 leading-relaxed">
             Your browser session uses an opaque HttpOnly cookie. Reusable credentials are not exposed to this page.
           </p>
-          <div className="grid gap-2 text-xs font-mono text-stone-500">
+          <div className="space-y-2">
+            {sessions.map((session) => (
+              <div key={session.id} className="flex items-center justify-between gap-3 border border-[var(--border-subtle)] px-3 py-2 text-xs">
+                <div>
+                  <p className="font-semibold text-[var(--text-app)]">{session.current ? "This browser" : "Browser session"}</p>
+                  <p className="text-stone-500">Started {new Date(session.createdAt).toLocaleString()}</p>
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary py-1.5 text-[10px]"
+                  disabled={updatingSessions}
+                  onClick={() => void handleSessionRevocation({ scope: "ONE", sessionId: session.id })}
+                >
+                  {session.current ? "Log out" : "Revoke"}
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn-secondary py-2 text-xs" disabled={updatingSessions || sessions.length < 2} onClick={() => void handleSessionRevocation({ scope: "OTHERS" })}>Revoke other sessions</button>
+            <button type="button" className="btn-secondary py-2 text-xs" disabled={updatingSessions} onClick={() => void handleSessionRevocation({ scope: "ALL" })}>Log out everywhere</button>
+          </div>          <div className="grid gap-2 text-xs font-mono text-stone-500">
             <div className="flex justify-between border border-[var(--border-subtle)] px-3 py-2">
               <span>Profile</span>
               <span className="font-bold text-[var(--text-app)]">{me?.username ? `@${me.username}` : "Not linked"}</span>

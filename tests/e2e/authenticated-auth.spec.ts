@@ -119,6 +119,8 @@ test("Google-style OAuth user reaches the same Sponsor enrollment and logout flo
   await expect(page.getByRole("heading", { name: "Account Security" })).toBeVisible();
   await expect(page.getByText("Google", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Disconnect" })).toBeDisabled();
+  await expect(page.getByText("This browser", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Log out everywhere" })).toBeVisible();
   await expect(page.getByText("Keep at least one sign-in method connected to avoid losing access.")).toBeVisible();
   await page.getByRole("button", { name: "Logout" }).click();
   await expect(page).toHaveURL(/^http:\/\/127\.0\.0\.1:3000\/(?:auth\/login)?$/);

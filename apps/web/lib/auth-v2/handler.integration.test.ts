@@ -9,6 +9,7 @@ const unverifiedEmail = `auth-v2-unverified-${Date.now()}@example.test`;
 const expiredEmail = `auth-v2-expired-${Date.now()}@example.test`;
 const linkEmail = "oidc-link@example.test";
 const resetEmail = `auth-v2-reset-${Date.now()}@example.test`;
+const sessionsEmail = `auth-v2-sessions-${Date.now()}@example.test`;
 const password = "correct horse battery staple 123";
 let handler: (request: Request) => Promise<Response>;
 
@@ -118,6 +119,22 @@ async function ageSessionsForEmail(targetEmail: string): Promise<void> {
     await pool.end();
   }
 }
+async function storedSessionTokensForEmail(targetEmail: string): Promise<string[]> {
+  const { Pool } = await import("pg");
+  const pool = new Pool({
+    connectionString: process.env.AUTH_DATABASE_URL,
+    options: "-c search_path=better_auth,pg_catalog,pg_temp",
+  });
+  try {
+    const result = await pool.query<{ token: string }>(
+      'SELECT s."token" FROM "session" s JOIN "user" u ON u."id" = s."userId" WHERE u."email" = $1',
+      [targetEmail],
+    );
+    return result.rows.map((row) => row.token);
+  } finally {
+    await pool.end();
+  }
+}
 async function storedSessionTokens(): Promise<string[]> {
   const { Pool } = await import("pg");
   const pool = new Pool({
@@ -203,7 +220,7 @@ describe("real Better Auth handler", () => {
       connectionString: process.env.AUTH_DATABASE_URL,
       options: "-c search_path=better_auth,pg_catalog,pg_temp",
     });
-    await pool.query('DELETE FROM "user" WHERE email = ANY($1::text[])', [[email, externalEmail, unverifiedEmail, expiredEmail, linkEmail, resetEmail]]);
+    await pool.query('DELETE FROM "user" WHERE email = ANY($1::text[])', [[email, externalEmail, unverifiedEmail, expiredEmail, linkEmail, resetEmail, sessionsEmail]]);
     await pool.query('DELETE FROM "rateLimit"');
     await pool.end();
   });
@@ -576,6 +593,73 @@ describe("real Better Auth handler", () => {
     const newPasswordLogin = await post("/sign-in/email", { email: resetEmail, password: newPassword });
     expect(newPasswordLogin.status).toBe(200);
     expect(newPasswordLogin.headers.get("set-cookie") ?? "").toContain("quorum.session_token=");
+  });
+  it("lists and revokes owned sessions without exposing reusable tokens", async () => {
+    await clearRateLimits();
+    expect((await post("/sign-up/email", {
+      callbackURL: "/auth/complete",
+      email: sessionsEmail,
+      name: "Session Manager",
+      password,
+    })).status).toBe(200);
+    expect([200, 302]).toContain((await handler(new Request(await waitForVerificationURL(sessionsEmail), {
+      headers: { origin },
+      redirect: "manual",
+    }))).status);
+
+    const signIns: Response[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      const response = await post("/sign-in/email", { email: sessionsEmail, password });
+      expect(response.status).toBe(200);
+      signIns.push(response);
+    }
+    const cookies = signIns.map(sessionCookie);
+    const sessionRoute = await import("../../app/api/v1/sessions/route");
+
+    const listed = await sessionRoute.GET(new Request(`${origin}/api/v1/sessions`, { headers: { cookie: cookies[0] } }));
+    expect(listed.status).toBe(200);
+    const listedText = await listed.clone().text();
+    const listedBody = await listed.json() as { sessions: Array<{ id: string; current: boolean }> };
+    expect(listedBody.sessions).toHaveLength(3);
+    expect(listedBody.sessions.filter((session) => session.current)).toHaveLength(1);
+    for (const token of await storedSessionTokensForEmail(sessionsEmail)) expect(listedText).not.toContain(token);
+
+    const secondSession = await handler(new Request(`${origin}/api/auth/get-session`, {
+      headers: { cookie: cookies[1], origin },
+    }));
+    const secondId = ((await secondSession.json()) as { session: { id: string } }).session.id;
+    const revokeOne = await sessionRoute.DELETE(new Request(`${origin}/api/v1/sessions`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json", cookie: cookies[0], origin, "sec-fetch-site": "same-origin" },
+      body: JSON.stringify({ scope: "ONE", sessionId: secondId }),
+    }));
+    expect(revokeOne.status).toBe(200);
+    expect((await revokeOne.json()) as object).toEqual({ revokedCurrent: false });
+    expect(await (await handler(new Request(`${origin}/api/auth/get-session`, { headers: { cookie: cookies[1], origin } }))).json()).toBeNull();
+
+    const unknown = await sessionRoute.DELETE(new Request(`${origin}/api/v1/sessions`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json", cookie: cookies[0], origin, "sec-fetch-site": "same-origin" },
+      body: JSON.stringify({ scope: "ONE", sessionId: "not-an-owned-session" }),
+    }));
+    expect(unknown.status).toBe(404);
+
+    const revokeOthers = await sessionRoute.DELETE(new Request(`${origin}/api/v1/sessions`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json", cookie: cookies[0], origin, "sec-fetch-site": "same-origin" },
+      body: JSON.stringify({ scope: "OTHERS" }),
+    }));
+    expect(revokeOthers.status).toBe(200);
+    expect(await (await handler(new Request(`${origin}/api/auth/get-session`, { headers: { cookie: cookies[2], origin } }))).json()).toBeNull();
+
+    const revokeAll = await sessionRoute.DELETE(new Request(`${origin}/api/v1/sessions`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json", cookie: cookies[0], origin, "sec-fetch-site": "same-origin" },
+      body: JSON.stringify({ scope: "ALL" }),
+    }));
+    expect(revokeAll.status).toBe(200);
+    expect((await revokeAll.json()) as object).toEqual({ revokedCurrent: true });
+    expect(await (await handler(new Request(`${origin}/api/auth/get-session`, { headers: { cookie: cookies[0], origin } }))).json()).toBeNull();
   });
   it("rejects wrong origin, wrong content type, and an external callback", async () => {
     const unverifiedRegistration = await post("/sign-up/email", {
