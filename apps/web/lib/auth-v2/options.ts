@@ -1,5 +1,6 @@
 import "server-only";
 import type { BetterAuthOptions } from "better-auth";
+import { genericOAuth } from "better-auth/plugins";
 import type { AuthRuntimeConfig } from "./config";
 
 type EmailVerificationOptions = NonNullable<BetterAuthOptions["emailVerification"]>;
@@ -14,6 +15,23 @@ type Inputs = Readonly<{
   sendVerificationEmail: NonNullable<EmailVerificationOptions["sendVerificationEmail"]>;
 }>;
 
+type AuthenticationContext = Readonly<{
+  path?: string;
+  params?: Readonly<Record<string, string | undefined>>;
+}>;
+
+export function resolveAuthenticationMethods(context: AuthenticationContext): string {
+  if (context.path === "/sign-in/email" || context.path === "/sign-up/email") {
+    return '["password"]';
+  }
+
+  const provider = context.params?.id ?? context.params?.providerId;
+  if (provider === "google" || provider === "quorum-test-oidc") {
+    return '["google"]';
+  }
+
+  throw new Error("Unsupported session authentication method");
+}
 export function buildBetterAuthOptions({
   config,
   database,
@@ -27,6 +45,31 @@ export function buildBetterAuthOptions({
     secret: config.secret,
     trustedOrigins: [...config.trustedOrigins],
     database,
+    onAPIError: { errorURL: "/auth/login?oauth=error" },
+    plugins: config.testOIDC ? [genericOAuth({
+      config: [{
+        providerId: "quorum-test-oidc",
+        authorizationUrl: `${config.testOIDC.baseURL}/authorize`,
+        tokenUrl: `${config.testOIDC.baseURL}/token`,
+        userInfoUrl: `${config.testOIDC.baseURL}/userinfo`,
+        issuer: config.testOIDC.baseURL,
+        requireIssuerValidation: true,
+        clientId: config.testOIDC.clientId,
+        clientSecret: config.testOIDC.clientSecret,
+        scopes: ["openid", "email", "profile"],
+        pkce: true,
+        authentication: "post",
+      }],
+    })] : [],
+    socialProviders: config.google ? {
+      google: {
+        clientId: config.google.clientId,
+        clientSecret: config.google.clientSecret,
+        redirectURI: config.google.callbackURL,
+        scope: ["openid", "email", "profile"],
+        accessType: "online",
+      },
+    } : undefined,
     advanced: {
       cookiePrefix: "quorum",
       crossSubDomainCookies: { enabled: false },
@@ -86,7 +129,7 @@ export function buildBetterAuthOptions({
     databaseHooks: {
       session: {
         create: {
-          before: async (session) => {
+          before: async (session, context) => {
             const now = new Date();
             return {
               data: {
@@ -94,7 +137,7 @@ export function buildBetterAuthOptions({
                 absoluteExpiresAt: new Date(now.getTime() + config.session.absoluteSeconds * 1_000),
                 assurance: "aal1",
                 authenticatedAt: now,
-                authenticationMethods: '["password"]',
+                authenticationMethods: resolveAuthenticationMethods(context ?? {}),
                 lastSeenAt: now,
               },
             };

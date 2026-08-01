@@ -7,6 +7,8 @@ const validEnvironment = {
   BETTER_AUTH_SECRET: "q".repeat(32),
   BETTER_AUTH_URL: "https://quorum.example",
   AUTH_DATABASE_URL: "postgresql://quorum_auth_runtime:secret@postgres:5432/quorum",
+  GOOGLE_CLIENT_ID: "google-client",
+  GOOGLE_CLIENT_SECRET: "google-secret",
 };
 
 describe("Auth V2 server configuration", () => {
@@ -21,6 +23,11 @@ describe("Auth V2 server configuration", () => {
       session: { idleSeconds: 86_400, absoluteSeconds: 604_800, recentAuthSeconds: 600 },
       databaseSchema: "better_auth",
       allowImplicitSameEmailLinking: false,
+      google: {
+        clientId: "google-client",
+        clientSecret: "google-secret",
+        callbackURL: "https://quorum.example/api/auth/callback/google",
+      },
     });
   });
 
@@ -32,6 +39,38 @@ describe("Auth V2 server configuration", () => {
     ["a non-PostgreSQL database", { AUTH_DATABASE_URL: "mysql://db/quorum" }],
   ])("rejects %s", (_label, override) => {
     expect(() => parseAuthEnvironment({ ...validEnvironment, ...override })).toThrow();
+  });
+
+  it.each([
+    [{ GOOGLE_CLIENT_ID: "" }],
+    [{ GOOGLE_CLIENT_SECRET: "" }],
+  ])("rejects incomplete Google credentials", (override) => {
+    expect(() => parseAuthEnvironment({ ...validEnvironment, ...override })).toThrow(/Google credentials/);
+  });
+
+  it("rejects the deterministic OIDC provider in production", () => {
+    expect(() => parseAuthEnvironment({
+      ...validEnvironment,
+      AUTH_TEST_OIDC_BASE_URL: "http://127.0.0.1:19090",
+      AUTH_TEST_OIDC_CLIENT_ID: "test-client",
+      AUTH_TEST_OIDC_CLIENT_SECRET: "test-secret",
+    })).toThrow(/nonproduction/);
+  });
+
+  it("accepts the complete loopback deterministic OIDC configuration in development", () => {
+    const config = parseAuthEnvironment({
+      ...validEnvironment,
+      NODE_ENV: "development",
+      BETTER_AUTH_URL: "http://127.0.0.1:3000",
+      AUTH_TEST_OIDC_BASE_URL: "http://127.0.0.1:19090",
+      AUTH_TEST_OIDC_CLIENT_ID: "test-client",
+      AUTH_TEST_OIDC_CLIENT_SECRET: "test-secret",
+    });
+    expect(config.testOIDC).toEqual({
+      baseURL: "http://127.0.0.1:19090",
+      clientId: "test-client",
+      clientSecret: "test-secret",
+    });
   });
 
   it("permits an explicit HTTP loopback origin only outside production", () => {

@@ -15,6 +15,18 @@ export async function signInWithEmail(email: string, password: string): Promise<
   if (result.error) throw new Error(authErrorMessage(result.error));
 }
 
+export async function signInWithGoogle(): Promise<void> {
+  const callbacks = {
+    callbackURL: "/auth/complete",
+    newUserCallbackURL: "/auth/complete",
+    errorCallbackURL: "/auth/login?oauth=error",
+  } as const;
+  const result = process.env.NEXT_PUBLIC_AUTH_TEST_OIDC === "true"
+    ? await authClient.signIn.oauth2({ providerId: "quorum-test-oidc", ...callbacks })
+    : await authClient.signIn.social({ provider: "google", ...callbacks });
+  if (result.error) throw new Error(authErrorMessage(result.error));
+}
+
 export async function signUpWithEmail(email: string, password: string, name: string): Promise<void> {
   const result = await authClient.signUp.email({ email, password, name, callbackURL: "/auth/complete" });
   if (result.error) throw new Error(authErrorMessage(result.error));

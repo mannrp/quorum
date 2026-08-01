@@ -11,6 +11,7 @@
 Quorum now has one browser authentication path: Better Auth `1.6.25` mounted by public Next at `/api/auth/[...path]`.
 
 - Email/password registration sends verification mail through SMTP/Mailpit.
+- Google sign-in uses one exact callback and the same verified Student/Sponsor enrollment path; implicit same-email linking is disabled.
 - Verification links are one-use; replay is rejected.
 - Verified users sign in with an opaque host-only HttpOnly `SameSite=Lax` cookie and can sign out.
 - A verified user can self-enroll only as Student or Sponsor through `POST /api/v1/enrollment`.
@@ -38,8 +39,8 @@ Verified locally on 2026-08-01:
 npm run lint                                      PASS
 npm run typecheck                                 PASS
 npm run build                                     PASS
-npm run test:web                                  PASS (8 files, 26 tests)
-npm run test:e2e                                  PASS (handler 2 + Chromium 2; no skips)
+npm run test:web                                  PASS (8 files, 37 tests)
+npm run test:e2e                                  PASS (handler 3 + Chromium 3; no skips)
 npm run test:docker-context                       PASS
 cd apps/api && go test ./...                      PASS
 service-backed go test -count=1 ./...             PASS (PostgreSQL required; no skips)
@@ -51,7 +52,7 @@ Repository scans found no active Neon Auth dependency/configuration, demo identi
 
 ## Real blockers and next work
 
-P1 completed on exact commit `2a00f4f` with pinned Ubuntu CI run `30712246442` green in 2m15s. The workflow ran the service-backed handler and authenticated Chromium journey with no skip path. P2.1 is now active.
+P1 completed on exact commit `2a00f4f` with pinned Ubuntu CI run `30712246442` green in 2m15s. The workflow ran the service-backed handler and authenticated Chromium journey with no skip path. P2.1 now has production Google configuration/UI plus a deterministic local provider proving exact callback, state, S256 PKCE, issuer, denial, missing/wrong state cookie, wrong origin, external return rejection, replay denial, opaque HttpOnly session issuance, and persisted `google` authentication-method provenance. OAuth expiry, returning-profile changes, same-email collision, explicit link/unlink, and last-method protection remain open.
 
 After P1, execute P2, P3, then P4 in `IMPLEMENTATION.md`. Production host/transport, transactional email, and retention choices do not block local P1-P3 work. Admin stays disabled.
 

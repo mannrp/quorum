@@ -2,13 +2,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const emailSignIn = vi.fn();
+const socialSignIn = vi.fn();
+const oauth2SignIn = vi.fn();
 const emailSignUp = vi.fn();
 const getSession = vi.fn();
 const signOut = vi.fn();
 
 vi.mock("./client", () => ({
   authClient: {
-    signIn: { email: emailSignIn },
+    signIn: { email: emailSignIn, social: socialSignIn, oauth2: oauth2SignIn },
     signUp: { email: emailSignUp },
     getSession,
     signOut,
@@ -16,7 +18,10 @@ vi.mock("./client", () => ({
 }));
 
 describe("Auth V2 client actions", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllEnvs();
+  });
 
   it("uses Better Auth email/password endpoints and propagates a safe provider error", async () => {
     emailSignIn.mockResolvedValue({ error: { message: "Invalid credentials" } });
@@ -24,6 +29,34 @@ describe("Auth V2 client actions", () => {
 
     await expect(signInWithEmail("user@example.test", "password")).rejects.toThrow("Invalid credentials");
     expect(emailSignIn).toHaveBeenCalledWith({ email: "user@example.test", password: "password" });
+  });
+
+  it("starts Google sign-in with reviewed relative callbacks only", async () => {
+    socialSignIn.mockResolvedValue({ data: { redirect: true }, error: null });
+    const { signInWithGoogle } = await import("./client-actions");
+
+    await signInWithGoogle();
+    expect(socialSignIn).toHaveBeenCalledWith({
+      provider: "google",
+      callbackURL: "/auth/complete",
+      newUserCallbackURL: "/auth/complete",
+      errorCallbackURL: "/auth/login?oauth=error",
+    });
+  });
+
+  it("uses the deterministic OAuth provider only behind the explicit browser-test flag", async () => {
+    vi.stubEnv("NEXT_PUBLIC_AUTH_TEST_OIDC", "true");
+    oauth2SignIn.mockResolvedValue({ data: { redirect: true }, error: null });
+    const { signInWithGoogle } = await import("./client-actions");
+
+    await signInWithGoogle();
+    expect(oauth2SignIn).toHaveBeenCalledWith({
+      providerId: "quorum-test-oidc",
+      callbackURL: "/auth/complete",
+      newUserCallbackURL: "/auth/complete",
+      errorCallbackURL: "/auth/login?oauth=error",
+    });
+    expect(socialSignIn).not.toHaveBeenCalled();
   });
 
   it("registers without fabricating a post-registration session", async () => {

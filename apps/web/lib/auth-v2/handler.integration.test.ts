@@ -16,6 +16,7 @@ function post(path: string, body: unknown, cookie?: string) {
     headers: {
       "content-type": "application/json",
       origin,
+      "sec-fetch-site": "same-origin",
       ...(cookie ? { cookie } : {}),
     },
     body: JSON.stringify(body),
@@ -65,6 +66,19 @@ async function expireVerification(verificationURL: string): Promise<void> {
   }
 }
 
+async function clearRateLimits(): Promise<void> {
+  const { Pool } = await import("pg");
+  const pool = new Pool({
+    connectionString: process.env.AUTH_DATABASE_URL,
+    options: "-c search_path=better_auth,pg_catalog,pg_temp",
+  });
+  try {
+    await pool.query('DELETE FROM "rateLimit"');
+  } finally {
+    await pool.end();
+  }
+}
+
 async function storedSessionTokens(): Promise<string[]> {
   const { Pool } = await import("pg");
   const pool = new Pool({
@@ -82,6 +96,23 @@ async function storedSessionTokens(): Promise<string[]> {
   }
 }
 
+async function latestTestOIDCSessionMethods(): Promise<string> {
+  const { Pool } = await import("pg");
+  const pool = new Pool({
+    connectionString: process.env.AUTH_DATABASE_URL,
+    options: "-c search_path=better_auth,pg_catalog,pg_temp",
+  });
+  try {
+    const result = await pool.query<{ authenticationMethods: string }>(
+      'SELECT s."authenticationMethods" FROM "session" s JOIN "account" a ON a."userId" = s."userId" WHERE a."providerId" = $1 ORDER BY s."createdAt" DESC LIMIT 1',
+      ["quorum-test-oidc"],
+    );
+    if (result.rowCount !== 1) throw new Error("Deterministic OAuth session was not persisted.");
+    return result.rows[0].authenticationMethods;
+  } finally {
+    await pool.end();
+  }
+}
 describe("real Better Auth handler", () => {
   beforeAll(async () => {
     if (process.env.QUORUM_REQUIRE_INTEGRATION !== "true") {
@@ -186,6 +217,124 @@ describe("real Better Auth handler", () => {
     expect(signOut.status).toBe(200);
     const afterLogout = await viewerRoute(new Request(origin + "/api/v1/viewer", { headers: { cookie } }));
     expect(afterLogout.status).toBe(401);
+  });
+
+  it("enforces state, S256 PKCE, issuer, exact callback, and one-use OAuth callbacks", async () => {
+    await clearRateLimits();
+    const oidcBaseURL = process.env.AUTH_TEST_OIDC_BASE_URL;
+    if (!oidcBaseURL) throw new Error("AUTH_TEST_OIDC_BASE_URL is required.");
+
+    async function beginOAuth() {
+      await clearRateLimits();
+      const start = await post("/sign-in/oauth2", {
+        providerId: "quorum-test-oidc",
+        callbackURL: "/auth/complete",
+        newUserCallbackURL: "/auth/complete",
+        errorCallbackURL: "/auth/login?oauth=error",
+      });
+      expect(start.status).toBe(200);
+      const body = await start.json() as { url?: string };
+      expect(body.url).toBeTruthy();
+      const authorizationURL = new URL(body.url!);
+      expect(authorizationURL.origin).toBe(oidcBaseURL);
+      const stateCookie = (start.headers.get("set-cookie") ?? "").split(";", 1)[0];
+      expect(stateCookie).toBeTruthy();
+
+      const authorization = await fetch(authorizationURL, { redirect: "manual" });
+      expect(authorization.status).toBe(302);
+      const callback = new URL(authorization.headers.get("location")!);
+      expect(callback.origin).toBe(origin);
+      expect(callback.pathname).toBe("/api/auth/oauth2/callback/quorum-test-oidc");
+      expect(callback.searchParams.get("iss")).toBe(oidcBaseURL);
+      return { callback, stateCookie };
+    }
+
+    const metadataResponse = await fetch(`${oidcBaseURL}/last`);
+    expect(metadataResponse.status).toBe(200);
+
+    const wrongOriginStart = await handler(new Request(`${origin}/api/auth/sign-in/oauth2`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://wrong.example" },
+      body: JSON.stringify({
+        providerId: "quorum-test-oidc",
+        callbackURL: "/auth/complete",
+        errorCallbackURL: "/auth/login?oauth=error",
+      }),
+    }));
+    expect(wrongOriginStart.status).toBeGreaterThanOrEqual(400);
+
+    const externalReturn = await post("/sign-in/oauth2", {
+      providerId: "quorum-test-oidc",
+      callbackURL: "https://wrong.example/steal",
+      errorCallbackURL: "/auth/login?oauth=error",
+    });
+    expect(externalReturn.status).toBeGreaterThanOrEqual(400);
+
+    const missingCookieFlow = await beginOAuth();
+    const missingCookie = await handler(new Request(missingCookieFlow.callback, {
+      headers: { origin },
+      redirect: "manual",
+    }));
+    expect(missingCookie.status).toBeGreaterThanOrEqual(300);
+    expect(missingCookie.headers.get("set-cookie") ?? "").not.toContain("quorum.session_token=");
+
+    const deniedFlow = await beginOAuth();
+    deniedFlow.callback.searchParams.delete("code");
+    deniedFlow.callback.searchParams.set("error", "access_denied");
+    deniedFlow.callback.searchParams.set("error_description", "user_cancelled");
+    const denied = await handler(new Request(deniedFlow.callback, {
+      headers: { cookie: deniedFlow.stateCookie, origin },
+      redirect: "manual",
+    }));
+    expect(denied.status).toBeGreaterThanOrEqual(300);
+    expect(denied.headers.get("location") ?? "").toContain("/auth/login?oauth=error");
+    expect(denied.headers.get("set-cookie") ?? "").not.toContain("quorum.session_token=");
+
+    const missingStateFlow = await beginOAuth();
+    missingStateFlow.callback.searchParams.delete("state");
+    const missingState = await handler(new Request(missingStateFlow.callback, {
+      headers: { cookie: missingStateFlow.stateCookie, origin },
+      redirect: "manual",
+    }));
+    expect(missingState.status).toBeGreaterThanOrEqual(300);
+    expect(missingState.headers.get("set-cookie") ?? "").not.toContain("quorum.session_token=");
+
+    const wrongIssuerFlow = await beginOAuth();
+    wrongIssuerFlow.callback.searchParams.set("iss", "https://wrong.example");
+    const wrongIssuer = await handler(new Request(wrongIssuerFlow.callback, {
+      headers: { cookie: wrongIssuerFlow.stateCookie, origin },
+      redirect: "manual",
+    }));
+    expect(wrongIssuer.status).toBeGreaterThanOrEqual(300);
+    expect(wrongIssuer.headers.get("set-cookie") ?? "").not.toContain("quorum.session_token=");
+
+    const successFlow = await beginOAuth();
+    const metadata = await (await fetch(`${oidcBaseURL}/last`)).json() as {
+      authorization: { redirectURI: string; challengeMethod: string; scope: string; issuer: string };
+    };
+    expect(metadata.authorization).toEqual({
+      redirectURI: `${origin}/api/auth/oauth2/callback/quorum-test-oidc`,
+      challengeMethod: "S256",
+      scope: "openid email profile",
+      issuer: oidcBaseURL,
+    });
+
+    const success = await handler(new Request(successFlow.callback, {
+      headers: { cookie: successFlow.stateCookie, origin },
+      redirect: "manual",
+    }));
+    expect(success.status).toBe(302);
+    expect(success.headers.get("location")).toBe("/auth/complete");
+    expect(success.headers.get("set-cookie") ?? "").toContain("quorum.session_token=");
+    expect(success.headers.get("set-cookie") ?? "").toContain("HttpOnly");
+    expect(await latestTestOIDCSessionMethods()).toBe('["google"]');
+
+    const replay = await handler(new Request(successFlow.callback, {
+      headers: { cookie: successFlow.stateCookie, origin },
+      redirect: "manual",
+    }));
+    expect(replay.status).toBeGreaterThanOrEqual(300);
+    expect(replay.headers.get("set-cookie") ?? "").not.toContain("quorum.session_token=");
   });
 
   it("rejects wrong origin, wrong content type, and an external callback", async () => {

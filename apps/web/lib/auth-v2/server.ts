@@ -10,11 +10,13 @@ type Auth = ReturnType<typeof betterAuth>;
 
 let authInstance: Auth | undefined;
 let verificationTokens: VerificationTokenStore | undefined;
+let canonicalOrigin: string | undefined;
 
 export function getAuth(): Auth {
   if (authInstance) return authInstance;
 
   const config = parseAuthEnvironment(process.env);
+  canonicalOrigin = config.baseURL;
   const database = new Pool({
     connectionString: config.databaseURL,
     options: "-c search_path=better_auth,pg_catalog,pg_temp",
@@ -62,6 +64,16 @@ async function projectAuthResponse(response: Response): Promise<Response> {
 
 export async function handleAuthRequest(request: Request): Promise<Response> {
   const auth = getAuth();
+  if (request.method === "POST") {
+    const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+    if (
+      request.headers.get("origin") !== canonicalOrigin ||
+      request.headers.get("sec-fetch-site") !== "same-origin" ||
+      contentType !== "application/json"
+    ) {
+      return Response.json({ error: "Request rejected." }, { status: 403 });
+    }
+  }
   const url = new URL(request.url);
 
   if (request.method === "GET" && url.pathname === "/api/auth/verify-email") {

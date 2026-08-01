@@ -34,8 +34,8 @@ Disabled features do not need speculative implementation, but their old routes a
 | Phase | Status | Product result |
 |---|---|---|
 | C0 Cleanup | done | Retired spike/planning framework removed; lean sources of truth established |
-| P1 Authentication cutover and viewer | ready | Better Auth replaces Neon and a verified user reaches `ViewerBootstrapV1` |
-| P2 Google and account lifecycle | pending | Both sign-in methods, recovery, linking, and session management work |
+| P1 Authentication cutover and viewer | done | Better Auth replaces Neon and a verified user reaches `ViewerBootstrapV1` |
+| P2 Google and account lifecycle | in progress | Both sign-in methods, recovery, linking, and session management work |
 | P3 Product operation migration | pending | Every enabled UI workflow uses registered operations and Go authorization |
 | P4 Files and release | pending | Private files, protected deployment, legacy deletion, and release evidence |
 

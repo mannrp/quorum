@@ -1,7 +1,24 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
 import type { BetterAuthOptions } from "better-auth";
-import { buildBetterAuthOptions } from "./options";
+import { buildBetterAuthOptions, resolveAuthenticationMethods } from "./options";
+
+describe("session authentication method provenance", () => {
+  it.each([
+    ["/sign-in/email", undefined, '["password"]'],
+    ["/sign-up/email", undefined, '["password"]'],
+    ["/callback/google", { id: "google" }, '["google"]'],
+    ["/oauth2/callback/quorum-test-oidc", { providerId: "quorum-test-oidc" }, '["google"]'],
+  ])("maps %s to the reviewed method", (path, params, expected) => {
+    expect(resolveAuthenticationMethods({ path, params })).toBe(expected);
+  });
+
+  it("rejects session creation when the authentication method is unknown", () => {
+    expect(() => resolveAuthenticationMethods({ path: "/unknown" })).toThrow(
+      "Unsupported session authentication method",
+    );
+  });
+});
 
 describe("Better Auth production options", () => {
   it("enforces the accepted cookie, password, session, linking, and database rate-limit policy", () => {
@@ -18,6 +35,16 @@ describe("Better Auth production options", () => {
         session: { idleSeconds: 86_400, absoluteSeconds: 604_800, recentAuthSeconds: 600 },
         databaseSchema: "better_auth",
         allowImplicitSameEmailLinking: false,
+        testOIDC: {
+          baseURL: "http://127.0.0.1:19090",
+          clientId: "test-client",
+          clientSecret: "test-secret",
+        },
+        google: {
+          clientId: "google-client",
+          clientSecret: "google-secret",
+          callbackURL: "https://quorum.example/api/auth/callback/google",
+        },
       },
       database,
       sendChangeEmailConfirmation: send,
@@ -53,5 +80,13 @@ describe("Better Auth production options", () => {
       allowUnlinkingAll: false,
     });
     expect(options.rateLimit).toMatchObject({ enabled: true, storage: "database" });
+    expect(options.onAPIError).toMatchObject({ errorURL: "/auth/login?oauth=error" });
+    expect(options.plugins).toHaveLength(1);
+    expect(options.socialProviders?.google).toMatchObject({
+      clientId: "google-client",
+      clientSecret: "google-secret",
+      redirectURI: "https://quorum.example/api/auth/callback/google",
+      scope: ["openid", "email", "profile"],
+    });
   });
 });

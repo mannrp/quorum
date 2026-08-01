@@ -64,6 +64,28 @@ required("SMTP_HOST");
 required("SMTP_PORT");
 required("MAILPIT_API_URL");
 
+const oidcBaseURL = "http://127.0.0.1:19090";
+const oidcClientId = "quorum-test-client";
+const oidcClientSecret = "quorum-test-secret";
+const oidcRedirectURI = "http://127.0.0.1:3000/api/auth/oauth2/callback/quorum-test-oidc";
+Object.assign(childEnv, {
+  AUTH_TEST_OIDC_BASE_URL: oidcBaseURL,
+  AUTH_TEST_OIDC_CLIENT_ID: oidcClientId,
+  AUTH_TEST_OIDC_CLIENT_SECRET: oidcClientSecret,
+  NEXT_PUBLIC_AUTH_TEST_OIDC: "true",
+});
+const oidcProvider = spawnChild(process.execPath, ["scripts/oidc-test-provider.mjs"], {
+  cwd: process.cwd(),
+  env: {
+    ...childEnv,
+    OIDC_TEST_CLIENT_ID: oidcClientId,
+    OIDC_TEST_CLIENT_SECRET: oidcClientSecret,
+    OIDC_TEST_REDIRECT_URI: oidcRedirectURI,
+  },
+  stdio: "ignore",
+});
+await waitFor(`${oidcBaseURL}/healthz`, oidcProvider, "deterministic OIDC provider");
+
 const { privateKey, publicKey } = generateKeyPairSync("ed25519");
 const encodedPrivateKey = privateKey.export({ type: "pkcs8", format: "der" }).toString("base64url");
 const encodedPublicKey = publicKey.export({ type: "spki", format: "der" }).subarray(-32).toString("base64url");
