@@ -1,8 +1,8 @@
 # Auth v2 status
 
 **Overall state:** `identity_foundation`
-**Current phase:** `A04` in review
-**Next task:** A04 project-owner review
+**Current phase:** `A05` ready
+**Next task:** A05 authenticated Next-to-Go contract
 **Security gate approver:** project owner  
 **Last updated:** 2026-07-31
 
@@ -18,8 +18,8 @@
 | A01 Contract approval | done | Codex / project owner | none | `codex/auth-v2-rewrite` | D-018/D-019/D-021/D-027/D-031 accepted; `ViewerBootstrapV1` allowlist recorded; D-024 privileged powers remain closed | 2026-07-24 |
 | A02 Local/CI/test harness | done | Codex / project owner | A00, A01 | `codex/auth-v2-rewrite` | Owner approved G2 under D-033 from complete service-backed local and negative-control evidence; exact pinned Ubuntu evidence is deferred only until G3 | 2026-07-26 |
 | A03 Auth-provider acceptance spike | done | Codex / project owner | A02 | `codex/auth-v2-rewrite`; draft PR #10 | Owner approved G3 after every `SPIKE-*` row and final pinned Ubuntu run `30670530686` passed | 2026-07-31 |
-| A04 Schema and identity foundation | in_review | Codex / project owner | A03 | `codex/auth-v2-rewrite`; draft PR #10 | Canonical schema, isolated roles, idempotent provisioning, SQLc, rollback/forward-fix, dump/restore, and final-tip Ubuntu evidence complete; awaiting reviewer | 2026-07-31 |
-| A05 Authenticated Next-to-Go contract | not_started | unassigned | A03, A04 | — | — | 2026-07-24 |
+| A04 Schema and identity foundation | done | Codex / project owner | A03 | `codex/auth-v2-rewrite`; draft PR #10 | Project owner approved after complete local and final-tip Ubuntu evidence | 2026-07-31 |
+| A05 Authenticated Next-to-Go contract | ready | unassigned | A03, A04 | `codex/auth-v2-rewrite`; draft PR #10 | Dependencies complete; awaiting mandated task review and test-first start | 2026-07-31 |
 | A06 Google vertical slice | not_started | unassigned | A05 | — | — | 2026-07-24 |
 | A07 Email/password and session lifecycle | not_started | unassigned | A06 | — | Production email provider remains open | 2026-07-24 |
 | A07M Admin MFA and privileged recovery | not_started | unassigned | A07 | — | Exact accepted factor(s) selected by A03/A07M; required before privileged grants become active | 2026-07-24 |
@@ -239,3 +239,10 @@ Change: Added canonical migration `000008` for the accepted Better Auth 1.6.25 s
 Tests: Failing-first PostgreSQL tests exposed the absent A04 catalogs, public cross-reference grants, reconciliation column, integration-owner usage, provisioning API, ambiguous JSON SQL parameters, migrator owner membership/database/public CREATE, guarded-reset ACL loss, product-runtime public access, and missing audit-reader boundary. The corrected required command with local-only service variables, `go test -count=1 ./...`, passed every Go package including empty/N-1/concurrent/checksum/timeout/reset replay, role isolation/default privileges, concurrent idempotent provisioning/collisions/multiple provider methods, rollback/forward-fix, and real `pg_dump`/`pg_restore`. `npm run db:generate`, lint, typecheck, Next build, Docker-context verification, exact provider spike (19 tests/13 files), web Vitest (146 tests/20 files), Chromium Playwright (1 test), and Mailpit HTTP readiness passed. Final-tip GitHub Actions run `30673150362`, job `91294902948` (`Verify`), passed in 4m11s with every required step green.
 Evidence: commits `6f50e1e`, `6b38a43`, `561de84`, and `f045924`; draft PR `mannrp/quorum#10`; `apps/api/migrations/000008_auth_v2_identity_foundation.sql`; `apps/api/internal/{identity,migrate,dbroles}`; `apps/api/queries/identity.sql`; `scripts/run-auth-provider-spike.mjs`; workflow run `30673150362`.
 Notes: Failed Ubuntu runs were retained as negative evidence: run `30671968028` exposed reset replay losing public-schema ACLs, and run `30672908771` exposed the provider spike colliding with the now-canonical `better_auth` schema. Both were fixed without weakening tests. A04 is in review, not done; the project owner remains the reviewer. A05 has not started.
+
+2026-07-31 - A04 - in_review -> done - project owner
+
+Change: The project owner explicitly approved A04 after the canonical schema, identity foundation, role boundaries, provisioning service, recovery, dump/restore, SQLc, and CI evidence completed review.
+Tests: Final branch-tip GitHub Actions run `30673425384`, job `91295699892` (`Verify`), passed in 3m37s with every required service-backed step green; the complete local and negative-control evidence remains recorded in the preceding A04 entry.
+Evidence: project-owner statement "I approve A04"; draft PR `mannrp/quorum#10`; commits `6f50e1e`, `6b38a43`, `561de84`, `f045924`, and `185f5d9`.
+Notes: A04 is done. A05 is ready but has not started; its mandated contract/task/verification review and failing-first test remain required before implementation.
