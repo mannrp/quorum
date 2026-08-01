@@ -16,9 +16,11 @@
   },
   "dependencies": {
     "@neondatabase/auth": "^0.4.1-beta",
+    "jose": "6.2.6",
     "next": "15.5.21",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "server-only": "0.0.1"
   },
   "devDependencies": {
     "@better-auth/utils": "0.4.2",

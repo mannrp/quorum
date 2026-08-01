@@ -19,7 +19,7 @@
 | A02 Local/CI/test harness | done | Codex / project owner | A00, A01 | `codex/auth-v2-rewrite` | Owner approved G2 under D-033 from complete service-backed local and negative-control evidence; exact pinned Ubuntu evidence is deferred only until G3 | 2026-07-26 |
 | A03 Auth-provider acceptance spike | done | Codex / project owner | A02 | `codex/auth-v2-rewrite`; draft PR #10 | Owner approved G3 after every `SPIKE-*` row and final pinned Ubuntu run `30670530686` passed | 2026-07-31 |
 | A04 Schema and identity foundation | done | Codex / project owner | A03 | `codex/auth-v2-rewrite`; draft PR #10 | Project owner approved after complete local and final-tip Ubuntu evidence | 2026-07-31 |
-| A05 Authenticated Next-to-Go contract | ready | unassigned | A03, A04 | `codex/auth-v2-rewrite`; draft PR #10 | Dependencies complete; awaiting mandated task review and test-first start | 2026-07-31 |
+| A05 Authenticated Next-to-Go contract | in_progress | Codex / project owner | A03, A04 | `codex/auth-v2-rewrite`; draft PR #10 | Mandated task/contract/verification/operations review complete; failing-first contract work starting | 2026-07-31 |
 | A06 Google vertical slice | not_started | unassigned | A05 | — | — | 2026-07-24 |
 | A07 Email/password and session lifecycle | not_started | unassigned | A06 | — | Production email provider remains open | 2026-07-24 |
 | A07M Admin MFA and privileged recovery | not_started | unassigned | A07 | — | Exact accepted factor(s) selected by A03/A07M; required before privileged grants become active | 2026-07-24 |
@@ -246,3 +246,16 @@ Change: The project owner explicitly approved A04 after the canonical schema, id
 Tests: Final branch-tip GitHub Actions run `30673425384`, job `91295699892` (`Verify`), passed in 3m37s with every required service-backed step green; the complete local and negative-control evidence remains recorded in the preceding A04 entry.
 Evidence: project-owner statement "I approve A04"; draft PR `mannrp/quorum#10`; commits `6f50e1e`, `6b38a43`, `561de84`, `f045924`, and `185f5d9`.
 Notes: A04 is done. A05 is ready but has not started; its mandated contract/task/verification review and failing-first test remain required before implementation.
+2026-07-31 - A05 - ready -> in_progress - Codex
+
+Change: Began the authenticated Next-to-Go boundary after confirming A03 and A04 are done and reading the mandated task, contract, verification, and operations material in order.
+Tests: No A05 implementation claim yet. The first scoped mutation will be a failing contract/security test for the missing versioned assertion boundary.
+Evidence: branch `codex/auth-v2-rewrite`; draft PR `mannrp/quorum#10`; A05 verification rows `INT-JWS-*`, `INT-PRINCIPAL-*`, `INT-CONTRACT-001`, `INT-ANON-001`, `INT-BINDING-001`, `INT-REPLAY-001`, `BFF-ROUTE-001`, and `VIEWER-BOOTSTRAP-001`.
+Notes: `INT-RESILIENCE-001` and `INT-TRANSPORT-001` begin in A05 but retain their G8 operational/deployed-topology evidence requirements; no weaker plaintext production transport is accepted.
+
+2026-07-31 - A05 - internal assertion foundation - Codex
+
+Change: Added a server-only Next Ed25519 signer and strict Go verifier for the versioned authenticated/anonymous delegated assertion. Both sides pin maintained JOSE libraries; the verifier bounds the key set, accepts only EdDSA, requires exact JOSE/content types and target claims, enforces a maximum 60-second lifetime, separates anonymous/authenticated claim sets, and rejects authorization/email claims.
+Tests: Failing-first `go test ./internal/internalapi` failed to compile because the A05 assertion types/verifier were absent, then passed (3 tests). Failing-first `npm run test --workspace=@quorum/web -- lib/internal-api/assertion.test.ts` failed because the signer module was absent, then passed (2 tests). `cd apps/api && go test ./...` passed all packages. `npm run typecheck --workspace=@quorum/web` passed. `git diff --check` passed. The initial root-level `go test ./...` was an invocation error because the Go module is under `apps/api`; it was corrected without changing code.
+Evidence: `apps/api/internal/internalapi/assertion.go`; `apps/web/lib/internal-api/assertion.ts`; `github.com/go-jose/go-jose/v4@v4.1.4`; `jose@6.2.6`; `server-only@0.0.1`.
+Notes: A05 remains in progress. Principal resolution, checked cross-language fixtures, the allowlisted `ViewerBootstrapV1` boundary, spoof/replay/rolling-version suites, and transport/resilience evidence remain unchecked.
