@@ -2,6 +2,8 @@ package config
 
 import (
 	"bufio"
+	"crypto/ed25519"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -10,21 +12,17 @@ import (
 )
 
 type Config struct {
-	AppEnv            string
-	AppOrigin         string
-	DatabaseURL       string
-	NeonAuthIssuer    string
-	NeonAuthJWKSURL   string
-	NeonAuthAudience  string
-	R2AccountID       string
-	R2AccessKeyID     string
-	R2SecretAccessKey string
-	R2BucketName      string
-	R2PublicURL       string
-	Port              string
-	DemoModeEnabled   bool
-	DemoResetEnabled  bool
-	AdminEmails       []string
+	AppEnv                    string
+	DatabaseURL               string
+	R2AccountID               string
+	R2AccessKeyID             string
+	R2SecretAccessKey         string
+	R2BucketName              string
+	R2PublicURL               string
+	Port                      string
+	InternalAssertionIssuer   string
+	InternalAssertionAudience string
+	InternalAssertionKeys     map[string]ed25519.PublicKey
 }
 
 func Load() (Config, error) {
@@ -35,22 +33,23 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	assertionKeys, err := assertionPublicKeys(os.Getenv("INTERNAL_ASSERTION_PUBLIC_KEYS"))
+	if err != nil {
+		return Config{}, err
+	}
+
 	cfg := Config{
-		AppEnv:            env("APP_ENV", "development"),
-		AppOrigin:         env("APP_ORIGIN", "http://localhost:3000"),
-		DatabaseURL:       os.Getenv("DATABASE_URL"),
-		NeonAuthIssuer:    os.Getenv("NEON_AUTH_ISSUER"),
-		NeonAuthJWKSURL:   os.Getenv("NEON_AUTH_JWKS_URL"),
-		NeonAuthAudience:  os.Getenv("NEON_AUTH_AUDIENCE"),
-		R2AccountID:       os.Getenv("R2_ACCOUNT_ID"),
-		R2AccessKeyID:     os.Getenv("R2_ACCESS_KEY_ID"),
-		R2SecretAccessKey: os.Getenv("R2_SECRET_ACCESS_KEY"),
-		R2BucketName:      os.Getenv("R2_BUCKET_NAME"),
-		R2PublicURL:       strings.TrimRight(os.Getenv("R2_PUBLIC_URL"), "/"),
-		Port:              env("PORT", "8080"),
-		DemoModeEnabled:   boolEnv("ENABLE_DEMO_MODE"),
-		DemoResetEnabled:  boolEnv("DEMO_RESET_ENABLED"),
-		AdminEmails:       csvEnv("ADMIN_EMAILS"),
+		AppEnv:                    env("APP_ENV", "development"),
+		DatabaseURL:               os.Getenv("DATABASE_URL"),
+		R2AccountID:               os.Getenv("R2_ACCOUNT_ID"),
+		R2AccessKeyID:             os.Getenv("R2_ACCESS_KEY_ID"),
+		R2SecretAccessKey:         os.Getenv("R2_SECRET_ACCESS_KEY"),
+		R2BucketName:              os.Getenv("R2_BUCKET_NAME"),
+		R2PublicURL:               strings.TrimRight(os.Getenv("R2_PUBLIC_URL"), "/"),
+		Port:                      env("PORT", "8080"),
+		InternalAssertionIssuer:   env("INTERNAL_ASSERTION_ISSUER", "quorum-next"),
+		InternalAssertionAudience: env("INTERNAL_ASSERTION_AUDIENCE", "quorum-go"),
+		InternalAssertionKeys:     assertionKeys,
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -64,9 +63,10 @@ func (c Config) Validate() error {
 		missing = append(missing, "DATABASE_URL")
 	}
 	if c.AppEnv != "development" {
+		if len(c.InternalAssertionKeys) == 0 {
+			missing = append(missing, "INTERNAL_ASSERTION_PUBLIC_KEYS")
+		}
 		for key, value := range map[string]string{
-			"NEON_AUTH_ISSUER":     c.NeonAuthIssuer,
-			"NEON_AUTH_JWKS_URL":   c.NeonAuthJWKSURL,
 			"R2_ACCOUNT_ID":        c.R2AccountID,
 			"R2_ACCESS_KEY_ID":     c.R2AccessKeyID,
 			"R2_SECRET_ACCESS_KEY": c.R2SecretAccessKey,
@@ -94,34 +94,6 @@ func env(key, fallback string) string {
 	return value
 }
 
-func boolEnv(key string) bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
-	case "1", "true", "yes", "on":
-		return true
-	default:
-		return false
-	}
-}
-
-func csvEnv(key string) []string {
-	raw := strings.TrimSpace(os.Getenv(key))
-	if raw == "" {
-		return nil
-	}
-	parts := strings.Split(raw, ",")
-	values := make([]string, 0, len(parts))
-	seen := map[string]bool{}
-	for _, part := range parts {
-		value := strings.ToLower(strings.TrimSpace(part))
-		if value == "" || seen[value] {
-			continue
-		}
-		seen[value] = true
-		values = append(values, value)
-	}
-	return values
-}
-
 func loadEnv(path string) error {
 	file, err := os.Open(path)
 	if err != nil {
@@ -146,4 +118,28 @@ func loadEnv(path string) error {
 		}
 	}
 	return scanner.Err()
+}
+func assertionPublicKeys(raw string) (map[string]ed25519.PublicKey, error) {
+	keys := map[string]ed25519.PublicKey{}
+	if strings.TrimSpace(raw) == "" {
+		return keys, nil
+	}
+	for _, entry := range strings.Split(raw, ",") {
+		kid, encoded, ok := strings.Cut(strings.TrimSpace(entry), ":")
+		if !ok || strings.TrimSpace(kid) != kid || kid == "" || encoded == "" {
+			return nil, errors.New("INTERNAL_ASSERTION_PUBLIC_KEYS must contain kid:base64url entries")
+		}
+		decoded, err := base64.RawURLEncoding.DecodeString(encoded)
+		if err != nil || len(decoded) != ed25519.PublicKeySize {
+			return nil, errors.New("INTERNAL_ASSERTION_PUBLIC_KEYS contains an invalid Ed25519 public key")
+		}
+		if _, exists := keys[kid]; exists {
+			return nil, errors.New("INTERNAL_ASSERTION_PUBLIC_KEYS contains a duplicate kid")
+		}
+		keys[kid] = ed25519.PublicKey(decoded)
+	}
+	if len(keys) > 8 {
+		return nil, errors.New("INTERNAL_ASSERTION_PUBLIC_KEYS exceeds the eight-key limit")
+	}
+	return keys, nil
 }

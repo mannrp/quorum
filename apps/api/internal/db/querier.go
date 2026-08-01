@@ -59,6 +59,7 @@ type Querier interface {
 	GetUserByAuthID(ctx context.Context, authUserID string) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserIdentityByRealmSubject(ctx context.Context, arg GetUserIdentityByRealmSubjectParams) (AppUserIdentity, error)
+	GetViewerBootstrapByRealmSubject(ctx context.Context, arg GetViewerBootstrapByRealmSubjectParams) (GetViewerBootstrapByRealmSubjectRow, error)
 	IsAdmin(ctx context.Context, userID pgtype.UUID) (bool, error)
 	ListActiveRoleGrantsForUser(ctx context.Context, userID pgtype.UUID) ([]AppRoleGrant, error)
 	ListAdminUsers(ctx context.Context) ([]User, error)

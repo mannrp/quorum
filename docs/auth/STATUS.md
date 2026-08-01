@@ -1,99 +1,63 @@
 # Auth V2 status
 
-**State:** foundations complete; runtime integration not started
-**Active work:** P1 ready; product integration has not started
+**State:** P1 authentication cutover implemented; acceptance completion in progress
+**Active work:** P1 authenticated Chromium flow and remaining handler negative controls
 **Branch:** `codex/auth-v2-rewrite`
 **Pull request:** `mannrp/quorum#10` (draft)
-**Updated:** 2026-07-31
+**Updated:** 2026-08-01
 
-## What the application does today
+## What works now
 
-Auth V2 is not yet usable.
+Quorum now has one browser authentication path: Better Auth `1.6.25` mounted by public Next at `/api/auth/[...path]`.
 
-- Next still mounts `@neondatabase/auth` at `/api/auth/[...path]`.
-- Login, registration, logout, and account UI still call the legacy Neon client.
-- `/api/graphql` still forwards arbitrary browser GraphQL bodies and obtains a Neon JWT.
-- Go still verifies Neon JWKS bearer tokens and resolves legacy `auth_user_id` values.
-- `ADMIN_EMAILS` and demo-persona identity paths still exist.
-- Better Auth, Auth V2 provisioning, the delegated assertion, and the Auth V2 schema are not wired into a runtime request.
-- The current Playwright test proves only the anonymous shell, not authenticated behavior.
+- Email/password registration sends verification mail through SMTP/Mailpit.
+- Verification links are one-use; replay is rejected.
+- Verified users sign in with an opaque host-only HttpOnly `SameSite=Lax` cookie and can sign out.
+- A verified user can self-enroll only as Student or Sponsor through `POST /api/v1/enrollment`.
+- Next derives identity and verified email from the server session, signs a short-lived assertion, and calls private Go.
+- Go verifies the assertion, ignores browser identity/authority fields, provisions through the existing identity service, resolves current PostgreSQL state, and returns the narrow `ViewerBootstrapV1` projection.
+- `GET /api/v1/viewer` is private/no-store and excludes email, provider/session identifiers, elevated grants, private profile data, and file URLs.
+- Existing product pages temporarily use the private Next `/api/graphql` bridge with the new assertion. Browser-supplied GraphQL remains scheduled for removal in P3.
+- Admin is unavailable until MFA/recovery. Legacy Neon, demo persona/reset, bearer verifier, `ADMIN_EMAILS`, browser backend URL, and legacy demo/e2e command paths are removed.
 
-Green tests therefore prove foundations, not a delivered authentication flow.
+## Current phase board
 
-## Completed foundations
-
-| Foundation | Result | Evidence |
+| Phase | Status | Remaining result |
 |---|---|---|
-| Containment and local services | Pinned PostgreSQL and Mailpit Compose services, guarded reset, Docker-context protection | commits `0b6d58d`, `b323153` |
-| Database delivery | Canonical transactional migrations, role bootstrap, checksums/locking, upgrade/reset/restore and least-privilege tests | Owner-approved; Ubuntu CI subsequently green |
-| Provider selection | Better Auth `1.6.25` accepted after PostgreSQL-backed evaluation; experimental harness retired after acceptance | Ubuntu run `30670530686`; commits through `f7018cd` |
-| Schema and identity foundation | `better_auth`, product identity/account-state/grant, integration and audit schemas; idempotent provisioning; SQLc generation | Owner-approved; Ubuntu run `30673425384`; commits `6f50e1e` through `185f5d9` |
-| Delegated assertion primitive | Server-only Next Ed25519 signer and strict Go verifier; no authority claims; 15-second default and 60-second maximum | commit `2aec098` |
+| C0 Cleanup | done | Lean contract, status, implementation plan, and operations guide |
+| P1 Authentication cutover and viewer | in progress | Authenticated Chromium journey plus remaining handler negative controls |
+| P2 Google and account lifecycle | pending | Google, recovery/email changes, explicit linking, and session management |
+| P3 Product operation migration | pending | Registered typed operations replace arbitrary browser GraphQL |
+| P4 Files and release | pending | Private files, protected deployment, final deletion, and release evidence |
 
-Accepted provider settings to carry into the real integration:
+## Latest verified evidence
 
-- Password minimum: 29 UTF-16 code units; maximum 128.
-- Sessions: 24-hour idle, 7-day absolute, 10-minute recent-auth window.
-- Secure host-only signed cookie; raw stored token and bearer reuse denied.
-- Explicit account linking; no implicit same-email merge.
-- Better Auth schema isolated to `better_auth`.
-- Database-backed rate limiting when more than one Next instance is deployed.
+Verified locally on 2026-08-01:
 
-Detailed experimental code and duplicated evidence were removed during C0. Git history and the CI run IDs above preserve the audit trail.
+```text
+npm run lint                                      PASS
+npm run typecheck                                 PASS
+npm run build                                     PASS
+npm run test:web                                  PASS (8 files, 25 tests)
+npm run test:e2e                                  PASS (Chromium anonymous shell, 1 test)
+npm run test:docker-context                       PASS
+cd apps/api && go test ./...                      PASS
+service-backed go test -count=1 ./...             PASS (PostgreSQL required; no skips)
+service-backed npm run test:integration           PASS (2 tests)
+```
 
-## Work board
+The service-backed handler flow proves register -> Mailpit delivery -> one-use verification -> login -> opaque cookie -> signed Next-to-Go enrollment -> viewer -> refresh -> logout. Database role bootstrap and all eight canonical migrations were verified before it ran. Docker services were pinned PostgreSQL `17.10-alpine3.24` and Mailpit `1.30.0` on loopback-only ports.
 
-| Slice | Status | Outcome |
-|---|---|---|
-| C0 Cleanup | done | Remove retired spike/planning bloat; leave one accurate contract, status, plan, and operations guide |
-| P1 Usable login and viewer | in progress | Real Better Auth email/password session reaches typed `ViewerBootstrapV1` through Next and Go |
-| P2 Complete sign-in lifecycle | pending | Google, verification/reset, logout, session management, linking, and inactive-account denial |
-| P3 Protect used product operations | pending | Replace arbitrary browser GraphQL with typed operations and Go authorization for UI features actually in use |
-| P4 Files, cutover, and release | pending | Private files, one protected deployment topology, operational checks, and removal of every legacy auth path |
+Repository scans found no active Neon Auth dependency/configuration, demo identity route, `ADMIN_EMAILS`, browser backend URL, bearer credential use, or browser storage credential use. The only `R2_PUBLIC_URL` references are dormant P4 file configuration and are not returned by the viewer path.
 
-Only one slice is active at a time. Acceptance criteria and commands live beside each slice in `IMPLEMENTATION.md`; there are no separate ceremonial phase gates.
+## Real blockers and next work
 
-## Finish-plan defaults
+P1 is not closed until:
 
-The final execution plan was expanded in place on 2026-07-31:
+1. Chromium covers register -> Mailpit verification -> enrollment -> viewer -> refresh -> logout.
+2. The real handler suite covers the remaining negative controls listed in P1.2, especially wrong content type/Fetch Metadata, unverified login, invalid/expired verification, unsafe return paths, and credential projection/reuse.
+3. The final P1 command set is rerun on the milestone commit and the pinned Ubuntu workflow is green.
 
-- P1 directly replaces Neon Auth; there is no long-lived dual-auth or spike route.
-- Current package targets are Better Auth `1.6.25`, PostgreSQL client `8.22.0`, Nodemailer `9.0.3`, and Next `16.2.12`, subject to clean install/build/audit evidence when implemented.
-- Existing Go GraphQL may remain private internally, but browser query text is temporary and must be replaced by registered operations in P3.
-- Admin and unused Professor invitation features remain disabled instead of blocking ordinary-user Auth V2.
-- The default release topology is one host with only Next public and a restrictive Unix-domain socket to Go; use mTLS only if the selected host cannot support that shape.
+After P1, execute P2, P3, then P4 in `IMPLEMENTATION.md`. Production host/transport, transactional email, and retention choices do not block local P1-P3 work. Admin stays disabled.
 
-P1-P3 are development/test integration and are not production-releaseable until P4 completes the transport, provider smoke, file, backup/rollback, and deletion checks.
-## Open release choices
-
-These do not block P1:
-
-- Production host/topology and its protected Next-to-Go transport.
-- Production transactional email provider.
-- Initial Admin bootstrap process. Admin stays disabled until MFA/recovery exists.
-- File/account retention periods. File and deletion features stay disabled until selected.
-
-## Latest verified work
-
-P1.1 is implemented and the first P1.2 runtime seam is mounted:
-
-- Next 16.2.12, Better Auth 1.6.25, pg 8.22.0, and Nodemailer 9.0.3 are direct exact dependencies.
-- The Next 16 ESLint CLI migration, typecheck, and production build pass.
-- Server configuration rejects weak secrets, unsafe origins, non-PostgreSQL URLs, public-schema fallback, implicit same-email linking, and insecure production cookies.
-- Better Auth uses the canonical origin, exact trusted origin, host-only HttpOnly cookie, accepted password/session limits, database rate limiting, and a PostgreSQL connection restricted to better_auth.
-- The existing /api/auth/[...path] now mounts the real Better Auth handler. Mail callbacks use the server-only SMTP adapter.
-- Login, registration, onboarding session lookup, and logout now use the Better Auth browser client. Registration stops after verification mail instead of performing the legacy profile mutation.
-- The real PostgreSQL/Mailpit handler test covers register, delivery, one-use verification, login, opaque host-only HttpOnly cookie, logout, and wrong-origin denial.
-- GraphQL identity, Go middleware, enrollment/viewer, and legacy Neon dependencies are not cut over yet; the product flow is therefore still incomplete.
-
-Verified 2026-07-31:
-
-    npm run lint                         PASS
-    npm run typecheck                    PASS
-    npm run build                        PASS
-    npm run test:web                     PASS (5 files, 14 tests)
-    npm run test:e2e                     PASS (Chromium, 1 test)
-    npm run test:integration             PASS (PostgreSQL + Mailpit, 2 tests)
-    npm run test:docker-context          PASS
-
-npm audit --omit=dev still reports seven production findings. The critical Better Auth findings are confined to the nested legacy @neondatabase/auth dependency that P1.4 removes. Current Next 16.2.12 also carries transitive PostCSS/sharp advisories with no non-breaking patched Next release reported by npm. These remain release blockers, not skipped checks.
+`npm audit --omit=dev` most recently reported three high transitive findings in the current Next dependency tree (PostCSS/sharp) with no non-breaking patched Next release offered by npm. There is no longer a nested legacy Better Auth dependency. Recheck before release; do not weaken tests or force a downgrade.

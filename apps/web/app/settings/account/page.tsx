@@ -61,7 +61,7 @@ export default function AccountSettingsPage() {
         <p className="text-sm text-stone-500">Manage your active session and account deactivation options.</p>
       </div>
 
-      <Section title="Active Neon Auth Session">
+      <Section title="Active Quorum Session">
         {notice && (
           <div className="mb-3 rounded-none border border-[var(--color-danger)] bg-[var(--color-danger-bg)] px-3 py-2 text-xs font-mono font-semibold text-[var(--color-danger)]">
             {notice}
@@ -69,7 +69,7 @@ export default function AccountSettingsPage() {
         )}
         <div className="space-y-3">
           <p className="text-xs text-stone-500 leading-relaxed">
-            You are signed in through Neon Auth. Quorum forwards session credentials server-side when protected GraphQL operations are required.
+            Your browser session uses an opaque HttpOnly cookie. Reusable credentials are not exposed to this page.
           </p>
           <div className="grid gap-2 text-xs font-mono text-stone-500">
             <div className="flex justify-between border border-[var(--border-subtle)] px-3 py-2">

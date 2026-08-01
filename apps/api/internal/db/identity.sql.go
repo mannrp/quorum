@@ -68,6 +68,64 @@ func (q *Queries) GetUserIdentityByRealmSubject(ctx context.Context, arg GetUser
 	return i, err
 }
 
+const getViewerBootstrapByRealmSubject = `-- name: GetViewerBootstrapByRealmSubject :one
+SELECT
+  product_user.id::text AS product_user_id,
+  account.status AS account_state,
+  identity.sync_status,
+  CASE WHEN product_user.profile_complete THEN 'COMPLETE' ELSE 'NOT_STARTED' END::text AS onboarding_state,
+  (CASE WHEN product_user.username LIKE 'user_%' THEN '' ELSE product_user.username END)::text AS username,
+  (CASE WHEN product_user.full_name = 'New user' THEN '' ELSE product_user.full_name END)::text AS display_name,
+  COALESCE(
+    array_agg(grant_record.role ORDER BY grant_record.role)
+      FILTER (
+        WHERE grant_record.source = 'SELF_SERVICE'
+          AND grant_record.revoked_at IS NULL
+          AND grant_record.role IN ('STUDENT', 'SPONSOR')
+      ),
+    ARRAY[]::text[]
+  )::text[] AS self_service_roles
+FROM app.user_identities AS identity
+JOIN app.identity_realms AS realm ON realm.id = identity.realm_id
+JOIN public.users AS product_user ON product_user.id = identity.user_id
+JOIN app.account_states AS account ON account.user_id = product_user.id
+LEFT JOIN app.role_grants AS grant_record ON grant_record.user_id = product_user.id
+WHERE realm.realm_key = $1
+  AND identity.identity_subject = $2
+  AND identity.unlinked_at IS NULL
+GROUP BY product_user.id, account.status, identity.sync_status
+`
+
+type GetViewerBootstrapByRealmSubjectParams struct {
+	RealmKey        string `json:"realm_key"`
+	IdentitySubject string `json:"identity_subject"`
+}
+
+type GetViewerBootstrapByRealmSubjectRow struct {
+	ProductUserID    string   `json:"product_user_id"`
+	AccountState     string   `json:"account_state"`
+	SyncStatus       string   `json:"sync_status"`
+	OnboardingState  string   `json:"onboarding_state"`
+	Username         string   `json:"username"`
+	DisplayName      string   `json:"display_name"`
+	SelfServiceRoles []string `json:"self_service_roles"`
+}
+
+func (q *Queries) GetViewerBootstrapByRealmSubject(ctx context.Context, arg GetViewerBootstrapByRealmSubjectParams) (GetViewerBootstrapByRealmSubjectRow, error) {
+	row := q.db.QueryRow(ctx, getViewerBootstrapByRealmSubject, arg.RealmKey, arg.IdentitySubject)
+	var i GetViewerBootstrapByRealmSubjectRow
+	err := row.Scan(
+		&i.ProductUserID,
+		&i.AccountState,
+		&i.SyncStatus,
+		&i.OnboardingState,
+		&i.Username,
+		&i.DisplayName,
+		&i.SelfServiceRoles,
+	)
+	return i, err
+}
+
 const listActiveRoleGrantsForUser = `-- name: ListActiveRoleGrantsForUser :many
 SELECT grant_record.id, grant_record.user_id, grant_record.role, grant_record.source, grant_record.granted_by, grant_record.granted_at, grant_record.revoked_by, grant_record.revoked_at, grant_record.reason, grant_record.created_at, grant_record.updated_at
 FROM app.role_grants AS grant_record

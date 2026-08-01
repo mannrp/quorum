@@ -60,7 +60,7 @@ describe("real Better Auth handler", () => {
     await pool.end();
   });
 
-  it("registers, delivers verification, verifies once, signs in, and signs out with an opaque HttpOnly cookie", async () => {
+  it("registers, verifies, enrolls, loads the viewer twice, and signs out with an opaque HttpOnly cookie", async () => {
     const registration = await post("/sign-up/email", {
       email,
       name: "Auth V2 Integration",
@@ -90,8 +90,39 @@ describe("real Better Auth handler", () => {
     expect(await signIn.clone().text()).not.toContain(setCookie.split(";", 1)[0]?.split("=", 2)[1] ?? "never");
 
     const cookie = setCookie.split(";", 1)[0];
+    const enrollmentRoute = (await import("../../app/api/v1/enrollment/route")).POST;
+    const viewerRoute = (await import("../../app/api/v1/viewer/route")).GET;
+    const enrollment = await enrollmentRoute(new Request(origin + "/api/v1/enrollment", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie,
+        origin,
+        "sec-fetch-site": "same-origin",
+      },
+      body: JSON.stringify({ role: "STUDENT" }),
+    }));
+    expect(enrollment.status).toBe(200);
+    const enrollmentBody = await enrollment.json() as { viewer: Record<string, unknown> };
+    expect(enrollmentBody.viewer).toMatchObject({
+      accountState: "ACTIVE",
+      onboardingState: "NOT_STARTED",
+      selfServiceRoles: ["STUDENT"],
+    });
+    expect(enrollmentBody.viewer).not.toHaveProperty("email");
+    expect(enrollmentBody.viewer).not.toHaveProperty("authUserId");
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const viewer = await viewerRoute(new Request(origin + "/api/v1/viewer", { headers: { cookie } }));
+      expect(viewer.status).toBe(200);
+      expect(viewer.headers.get("cache-control")).toBe("private, no-store");
+      expect((await viewer.json()) as object).toEqual(enrollmentBody);
+    }
+
     const signOut = await post("/sign-out", {}, cookie);
     expect(signOut.status).toBe(200);
+    const afterLogout = await viewerRoute(new Request(origin + "/api/v1/viewer", { headers: { cookie } }));
+    expect(afterLogout.status).toBe(401);
   });
 
   it("rejects a wrong origin", async () => {

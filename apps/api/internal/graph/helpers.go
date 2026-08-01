@@ -55,22 +55,8 @@ func (r *Resolver) cachedUserTags(ctx context.Context, id pgtype.UUID) ([]db.Tag
 }
 
 func (r *Resolver) cachedIsAdmin(ctx context.Context, id pgtype.UUID) (bool, error) {
-	if cache := cacheFromContext(ctx); cache != nil {
-		key := uuidString(id)
-		cache.mu.Lock()
-		if cached, ok := cache.adminStatus[key]; ok {
-			cache.mu.Unlock()
-			return cached.value, cached.err
-		}
-		cache.mu.Unlock()
-
-		value, err := r.Queries.IsAdmin(ctx, id)
-		cache.mu.Lock()
-		cache.adminStatus[key] = cachedBool{value: value, err: err}
-		cache.mu.Unlock()
-		return value, err
-	}
-	return r.Queries.IsAdmin(ctx, id)
+	// Admin is deliberately unavailable until Auth V2 MFA and recovery are complete.
+	return false, nil
 }
 
 func (r *Resolver) cachedTeamMembership(ctx context.Context, teamID pgtype.UUID, userID pgtype.UUID) (db.TeamMembership, error) {

@@ -14,7 +14,6 @@
     "clear": "npx rimraf .next"
   },
   "dependencies": {
-    "@neondatabase/auth": "^0.4.1-beta",
     "better-auth": "1.6.25",
     "jose": "6.2.6",
     "next": "16.2.12",

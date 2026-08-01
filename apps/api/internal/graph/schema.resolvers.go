@@ -45,7 +45,7 @@ func (r *mutationResolver) BootstrapProfile(ctx context.Context, input model.Boo
 func (r *mutationResolver) UpsertMyProfile(ctx context.Context, input model.UpsertMyProfileInput) (*model.User, error) {
 	subject, ok := auth.SubjectFromContext(ctx)
 	if !ok || subject == "" {
-		return nil, errors.New("verified Neon Auth token required")
+		return nil, errors.New("verified Quorum session required")
 	}
 
 	username := strings.TrimSpace(input.Username)

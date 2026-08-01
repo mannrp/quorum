@@ -669,8 +669,8 @@ func TestPermissionFlagsReflectCurrentUser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if adminProject.Permissions.CanEdit || adminProject.Permissions.CanReviewApplications || adminProject.Permissions.CanSubmitForApproval || adminProject.Permissions.CanArchive || !adminProject.Permissions.CanApprove {
-		t.Fatalf("admin project permissions = %+v, want approve only", adminProject.Permissions)
+	if adminProject.Permissions.CanEdit || adminProject.Permissions.CanReviewApplications || adminProject.Permissions.CanSubmitForApproval || adminProject.Permissions.CanArchive || adminProject.Permissions.CanApprove {
+		t.Fatalf("disabled admin project permissions = %+v, want all false until MFA and recovery exist", adminProject.Permissions)
 	}
 }
 

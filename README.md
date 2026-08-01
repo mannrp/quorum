@@ -2,7 +2,7 @@
 
 Quorum is a capstone matching workspace for students, teams, project owners, and admins.
 
-> **Auth V2 is not wired yet:** the running code still uses legacy Neon Auth. Current facts and the lean replacement plan start in [`docs/auth/README.md`](docs/auth/README.md).
+> **Auth V2 cutover is in progress.** Current capability and remaining work are tracked in docs/auth/STATUS.md.
 
 Students use Quorum to build a profile around their skills, discipline, availability, links, and resume; find teammates; request to join teams; and apply to real capstone-style projects. Project owners publish opportunities, review applicants, send offers, and manage project assets. Admins review project submissions, keep the marketplace healthy, set deadlines, and audit important actions.
 
@@ -20,7 +20,7 @@ The product is built around the full matching workflow: profiles make students d
 
 ## Stack
 
-- `apps/web` - Next.js, React, Tailwind, legacy Neon Auth pending auth v2
+- `apps/web` - Next.js, React, Tailwind, Better Auth
 - `apps/api` - Go, gqlgen GraphQL, Postgres, Cloudflare R2
 - Root workspace - npm workspaces and Turborepo
 
@@ -28,14 +28,13 @@ The target uses Better Auth in Next for browser sessions, a protected private Go
 
 ## Setup
 
-The commands in this section describe the current legacy development system. Do not add new Neon-specific auth behavior. The auth-v2 local target and migration rules are in [`docs/auth/OPERATIONS.md`](docs/auth/OPERATIONS.md).
+Auth V2 local services, database roles, migrations, and verification commands are documented in docs/auth/OPERATIONS.md.
 
 Prerequisites:
 
 - Node.js 22.23.1 and npm 11.11.0
 - Go 1.25.12
-- Postgres or Neon Postgres
-- Neon Auth
+- Docker Desktop for local PostgreSQL and Mailpit
 - Cloudflare R2 for upload signing
 
 Install dependencies and create local env files:
@@ -46,7 +45,7 @@ cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
 ```
 
-Fill in the copied env files with your Postgres, Neon Auth, and R2 values. See `SETUP.md` for the full variable list and service notes.
+Fill in the copied env files with local runtime-role credentials and a matching Ed25519 assertion keypair. See docs/auth/OPERATIONS.md for service and migration rules.
 
 Run API migrations:
 
@@ -68,16 +67,6 @@ npm run dev:web
 
 The web app runs at `http://localhost:3000`. The GraphQL API runs at `http://localhost:8080/graphql`, and the frontend proxies GraphQL requests through `/api/graphql`.
 
-## Demo Mode
-
-Quorum includes a login-free demo mode with three seeded personas: student/team lead, project owner, and admin/professor. Use it only with a separate demo database or Neon branch.
-
-```sh
-cd apps/api
-go run ./cmd/demo-seed --reset
-```
-
-Set `ENABLE_DEMO_MODE=true` and `DEMO_RESET_ENABLED=true` for the API, and `NEXT_PUBLIC_ENABLE_DEMO_MODE=true` plus `NEXT_PUBLIC_DEMO_RESET_ENABLED=true` for the web app. Then open `http://localhost:3000/demo`.
 
 ## Useful Commands
 
