@@ -39,8 +39,8 @@ Verified locally on 2026-08-01:
 npm run lint                                      PASS
 npm run typecheck                                 PASS
 npm run build                                     PASS
-npm run test:web                                  PASS (9 files, 41 tests)
-npm run test:e2e                                  PASS (handler 4 + Chromium 3; no skips)
+npm run test:web                                  PASS (9 files, 42 tests)
+npm run test:e2e                                  PASS (handler 5 + Chromium 4; no skips)
 npm run test:docker-context                       PASS
 cd apps/api && go test ./...                      PASS
 service-backed go test -count=1 ./...             PASS (PostgreSQL required; no skips)
@@ -52,7 +52,7 @@ Repository scans found no active Neon Auth dependency/configuration, demo identi
 
 ## Real blockers and next work
 
-P1 completed on exact commit `2a00f4f` with pinned Ubuntu CI run `30712246442` green in 2m15s. The workflow ran the service-backed handler and authenticated Chromium journey with no skip path. P2.1 is complete: production Google configuration/UI and the deterministic local provider prove exact callback, state, S256 PKCE, issuer, denial, missing/wrong state cookie, wrong origin, external return rejection, expiry, replay denial, opaque HttpOnly session issuance, stable returning identity after profile changes, enumeration-safe same-email collision, recent-auth link enforcement, explicit link/unlink, last-method protection, projected account methods, and persisted `google` authentication-method provenance. Exact commit `6ebb865` passed pinned Ubuntu run `30713600498`; the later P2.1 link milestone is awaiting its exact-commit CI run. P2.2 is active.
+P1 completed on exact commit `2a00f4f` with pinned Ubuntu CI run `30712246442` green in 2m15s. The workflow ran the service-backed handler and authenticated Chromium journey with no skip path. P2.1 is complete: production Google configuration/UI and the deterministic local provider prove exact callback, state, S256 PKCE, issuer, denial, missing/wrong state cookie, wrong origin, external return rejection, expiry, replay denial, opaque HttpOnly session issuance, stable returning identity after profile changes, enumeration-safe same-email collision, recent-auth link enforcement, explicit link/unlink, last-method protection, projected account methods, and persisted `google` authentication-method provenance. Exact P2.1 commit `285f3ef` passed pinned Ubuntu run `30714569678`. P2.2 is active; password recovery now has enumeration-safe request, Mailpit delivery, one-use exchange, old-session revocation, clean browser navigation, and new-password login. Exact reset commit `4a010df` is in Ubuntu CI run `30714815498`.
 
 After P1, execute P2, P3, then P4 in `IMPLEMENTATION.md`. Production host/transport, transactional email, and retention choices do not block local P1-P3 work. Admin stays disabled.
 
