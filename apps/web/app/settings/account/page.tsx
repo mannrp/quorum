@@ -2,11 +2,12 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Modal, LoadingSkeleton } from "@/components/ui";
-import { graphqlRequest, userFacingError } from "@/lib/graphql";
+import { clearGraphQLCache, graphqlRequest, userFacingError } from "@/lib/graphql";
 import { ME_QUERY } from "@/lib/queries";
 import type { User } from "@/types/domain";
 import { linkGoogle, listSignInMethods, unlinkGoogle, type SignInMethod } from "@/lib/auth-v2/client-actions";
 import { sessionClient, type BrowserSession } from "@/lib/auth-v2/session-client";
+import { CredentialsPanel } from "./credentials-panel";
 
 export default function AccountSettingsPage() {
   const router = useRouter();
@@ -157,6 +158,13 @@ export default function AccountSettingsPage() {
         </div>
       </Section>
 
+      <CredentialsPanel
+        passwordEnabled={signInMethods.includes("password")}
+        onPasswordChanged={async () => {
+          clearGraphQLCache();
+          setSessions(await sessionClient.list());
+        }}
+      />
       <Section title="Sign-in methods">
         <div className="space-y-3 text-sm">
           <div className="flex items-center justify-between border border-[var(--border-subtle)] px-3 py-3">

@@ -20,9 +20,11 @@ describe("browser session client", () => {
       expect(input).toBe("/api/v1/sessions");
       return Response.json({ sessions: [session] });
     });
-    const client = createSessionClient(request as typeof fetch);
+    const invalidate = vi.fn();
+    const client = createSessionClient(request as typeof fetch, invalidate);
     await expect(client.list()).resolves.toEqual([session]);
     await expect(client.revoke({ scope: "ONE", sessionId: "session-row-1" })).resolves.toEqual({ revokedCurrent: true });
+    expect(invalidate).toHaveBeenCalledOnce();
   });
 
   it("rejects any credential-bearing or expanded session projection", async () => {

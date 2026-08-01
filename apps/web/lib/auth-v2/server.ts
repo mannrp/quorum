@@ -6,6 +6,7 @@ import { parseAuthEnvironment } from "./config";
 import { createAuthMailer } from "./mail";
 import { buildBetterAuthOptions } from "./options";
 import { VerificationTokenStore } from "./verification-token-store";
+import { isWithinAbsoluteLifetime } from "./session-policy";
 
 type Auth = ReturnType<typeof betterAuth>;
 
@@ -30,7 +31,10 @@ export function getAuth(): Auth {
   authInstance = betterAuth(buildBetterAuthOptions({
     config,
     database,
-    sendChangeEmailConfirmation: mail.emailChange,
+    sendChangeEmailConfirmation: async (message) => {
+      await verificationTokens!.issue(message.token);
+      await mail.emailChange(message);
+    },
     sendResetPassword: mail.passwordReset,
     sendVerificationEmail: async (message) => {
       await verificationTokens!.issue(message.token);
@@ -40,6 +44,15 @@ export function getAuth(): Auth {
   return authInstance;
 }
 
+export async function getCurrentAuthSession(headers: Headers) {
+  const auth = getAuth();
+  const value = await auth.api.getSession({ headers });
+  if (!value) return null;
+  const session = value.session as typeof value.session & { absoluteExpiresAt?: Date | string };
+  if (isWithinAbsoluteLifetime(session.absoluteExpiresAt)) return value;
+  await auth.api.revokeSession({ headers, body: { token: value.session.token } });
+  return null;
+}
 const credentialFields = new Set(["token", "accessToken", "refreshToken", "idToken"]);
 
 function projectAuthValue(value: unknown): unknown {
@@ -82,8 +95,12 @@ export async function handleAuthRequest(request: Request): Promise<Response> {
   }
   const url = new URL(request.url);
 
+  if (request.headers.get("cookie")?.includes("quorum.session_token=")) {
+    await getCurrentAuthSession(request.headers);
+  }
+
   if (request.method === "POST" && url.pathname === "/api/auth/link-social") {
-    const current = await auth.api.getSession({ headers: request.headers });
+    const current = await getCurrentAuthSession(request.headers);
     if (!current) return Response.json({ error: "Authentication required." }, { status: 401 });
     if (!isRecentSession(current.session.createdAt, recentAuthSeconds ?? 0)) {
       return Response.json({ error: "Recent authentication required." }, { status: 403 });

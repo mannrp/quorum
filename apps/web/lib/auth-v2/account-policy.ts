@@ -16,5 +16,5 @@ export function projectAccountMethods(value: unknown): Array<{ providerId: strin
     const providerId = (entry as AccountMethodRecord).providerId;
     if (typeof providerId === "string" && allowed.has(providerId)) providers.add(providerId);
   }
-  return [...providers].map((providerId) => ({ providerId }));
+  return [...providers].sort().map((providerId) => ({ providerId }));
 }

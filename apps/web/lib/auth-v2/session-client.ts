@@ -1,5 +1,7 @@
 "use client";
 
+import { publishSessionInvalidated } from "./session-events";
+
 export type BrowserSession = Readonly<{
   id: string;
   createdAt: string;
@@ -29,7 +31,10 @@ function parseSessions(value: unknown): BrowserSession[] {
   });
 }
 
-export function createSessionClient(request: typeof globalThis.fetch = globalThis.fetch) {
+export function createSessionClient(
+  request: typeof globalThis.fetch = globalThis.fetch,
+  invalidate: () => void = publishSessionInvalidated,
+) {
   return {
     async list(): Promise<BrowserSession[]> {
       const response = await request("/api/v1/sessions", { credentials: "same-origin", cache: "no-store" });
@@ -46,6 +51,7 @@ export function createSessionClient(request: typeof globalThis.fetch = globalThi
       if (!response.ok) throw new Error("Session revocation failed.");
       const value = await response.json() as { revokedCurrent?: unknown };
       if (typeof value.revokedCurrent !== "boolean") throw new Error("Session revocation response is invalid.");
+      invalidate();
       return { revokedCurrent: value.revokedCurrent };
     },
   };

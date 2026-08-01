@@ -1,7 +1,7 @@
 # Auth V2 status
 
-**State:** P1 complete; P2 account lifecycle in progress
-**Active work:** P2.2 password, email, and sessions
+**State:** P1 and P2 complete; P3 product operation migration in progress
+**Active work:** P3.1 public discovery registered operations
 **Branch:** `codex/auth-v2-rewrite`
 **Pull request:** `mannrp/quorum#10` (draft)
 **Updated:** 2026-08-01
@@ -27,8 +27,8 @@ Quorum now has one browser authentication path: Better Auth `1.6.25` mounted by 
 |---|---|---|
 | C0 Cleanup | done | Lean contract, status, implementation plan, and operations guide |
 | P1 Authentication cutover and viewer | done | Local and pinned Ubuntu acceptance green |
-| P2 Google and account lifecycle | in progress | Google, recovery/email changes, explicit linking, and session management |
-| P3 Product operation migration | pending | Registered typed operations replace arbitrary browser GraphQL |
+| P2 Google and account lifecycle | done | Google, recovery/email changes, explicit linking, and session management |
+| P3 Product operation migration | in progress | Registered typed operations replace arbitrary browser GraphQL |
 | P4 Files and release | pending | Private files, protected deployment, final deletion, and release evidence |
 
 ## Latest verified evidence
@@ -39,8 +39,8 @@ Verified locally on 2026-08-01:
 npm run lint                                      PASS
 npm run typecheck                                 PASS
 npm run build                                     PASS
-npm run test:web                                  PASS (9 files, 42 tests)
-npm run test:e2e                                  PASS (handler 5 + Chromium 4; no skips)
+npm run test:web                                  PASS (12 files, 57 tests)
+npm run test:e2e                                  PASS (handler 10 + Chromium 4; no skips)
 npm run test:docker-context                       PASS
 cd apps/api && go test ./...                      PASS
 service-backed go test -count=1 ./...             PASS (PostgreSQL required; no skips)
@@ -52,8 +52,7 @@ Repository scans found no active Neon Auth dependency/configuration, demo identi
 
 ## Real blockers and next work
 
-P1 completed on exact commit `2a00f4f` with pinned Ubuntu CI run `30712246442` green in 2m15s. The workflow ran the service-backed handler and authenticated Chromium journey with no skip path. P2.1 is complete: production Google configuration/UI and the deterministic local provider prove exact callback, state, S256 PKCE, issuer, denial, missing/wrong state cookie, wrong origin, external return rejection, expiry, replay denial, opaque HttpOnly session issuance, stable returning identity after profile changes, enumeration-safe same-email collision, recent-auth link enforcement, explicit link/unlink, last-method protection, projected account methods, and persisted `google` authentication-method provenance. Exact P2.1 commit `285f3ef` passed pinned Ubuntu run `30714569678`. P2.2 is active; password recovery now has enumeration-safe request, Mailpit delivery, one-use exchange, old-session revocation, clean browser navigation, and new-password login. Exact reset commit `4a010df` is in Ubuntu CI run `30714815498`.
+P2 is complete. Account Security now provides password change, two-mailbox email change, explicit Google linking, projected session listing, revoke-one/revoke-others/logout-all, and credential-free cross-tab invalidation. Service-backed tests prove enumeration-safe reset, one-use email links and replay denial, password cookie rotation, 24-hour idle and 7-day absolute expiry, refresh preservation of authentication context, current-state inactive-account denial, and no reusable credential projection. The exact local acceptance above passed with pinned PostgreSQL `17.10-alpine3.24` and Mailpit `1.30.0`.
 
-After P1, execute P2, P3, then P4 in `IMPLEMENTATION.md`. Production host/transport, transactional email, and retention choices do not block local P1-P3 work. Admin stays disabled.
-
+P3 is active. Migrate the six operation groups in `IMPLEMENTATION.md` in order, deleting each browser GraphQL document as its registered typed operation replaces it. The temporary `/api/graphql` bridge remains the release blocker; Admin and file controls stay unavailable until their planned phases.
 `npm audit --omit=dev` most recently reported three high transitive findings in the current Next dependency tree (PostCSS/sharp) with no non-breaking patched Next release offered by npm. There is no longer a nested legacy Better Auth dependency. Recheck before release; do not weaken tests or force a downgrade.

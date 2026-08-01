@@ -3,6 +3,21 @@ import { expect, test } from "@playwright/test";
 const integration = process.env.QUORUM_REQUIRE_INTEGRATION === "true";
 const mailpitURL = process.env.MAILPIT_API_URL;
 
+async function suspendProductAccount(email: string): Promise<void> {
+  const databaseURL = process.env.DATABASE_URL;
+  if (!databaseURL) throw new Error("DATABASE_URL is required.");
+  const { Pool } = await import("pg");
+  const pool = new Pool({ connectionString: databaseURL });
+  try {
+    const result = await pool.query(
+      `UPDATE app.account_states state SET status = 'SUSPENDED', suspended_at = now(), state_version = state_version + 1, updated_at = now() FROM app.user_identities identity WHERE state.user_id = identity.user_id AND identity.verified_email = $1`,
+      [email],
+    );
+    expect(result.rowCount).toBe(1);
+  } finally {
+    await pool.end();
+  }
+}
 async function verificationURL(email: string, subject = "Verify your Quorum email"): Promise<string> {
   if (!mailpitURL) throw new Error("MAILPIT_API_URL is required.");
   const deadline = Date.now() + 10_000;
@@ -71,8 +86,15 @@ test("verified user enrolls, refreshes the viewer, and logs out", async ({ page 
     await page.reload();
   }
 
-  await page.getByRole("button", { name: "Logout" }).click();
-  await expect(page).toHaveURL(/^http:\/\/127\.0\.0\.1:3000\/(?:auth\/login)?$/);
+  await suspendProductAccount(email);
+  const inactiveViewer = await page.evaluate(() => fetch("/api/v1/viewer", { cache: "no-store" }).then((response) => response.status));
+  expect(inactiveViewer).toBe(403);
+  const signOutStatus = await page.evaluate(() => fetch("/api/auth/sign-out", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  }).then((response) => response.status));
+  expect(signOutStatus).toBe(200);
   const afterLogout = await page.evaluate(() => fetch("/api/v1/viewer").then((response) => response.status));
   expect(afterLogout).toBe(401);
 });
@@ -122,9 +144,13 @@ test("Google-style OAuth user reaches the same Sponsor enrollment and logout flo
   await expect(page.getByText("This browser", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Log out everywhere" })).toBeVisible();
   await expect(page.getByText("Keep at least one sign-in method connected to avoid losing access.")).toBeVisible();
-  await page.getByRole("button", { name: "Logout" }).click();
-  await expect(page).toHaveURL(/^http:\/\/127\.0\.0\.1:3000\/(?:auth\/login)?$/);
-  expect(await page.evaluate(() => fetch("/api/v1/viewer").then((response) => response.status))).toBe(401);
+  const secondTab = await page.context().newPage();
+  await secondTab.goto("/settings/account");
+  await expect(secondTab.getByRole("heading", { name: "Account Security" })).toBeVisible();
+  await page.getByRole("button", { name: "Log out everywhere" }).click();
+  await expect(page).toHaveURL(/\/auth\/login$/);
+  await expect(secondTab).toHaveURL(/\/auth\/login$/);
+  expect(await secondTab.evaluate(() => fetch("/api/v1/viewer").then((response) => response.status))).toBe(401);
 });
 test("password reset email replaces credentials without retaining the token URL", async ({ page }) => {
   test.skip(!integration, "requires pinned PostgreSQL and Mailpit services");

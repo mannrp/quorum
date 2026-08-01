@@ -3,7 +3,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useState, useEffect, useCallback } from "react";
 import { clearGraphQLCache, graphqlRequest, userFacingError } from "@/lib/graphql";
-import { signOut } from "@/lib/auth-v2/client-actions";
+import { getCurrentUser, signOut } from "@/lib/auth-v2/client-actions";
+import { subscribeToSessionInvalidation } from "@/lib/auth-v2/session-events";
 import { SHELL_AUTH_QUERY, SHELL_COUNTS_QUERY } from "@/lib/queries";
 import type { AuthState, User } from "@/types/domain";
 
@@ -76,6 +77,25 @@ export function AppShell({ children }: { children: ReactNode }) {
     void fetchSession();
   }, [fetchSession]);
 
+  useEffect(() => subscribeToSessionInvalidation(() => {
+    clearGraphQLCache();
+    void getCurrentUser()
+      .then((user) => {
+        if (user) return fetchSession();
+        setMe(null);
+        setAdminAccess(false);
+        setUnreadNotif(0);
+        setUnreadMsg(0);
+        router.push("/auth/login");
+      })
+      .catch(() => {
+        setMe(null);
+        setAdminAccess(false);
+        setUnreadNotif(0);
+        setUnreadMsg(0);
+        router.push("/auth/login");
+      });
+  }), [fetchSession, router]);
   const handleLogout = async () => {
     await signOut().catch(() => undefined);
     clearGraphQLCache();

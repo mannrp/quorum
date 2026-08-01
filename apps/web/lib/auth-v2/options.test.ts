@@ -7,6 +7,7 @@ describe("session authentication method provenance", () => {
   it.each([
     ["/sign-in/email", undefined, '["password"]'],
     ["/sign-up/email", undefined, '["password"]'],
+    ["/change-password", undefined, '["password"]'],
     ["/callback/google", { id: "google" }, '["google"]'],
     ["/oauth2/callback/quorum-test-oidc", { providerId: "quorum-test-oidc" }, '["google"]'],
   ])("maps %s to the reviewed method", (path, params, expected) => {

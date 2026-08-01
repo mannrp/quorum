@@ -1,6 +1,7 @@
 "use client";
 
 import { authClient } from "./client";
+import { publishSessionInvalidated } from "./session-events";
 
 function authErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -41,6 +42,7 @@ export async function getCurrentUser() {
 export async function signOut(): Promise<void> {
   const result = await authClient.signOut();
   if (result.error) throw new Error(authErrorMessage(result.error));
+  publishSessionInvalidated();
 }
 export type SignInMethod = "password" | "google";
 
@@ -80,5 +82,15 @@ export async function requestPasswordResetEmail(email: string): Promise<void> {
 
 export async function resetPasswordWithToken(token: string, newPassword: string): Promise<void> {
   const result = await authClient.resetPassword({ token, newPassword });
+  if (result.error) throw new Error(authErrorMessage(result.error));
+}
+export async function changeCurrentPassword(currentPassword: string, newPassword: string): Promise<void> {
+  const result = await authClient.changePassword({ currentPassword, newPassword, revokeOtherSessions: true });
+  if (result.error) throw new Error(authErrorMessage(result.error));
+  publishSessionInvalidated();
+}
+
+export async function requestEmailChange(newEmail: string): Promise<void> {
+  const result = await authClient.changeEmail({ newEmail, callbackURL: "/settings/account?email=changed" });
   if (result.error) throw new Error(authErrorMessage(result.error));
 }

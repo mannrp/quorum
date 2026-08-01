@@ -10,6 +10,11 @@ const expiredEmail = `auth-v2-expired-${Date.now()}@example.test`;
 const linkEmail = "oidc-link@example.test";
 const resetEmail = `auth-v2-reset-${Date.now()}@example.test`;
 const sessionsEmail = `auth-v2-sessions-${Date.now()}@example.test`;
+const passwordChangeEmail = `auth-v2-password-change-${Date.now()}@example.test`;
+const emailChangeOld = `auth-v2-email-change-old-${Date.now()}@example.test`;
+const emailChangeNew = `auth-v2-email-change-new-${Date.now()}@example.test`;
+const absoluteExpiryEmail = `auth-v2-absolute-${Date.now()}@example.test`;
+const idleExpiryEmail = `auth-v2-idle-${Date.now()}@example.test`;
 const password = "correct horse battery staple 123";
 let handler: (request: Request) => Promise<Response>;
 
@@ -119,6 +124,80 @@ async function ageSessionsForEmail(targetEmail: string): Promise<void> {
     await pool.end();
   }
 }
+async function expireIdleSessionsForEmail(targetEmail: string): Promise<void> {
+  const { Pool } = await import("pg");
+  const pool = new Pool({
+    connectionString: process.env.AUTH_DATABASE_URL,
+    options: "-c search_path=better_auth,pg_catalog,pg_temp",
+  });
+  try {
+    const result = await pool.query(
+      `UPDATE "session" s SET "expiresAt" = now() - interval '1 second', "absoluteExpiresAt" = now() + interval '1 hour' FROM "user" u WHERE s."userId" = u."id" AND u."email" = $1`,
+      [targetEmail],
+    );
+    expect(result.rowCount).toBeGreaterThan(0);
+  } finally {
+    await pool.end();
+  }
+}
+async function expireAbsoluteSessionsForEmail(targetEmail: string): Promise<void> {
+  const { Pool } = await import("pg");
+  const pool = new Pool({
+    connectionString: process.env.AUTH_DATABASE_URL,
+    options: "-c search_path=better_auth,pg_catalog,pg_temp",
+  });
+  try {
+    const result = await pool.query(
+      `UPDATE "session" s SET "absoluteExpiresAt" = now() - interval '1 second', "expiresAt" = now() + interval '1 hour' FROM "user" u WHERE s."userId" = u."id" AND u."email" = $1`,
+      [targetEmail],
+    );
+    expect(result.rowCount).toBeGreaterThan(0);
+  } finally {
+    await pool.end();
+  }
+}
+type StoredSessionContext = Readonly<{
+  absoluteExpiresAt: Date;
+  assurance: string;
+  authenticatedAt: Date;
+  authenticationMethods: string;
+  expiresAt: Date;
+}>;
+
+async function latestSessionContext(targetEmail: string): Promise<StoredSessionContext> {
+  const { Pool } = await import("pg");
+  const pool = new Pool({
+    connectionString: process.env.AUTH_DATABASE_URL,
+    options: "-c search_path=better_auth,pg_catalog,pg_temp",
+  });
+  try {
+    const result = await pool.query<StoredSessionContext>(
+      `SELECT s."absoluteExpiresAt", s."assurance", s."authenticatedAt", s."authenticationMethods", s."expiresAt" FROM "session" s JOIN "user" u ON u."id" = s."userId" WHERE u."email" = $1 ORDER BY s."createdAt" DESC LIMIT 1`,
+      [targetEmail],
+    );
+    if (result.rowCount !== 1) throw new Error("Expected one latest session context.");
+    return result.rows[0];
+  } finally {
+    await pool.end();
+  }
+}
+
+async function requireLatestSessionRefresh(targetEmail: string): Promise<void> {
+  const { Pool } = await import("pg");
+  const pool = new Pool({
+    connectionString: process.env.AUTH_DATABASE_URL,
+    options: "-c search_path=better_auth,pg_catalog,pg_temp",
+  });
+  try {
+    const result = await pool.query(
+      `UPDATE "session" SET "expiresAt" = now() + interval '10 minutes' WHERE "id" = (SELECT s."id" FROM "session" s JOIN "user" u ON u."id" = s."userId" WHERE u."email" = $1 ORDER BY s."createdAt" DESC LIMIT 1)`,
+      [targetEmail],
+    );
+    expect(result.rowCount).toBe(1);
+  } finally {
+    await pool.end();
+  }
+}
 async function storedSessionTokensForEmail(targetEmail: string): Promise<string[]> {
   const { Pool } = await import("pg");
   const pool = new Pool({
@@ -220,7 +299,7 @@ describe("real Better Auth handler", () => {
       connectionString: process.env.AUTH_DATABASE_URL,
       options: "-c search_path=better_auth,pg_catalog,pg_temp",
     });
-    await pool.query('DELETE FROM "user" WHERE email = ANY($1::text[])', [[email, externalEmail, unverifiedEmail, expiredEmail, linkEmail, resetEmail, sessionsEmail]]);
+    await pool.query('DELETE FROM "user" WHERE email = ANY($1::text[])', [[email, externalEmail, unverifiedEmail, expiredEmail, linkEmail, resetEmail, sessionsEmail, passwordChangeEmail, emailChangeOld, emailChangeNew, absoluteExpiryEmail, idleExpiryEmail]]);
     await pool.query('DELETE FROM "rateLimit"');
     await pool.end();
   });
@@ -660,6 +739,156 @@ describe("real Better Auth handler", () => {
     expect(revokeAll.status).toBe(200);
     expect((await revokeAll.json()) as object).toEqual({ revokedCurrent: true });
     expect(await (await handler(new Request(`${origin}/api/auth/get-session`, { headers: { cookie: cookies[0], origin } }))).json()).toBeNull();
+  });
+  it("denies a session after its idle deadline even while absolute expiry is still future", async () => {
+    await clearRateLimits();
+    expect((await post("/sign-up/email", {
+      callbackURL: "/auth/complete",
+      email: idleExpiryEmail,
+      name: "Idle Expiry User",
+      password,
+    })).status).toBe(200);
+    expect([200, 302]).toContain((await handler(new Request(await waitForVerificationURL(idleExpiryEmail), {
+      headers: { origin },
+      redirect: "manual",
+    }))).status);
+    const signIn = await post("/sign-in/email", { email: idleExpiryEmail, password });
+    const cookie = sessionCookie(signIn);
+    await expireIdleSessionsForEmail(idleExpiryEmail);
+
+    const stale = await handler(new Request(`${origin}/api/auth/get-session`, { headers: { cookie, origin } }));
+    expect(await stale.json()).toBeNull();
+    const { GET: listSessions } = await import("@/app/api/v1/sessions/route");
+    expect((await listSessions(new Request(`${origin}/api/v1/sessions`, { headers: { cookie, origin } }))).status).toBe(401);
+  });
+  it("revokes a session at its absolute deadline even while idle expiry is still future", async () => {
+    await clearRateLimits();
+    expect((await post("/sign-up/email", {
+      callbackURL: "/auth/complete",
+      email: absoluteExpiryEmail,
+      name: "Absolute Expiry User",
+      password,
+    })).status).toBe(200);
+    expect([200, 302]).toContain((await handler(new Request(await waitForVerificationURL(absoluteExpiryEmail), {
+      headers: { origin },
+      redirect: "manual",
+    }))).status);
+    const signIn = await post("/sign-in/email", { email: absoluteExpiryEmail, password });
+    const cookie = sessionCookie(signIn);
+    expect(await storedSessionTokensForEmail(absoluteExpiryEmail)).toHaveLength(1);
+    await expireAbsoluteSessionsForEmail(absoluteExpiryEmail);
+
+    const { GET: listSessions } = await import("@/app/api/v1/sessions/route");
+    const listed = await listSessions(new Request(`${origin}/api/v1/sessions`, { headers: { cookie, origin } }));
+    expect(listed.status).toBe(401);
+    expect(await storedSessionTokensForEmail(absoluteExpiryEmail)).toHaveLength(0);
+    const stale = await handler(new Request(`${origin}/api/auth/get-session`, { headers: { cookie, origin } }));
+    expect(await stale.json()).toBeNull();
+  });
+  it("changes email through both one-use mailbox confirmations", async () => {
+    await clearRateLimits();
+    expect((await post("/sign-up/email", {
+      callbackURL: "/auth/complete",
+      email: emailChangeOld,
+      name: "Email Change User",
+      password,
+    })).status).toBe(200);
+    expect([200, 302]).toContain((await handler(new Request(await waitForVerificationURL(emailChangeOld), {
+      headers: { origin },
+      redirect: "manual",
+    }))).status);
+
+    const signIn = await post("/sign-in/email", { email: emailChangeOld, password });
+    const cookie = sessionCookie(signIn);
+    const requested = await post("/change-email", {
+      newEmail: emailChangeNew,
+      callbackURL: "/settings/account?email=changed",
+    }, cookie);
+    expect(requested.status).toBe(200);
+
+    const confirmationURL = await waitForVerificationURL(emailChangeOld, "Confirm your Quorum email change");
+    const confirmation = await handler(new Request(confirmationURL, {
+      headers: { cookie, origin },
+      redirect: "manual",
+    }));
+    expect([200, 302]).toContain(confirmation.status);
+    expect((await handler(new Request(confirmationURL, {
+      headers: { cookie, origin },
+      redirect: "manual",
+    }))).status).toBe(410);
+
+    const verificationURL = await waitForVerificationURL(emailChangeNew);
+    const verification = await handler(new Request(verificationURL, {
+      headers: { cookie, origin },
+      redirect: "manual",
+    }));
+    expect([200, 302]).toContain(verification.status);
+    expect((await handler(new Request(verificationURL, {
+      headers: { cookie, origin },
+      redirect: "manual",
+    }))).status).toBe(410);
+
+    await clearRateLimits();
+    expect((await post("/sign-in/email", { email: emailChangeOld, password })).status).toBeGreaterThanOrEqual(400);
+    expect((await post("/sign-in/email", { email: emailChangeNew, password })).status).toBe(200);
+  });
+  it("changes password, keeps the current session, and revokes every other session", async () => {
+    await clearRateLimits();
+    expect((await post("/sign-up/email", {
+      callbackURL: "/auth/complete",
+      email: passwordChangeEmail,
+      name: "Password Change User",
+      password,
+    })).status).toBe(200);
+    expect([200, 302]).toContain((await handler(new Request(await waitForVerificationURL(passwordChangeEmail), {
+      headers: { origin },
+      redirect: "manual",
+    }))).status);
+
+    const currentSignIn = await post("/sign-in/email", { email: passwordChangeEmail, password });
+    const otherSignIn = await post("/sign-in/email", { email: passwordChangeEmail, password });
+    const currentCookie = sessionCookie(currentSignIn);
+    const otherCookie = sessionCookie(otherSignIn);
+    const rejected = await post("/change-password", {
+      currentPassword: "wrong current password value 123",
+      newPassword: "unused new password value 12345",
+      revokeOtherSessions: true,
+    }, currentCookie);
+    expect(rejected.status).toBeGreaterThanOrEqual(400);
+
+    const newPassword = "changed correct horse battery staple 789";
+    const changed = await post("/change-password", {
+      currentPassword: password,
+      newPassword,
+      revokeOtherSessions: true,
+    }, currentCookie);
+    expect(changed.status).toBe(200);
+    const changedBody = await changed.clone().text();
+    for (const token of await storedSessionTokensForEmail(passwordChangeEmail)) expect(changedBody).not.toContain(token);
+
+    const rotatedCookie = sessionCookie(changed);
+    expect(rotatedCookie).not.toBe(currentCookie);
+    const rotatedSession = await handler(new Request(`${origin}/api/auth/get-session`, { headers: { cookie: rotatedCookie, origin } }));
+    expect((await rotatedSession.json()) as object).not.toBeNull();
+    const staleCurrent = await handler(new Request(`${origin}/api/auth/get-session`, { headers: { cookie: currentCookie, origin } }));
+    expect(await staleCurrent.json()).toBeNull();
+    const revokedOther = await handler(new Request(`${origin}/api/auth/get-session`, { headers: { cookie: otherCookie, origin } }));
+    expect(await revokedOther.json()).toBeNull();
+
+    await clearRateLimits();
+    expect((await post("/sign-in/email", { email: passwordChangeEmail, password })).status).toBeGreaterThanOrEqual(400);
+    const refreshedSignIn = await post("/sign-in/email", { email: passwordChangeEmail, password: newPassword });
+    expect(refreshedSignIn.status).toBe(200);
+    const refreshCookie = sessionCookie(refreshedSignIn);
+    const beforeRefresh = await latestSessionContext(passwordChangeEmail);
+    await requireLatestSessionRefresh(passwordChangeEmail);
+    expect((await handler(new Request(`${origin}/api/auth/get-session`, { headers: { cookie: refreshCookie, origin } }))).status).toBe(200);
+    const afterRefresh = await latestSessionContext(passwordChangeEmail);
+    expect(afterRefresh.authenticatedAt.toISOString()).toBe(beforeRefresh.authenticatedAt.toISOString());
+    expect(afterRefresh.authenticationMethods).toBe(beforeRefresh.authenticationMethods);
+    expect(afterRefresh.assurance).toBe(beforeRefresh.assurance);
+    expect(afterRefresh.absoluteExpiresAt.toISOString()).toBe(beforeRefresh.absoluteExpiresAt.toISOString());
+    expect(afterRefresh.expiresAt.getTime()).toBeGreaterThan(Date.now() + 23 * 60 * 60 * 1_000);
   });
   it("rejects wrong origin, wrong content type, and an external callback", async () => {
     const unverifiedRegistration = await post("/sign-up/email", {

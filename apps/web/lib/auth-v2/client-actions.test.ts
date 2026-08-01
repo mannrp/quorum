@@ -12,6 +12,8 @@ const linkSocial = vi.fn();
 const unlinkAccount = vi.fn();
 const requestPasswordReset = vi.fn();
 const resetPassword = vi.fn();
+const changePassword = vi.fn();
+const changeEmail = vi.fn();
 
 vi.mock("./client", () => ({
   authClient: {
@@ -24,6 +26,8 @@ vi.mock("./client", () => ({
     unlinkAccount,
     requestPasswordReset,
     resetPassword,
+    changePassword,
+    changeEmail,
   },
 }));
 
@@ -124,5 +128,22 @@ describe("Auth V2 client actions", () => {
     expect(resetPassword).toHaveBeenCalledWith({
       token: "one-time-token",
       newPassword: "n".repeat(29),
+    });
+  });
+  it("changes password and email with reviewed lifecycle policy", async () => {
+    changePassword.mockResolvedValue({ data: { user: {} }, error: null });
+    changeEmail.mockResolvedValue({ data: { status: true }, error: null });
+    const { changeCurrentPassword, requestEmailChange } = await import("./client-actions");
+
+    await changeCurrentPassword("current password", "n".repeat(29));
+    await requestEmailChange("new@example.test");
+    expect(changePassword).toHaveBeenCalledWith({
+      currentPassword: "current password",
+      newPassword: "n".repeat(29),
+      revokeOtherSessions: true,
+    });
+    expect(changeEmail).toHaveBeenCalledWith({
+      newEmail: "new@example.test",
+      callbackURL: "/settings/account?email=changed",
     });
   });});

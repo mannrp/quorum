@@ -12,8 +12,8 @@ describe("account management policy", () => {
 
   it("projects account records to reviewed methods only", () => {
     expect(projectAccountMethods([
-      { providerId: "credential", accountId: "private-password", userId: "private-user" },
       { providerId: "google", accountId: "private-google", userId: "private-user" },
+      { providerId: "credential", accountId: "private-password", userId: "private-user" },
       { providerId: "unknown", accountId: "private-other", userId: "private-user" },
     ])).toEqual([{ providerId: "credential" }, { providerId: "google" }]);
   });

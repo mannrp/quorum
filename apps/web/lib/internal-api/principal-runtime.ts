@@ -1,7 +1,7 @@
 import "server-only";
 import { createHmac, randomUUID } from "node:crypto";
 import { importPKCS8 } from "jose";
-import { getAuth } from "@/lib/auth-v2/server";
+import { getCurrentAuthSession } from "@/lib/auth-v2/server";
 import { createInternalAssertionSigner } from "./assertion";
 import { AuthenticationRequiredError, createPrincipalClient } from "./principal-client";
 
@@ -30,7 +30,7 @@ async function buildRuntime() {
   });
 
   const session = async (headers: Headers) => {
-    const value = await getAuth().api.getSession({ headers });
+    const value = await getCurrentAuthSession(headers);
     if (!value) return null;
     const context = value.session as typeof value.session & {
       authenticatedAt?: Date | string;

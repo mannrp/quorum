@@ -1,12 +1,12 @@
 import { readSessionRevocationRequest } from "@/lib/auth-v2/browser-request";
-import { getAuth } from "@/lib/auth-v2/server";
+import { getAuth, getCurrentAuthSession } from "@/lib/auth-v2/server";
 
 const privateHeaders = { "Cache-Control": "private, no-store" };
 
 export async function GET(request: Request): Promise<Response> {
   try {
     const auth = getAuth();
-    const current = await auth.api.getSession({ headers: request.headers });
+    const current = await getCurrentAuthSession(request.headers);
     if (!current) return Response.json({ error: "authentication_required" }, { status: 401, headers: privateHeaders });
     const sessions = await auth.api.listSessions({ headers: request.headers });
     return Response.json({
@@ -26,7 +26,7 @@ export async function DELETE(request: Request): Promise<Response> {
   try {
     const input = await readSessionRevocationRequest(request, process.env.BETTER_AUTH_URL ?? "");
     const auth = getAuth();
-    const current = await auth.api.getSession({ headers: request.headers });
+    const current = await getCurrentAuthSession(request.headers);
     if (!current) return Response.json({ error: "authentication_required" }, { status: 401, headers: privateHeaders });
 
     if (input.scope === "ONE") {

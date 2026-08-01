@@ -21,7 +21,11 @@ type AuthenticationContext = Readonly<{
 }>;
 
 export function resolveAuthenticationMethods(context: AuthenticationContext): string {
-  if (context.path === "/sign-in/email" || context.path === "/sign-up/email") {
+  if (
+    context.path === "/sign-in/email" ||
+    context.path === "/sign-up/email" ||
+    context.path === "/change-password"
+  ) {
     return '["password"]';
   }
 
