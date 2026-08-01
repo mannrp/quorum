@@ -35,6 +35,31 @@ export function getAuth(): Auth {
   return authInstance;
 }
 
+const credentialFields = new Set(["token", "accessToken", "refreshToken", "idToken"]);
+
+function projectAuthValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(projectAuthValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .filter(([key]) => !credentialFields.has(key))
+    .map(([key, field]) => [key, projectAuthValue(field)]));
+}
+
+async function projectAuthResponse(response: Response): Promise<Response> {
+  if (!response.headers.get("content-type")?.toLowerCase().startsWith("application/json")) return response;
+  const body = await response.clone().text();
+  if (!body) return response;
+  let value: unknown;
+  try {
+    value = JSON.parse(body) as unknown;
+  } catch {
+    return response;
+  }
+  const headers = new Headers(response.headers);
+  headers.delete("content-length");
+  return Response.json(projectAuthValue(value), { status: response.status, statusText: response.statusText, headers });
+}
+
 export async function handleAuthRequest(request: Request): Promise<Response> {
   const auth = getAuth();
   const url = new URL(request.url);
@@ -46,5 +71,5 @@ export async function handleAuthRequest(request: Request): Promise<Response> {
     }
   }
 
-  return auth.handler(request);
+  return projectAuthResponse(await auth.handler(request));
 }

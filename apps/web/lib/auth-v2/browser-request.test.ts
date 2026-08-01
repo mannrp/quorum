@@ -24,6 +24,7 @@ describe("enrollment browser boundary", () => {
   it.each([
     ["wrong origin", request('{"role":"STUDENT"}', { origin: "https://wrong.example" })],
     ["cross-site fetch", request('{"role":"STUDENT"}', { "sec-fetch-site": "cross-site" })],
+    ["missing Fetch Metadata", request('{"role":"STUDENT"}', { "sec-fetch-site": "" })],
     ["wrong content type", request('{"role":"STUDENT"}', { "content-type": "text/plain" })],
     ["authority role", request('{"role":"ADMIN"}')],
     ["identity spoof", request('{"role":"STUDENT","subject":"attacker"}')],

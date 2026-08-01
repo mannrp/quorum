@@ -1,7 +1,7 @@
 # Auth V2 status
 
-**State:** P1 authentication cutover implemented; acceptance completion in progress
-**Active work:** P1 authenticated Chromium flow and remaining handler negative controls
+**State:** P1 locally accepted; pinned Ubuntu verification pending
+**Active work:** verify P1 on Ubuntu; P2 queued
 **Branch:** `codex/auth-v2-rewrite`
 **Pull request:** `mannrp/quorum#10` (draft)
 **Updated:** 2026-08-01
@@ -25,7 +25,7 @@ Quorum now has one browser authentication path: Better Auth `1.6.25` mounted by 
 | Phase | Status | Remaining result |
 |---|---|---|
 | C0 Cleanup | done | Lean contract, status, implementation plan, and operations guide |
-| P1 Authentication cutover and viewer | in progress | Authenticated Chromium journey plus remaining handler negative controls |
+| P1 Authentication cutover and viewer | in review | Local acceptance complete; exact pushed commit must pass pinned Ubuntu |
 | P2 Google and account lifecycle | pending | Google, recovery/email changes, explicit linking, and session management |
 | P3 Product operation migration | pending | Registered typed operations replace arbitrary browser GraphQL |
 | P4 Files and release | pending | Private files, protected deployment, final deletion, and release evidence |
@@ -38,25 +38,20 @@ Verified locally on 2026-08-01:
 npm run lint                                      PASS
 npm run typecheck                                 PASS
 npm run build                                     PASS
-npm run test:web                                  PASS (8 files, 25 tests)
-npm run test:e2e                                  PASS (Chromium anonymous shell, 1 test)
+npm run test:web                                  PASS (8 files, 26 tests)
+npm run test:e2e                                  PASS (handler 2 + Chromium 2; no skips)
 npm run test:docker-context                       PASS
 cd apps/api && go test ./...                      PASS
 service-backed go test -count=1 ./...             PASS (PostgreSQL required; no skips)
-service-backed npm run test:integration           PASS (2 tests)
 ```
 
-The service-backed handler flow proves register -> Mailpit delivery -> one-use verification -> login -> opaque cookie -> signed Next-to-Go enrollment -> viewer -> refresh -> logout. Database role bootstrap and all eight canonical migrations were verified before it ran. Docker services were pinned PostgreSQL `17.10-alpine3.24` and Mailpit `1.30.0` on loopback-only ports.
+The service-backed handler flow proves register -> Mailpit delivery -> invalid/expired/replayed verification rejection -> login -> opaque cookie -> raw-token projection -> bearer-reuse denial -> signed Next-to-Go enrollment -> viewer -> refresh -> logout. Database role bootstrap and all eight canonical migrations were verified before it ran. Docker services were pinned PostgreSQL `17.10-alpine3.24` and Mailpit `1.30.0` on loopback-only ports.
 
 Repository scans found no active Neon Auth dependency/configuration, demo identity route, `ADMIN_EMAILS`, browser backend URL, bearer credential use, or browser storage credential use. The only `R2_PUBLIC_URL` references are dormant P4 file configuration and are not returned by the viewer path.
 
 ## Real blockers and next work
 
-P1 is not closed until:
-
-1. Chromium covers register -> Mailpit verification -> enrollment -> viewer -> refresh -> logout.
-2. The real handler suite covers the remaining negative controls listed in P1.2, especially wrong content type/Fetch Metadata, unverified login, invalid/expired verification, unsafe return paths, and credential projection/reuse.
-3. The final P1 command set is rerun on the milestone commit and the pinned Ubuntu workflow is green.
+P1 behavior is locally complete. The sole P1 closure condition is a green pinned Ubuntu workflow on the exact pushed milestone commit. CI now restores runtime-role credentials after rotation tests and runs the service-backed handler plus authenticated Chromium journey with no skip path.
 
 After P1, execute P2, P3, then P4 in `IMPLEMENTATION.md`. Production host/transport, transactional email, and retention choices do not block local P1-P3 work. Admin stays disabled.
 

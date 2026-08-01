@@ -16,7 +16,7 @@ export async function signInWithEmail(email: string, password: string): Promise<
 }
 
 export async function signUpWithEmail(email: string, password: string, name: string): Promise<void> {
-  const result = await authClient.signUp.email({ email, password, name });
+  const result = await authClient.signUp.email({ email, password, name, callbackURL: "/auth/complete" });
   if (result.error) throw new Error(authErrorMessage(result.error));
 }
 

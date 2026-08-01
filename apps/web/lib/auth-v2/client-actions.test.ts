@@ -35,6 +35,7 @@ describe("Auth V2 client actions", () => {
       email: "user@example.test",
       password: "a".repeat(29),
       name: "Test User",
+      callbackURL: "/auth/complete",
     });
     expect(emailSignIn).not.toHaveBeenCalled();
   });

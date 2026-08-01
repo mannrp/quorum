@@ -40,16 +40,16 @@ export default function RegisterPage() {
         ) : (
           <form className="space-y-3 pt-2" onSubmit={handleSubmit}>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Full name</label>
-              <input required value={fullName} onChange={(event) => setFullName(event.target.value)} className="input-field" autoComplete="name" />
+              <label htmlFor="register-name" className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Full name</label>
+              <input id="register-name" required value={fullName} onChange={(event) => setFullName(event.target.value)} className="input-field" autoComplete="name" />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Email address</label>
-              <input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="input-field" autoComplete="email" />
+              <label htmlFor="register-email" className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Email address</label>
+              <input id="register-email" required type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="input-field" autoComplete="email" />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Password</label>
-              <input required type="password" minLength={29} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} className="input-field" autoComplete="new-password" />
+              <label htmlFor="register-password" className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Password</label>
+              <input id="register-password" required type="password" minLength={29} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} className="input-field" autoComplete="new-password" />
               <p className="text-[10px] text-stone-500">Use at least 29 characters.</p>
             </div>
             {error && <p className="text-xs font-bold text-rose-500">{error}</p>}

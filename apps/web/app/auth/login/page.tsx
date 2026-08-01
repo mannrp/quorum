@@ -37,8 +37,9 @@ export default function LoginPage() {
           {/* Email / Password Form */}
           <form className="space-y-3" onSubmit={handleCredentialsLogin}>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Email Address</label>
+              <label htmlFor="login-email" className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Email Address</label>
               <input
+                id="login-email"
                 required
                 type="email"
                 value={email}
@@ -50,10 +51,11 @@ export default function LoginPage() {
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Password</label>
+                <label htmlFor="login-password" className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Password</label>
                 <a href="#reset" className="text-[9px] text-[var(--accent-app)] hover:underline">Forgot password?</a>
               </div>
               <input
+                id="login-password"
                 required
                 type="password"
                 value={password}
