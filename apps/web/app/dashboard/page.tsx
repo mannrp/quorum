@@ -83,18 +83,6 @@ function dashboardView(result: DashboardPageData) {
     deadline: result.dashboardContext.universalDeadline,
   };
 }
-function getRemainingTimeText(expiresAtStr: string): string {
-  const expiresAt = new Date(expiresAtStr);
-  const diffMs = expiresAt.getTime() - Date.now();
-  if (diffMs <= 0) return "Expired";
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays > 0) return `${diffDays}d remaining`;
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  if (diffHours > 0) return `${diffHours}h remaining`;
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  return `${diffMins}m remaining`;
-}
-
 export default function DashboardPage() {
   const router = useRouter();
   const [me, setMe] = useState<User | null>(null);
@@ -106,7 +94,8 @@ export default function DashboardPage() {
   const [myRequests, setMyRequests] = useState<DashboardJoinRequest[]>([]);
   const [deadline, setDeadline] = useState<Deadline | null>(null);
   const [selfServiceRoles, setSelfServiceRoles] = useState<SelfServiceRole[]>([]);
-  const [loading, setLoading] = useState(true);  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -288,25 +277,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </section>
-      {/* Welcome Banner */}
-      {false && (
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-[var(--accent-app)]">
-              [-] Academics Console
-            </span>
-            <h1 className="text-2xl font-bold font-serif text-[var(--text-app)] tracking-tight uppercase">
-              Welcome Back, {me?.fullName}
-            </h1>
-            <p className="text-[10px] font-mono uppercase tracking-wider text-stone-500">
-              @{me?.username} • Concordia University • {me?.discipline || "SOEN"}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Link href="/settings/profile" className="btn-secondary py-2 px-3.5 text-xs">Edit Settings</Link>
-          </div>
-        </div>
-      )}
 
       {notice && (
         <div className="rounded-lg border border-[var(--color-success)] bg-[var(--color-success-bg)] p-3 text-xs font-bold uppercase tracking-wider text-[var(--color-success)]">

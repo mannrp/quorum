@@ -51,7 +51,7 @@ func main() {
 		if os.Getenv("QUORUM_ALLOW_LOCAL_RESET") != "true" {
 			fatal("QUORUM_ALLOW_LOCAL_RESET=true is required")
 		}
-		if err := reset(ctx, conn, *markerFile, *migrationDir); err != nil {
+		if err := reset(ctx, conn, os.Getenv("MIGRATOR_DATABASE_URL"), *markerFile, *migrationDir); err != nil {
 			fatal(err.Error())
 		}
 		fmt.Println("guarded local database reset completed")
@@ -88,21 +88,40 @@ func initialize(ctx context.Context, conn *pgx.Conn, markerFile string) error {
 	return localdb.ValidateMarker(hostMarker, databaseMarker)
 }
 
-func reset(ctx context.Context, conn *pgx.Conn, markerFile, migrationDir string) error {
+func reset(ctx context.Context, operator *pgx.Conn, migratorURL, markerFile, migrationDir string) error {
+	if err := localdb.ValidateResetTarget(migratorURL); err != nil {
+		return fmt.Errorf("validate local migrator target: %w", err)
+	}
+	migrator, err := pgx.Connect(ctx, migratorURL)
+	if err != nil {
+		return fmt.Errorf("connect local migrator: %w", err)
+	}
+	defer migrator.Close(ctx)
+
+	var operatorDatabase, migratorDatabase string
+	if err := operator.QueryRow(ctx, "SELECT current_database()").Scan(&operatorDatabase); err != nil {
+		return fmt.Errorf("read operator database: %w", err)
+	}
+	if err := migrator.QueryRow(ctx, "SELECT current_database()").Scan(&migratorDatabase); err != nil {
+		return fmt.Errorf("read migrator database: %w", err)
+	}
+	if operatorDatabase != migratorDatabase {
+		return fmt.Errorf("operator and migrator must target the same local database")
+	}
 	hostBytes, err := os.ReadFile(markerFile)
 	if err != nil {
 		return fmt.Errorf("read host instance marker: %w", err)
 	}
 	hostMarker := strings.TrimSpace(string(hostBytes))
 	var databaseMarker string
-	if err := conn.QueryRow(ctx, "SELECT instance_id FROM quorum_meta.environment_identity WHERE singleton = TRUE").Scan(&databaseMarker); err != nil {
+	if err := operator.QueryRow(ctx, "SELECT instance_id FROM quorum_meta.environment_identity WHERE singleton = TRUE").Scan(&databaseMarker); err != nil {
 		return fmt.Errorf("read database instance marker: %w", err)
 	}
 	if err := localdb.ValidateMarker(hostMarker, databaseMarker); err != nil {
 		return err
 	}
 
-	tx, err := conn.Begin(ctx)
+	tx, err := operator.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin guarded reset: %w", err)
 	}
@@ -128,7 +147,7 @@ func reset(ctx context.Context, conn *pgx.Conn, markerFile, migrationDir string)
 	if err != nil {
 		return err
 	}
-	return quorummigrate.Apply(ctx, conn, migrations)
+	return quorummigrate.Apply(ctx, migrator, migrations)
 }
 
 func readOrCreateMarker(path string) (string, error) {

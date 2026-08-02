@@ -1,5 +1,7 @@
 import "server-only";
 
+// Browsers choose a reviewed ID and validated variables; GraphQL text stays server-owned.
+
 type RegisteredOperation = Readonly<{
   auth: "anonymous" | "authenticated" | "optional";
   document: string;
@@ -75,7 +77,6 @@ const documents = {
   ViewerProfileV1: `query ViewerProfileV1 {
     me {
       id username email fullName bio discipline university linkedinUrl githubUrl portfolioUrl
-      userIntent resumeVisibility discord availabilityNote preferredProjectAreas profileComplete
       tags { id name isPredefined }
     }
   }`,
@@ -84,7 +85,7 @@ const documents = {
   }`,
   DeactivateAccountV1: `mutation DeactivateAccountV1($reason: String) { deactivateAccount(reason: $reason) }`,
   DashboardV1: `query DashboardV1 {
-    me { id username fullName userIntent }
+    me { id username fullName }
     dashboardContext {
       myTeams {
         id name description isComplete maxSize
@@ -123,7 +124,17 @@ const documents = {
   RemoveTeamMemberV1: `mutation RemoveTeamMemberV1($teamId: ID!, $userId: ID!) { removeMember(teamId: $teamId, userId: $userId) }`,
   PromoteTeamMemberV1: `mutation PromoteTeamMemberV1($teamId: ID!, $userId: ID!, $role: TeamRole!) { promoteMember(teamId: $teamId, userId: $userId, role: $role) { id role } }`,
   ProjectSessionV1: `query ProjectSessionV1 { me { id username fullName } dashboardContext { myTeams { id name maxSize members { user { id } role } } } }`,
-  ProjectOwnerV1: `query ProjectOwnerV1($projectId: ID!) { project(id: $projectId) { ${publicProjectFields} permissions { canEdit canReviewApplications canSubmitForApproval canApprove canArchive } applications { id status message answers reviewMessage offerMessage expiresAt teamConfirmedAt ownerConfirmedAt withdrawnAt createdAt team { ${publicTeamFields} } } } }`,
+  ProjectOwnerV1: `query ProjectOwnerV1($projectId: ID!) {
+    project(id: $projectId) {
+      ${publicProjectFields}
+      permissions { canEdit canReviewApplications canSubmitForApproval canApprove canArchive }
+      applications {
+        id status message answers reviewMessage offerMessage expiresAt
+        teamConfirmedAt ownerConfirmedAt withdrawnAt createdAt
+        team { ${publicTeamFields} }
+      }
+    }
+  }`,
   CreateProjectV1: `mutation CreateProjectV1($input: CreateProjectInput!) { createProject(input: $input) { id } }`,
   UpdateProjectV1: `mutation UpdateProjectV1($projectId: ID!, $input: UpdateProjectInput!) { updateProject(id: $projectId, input: $input) { id } }`,
   ApplyToProjectV1: `mutation ApplyToProjectV1($input: ApplyToProjectInput!) { applyToProjectInput(input: $input) { id status } }`,
@@ -131,13 +142,15 @@ const documents = {
   RejectProjectApplicationV1: `mutation RejectProjectApplicationV1($applicationId: ID!, $message: String) { rejectApplication(applicationId: $applicationId, message: $message) { id status reviewMessage } }`,
   SendProjectOfferV1: `mutation SendProjectOfferV1($applicationId: ID!, $message: String) { sendProjectOffer(applicationId: $applicationId, message: $message) { id status offerMessage expiresAt } }`,
   ConfirmProjectOfferOwnerV1: `mutation ConfirmProjectOfferOwnerV1($applicationId: ID!) { confirmProjectOfferByOwner(applicationId: $applicationId) { id status ownerConfirmedAt } }`,
-  ConfirmProjectOfferTeamV1: `mutation ConfirmProjectOfferTeamV1($applicationId: ID!) { confirmProjectOfferByTeam(applicationId: $applicationId) { id status teamConfirmedAt } }`,  InboxV1: `query InboxV1 { me { id username fullName } myInbox { id username fullName discipline } }`,
+  ConfirmProjectOfferTeamV1: `mutation ConfirmProjectOfferTeamV1($applicationId: ID!) { confirmProjectOfferByTeam(applicationId: $applicationId) { id status teamConfirmedAt } }`,
+  InboxV1: `query InboxV1 { me { id username fullName } myInbox { id username fullName discipline } }`,
   MessageRecipientV1: `query MessageRecipientV1($username: String!) { user(username: $username) { id username fullName discipline } }`,
   ThreadMessagesV1: `query ThreadMessagesV1($withUser: ID!) { myMessages(withUser: $withUser) { id body read createdAt sender { id username fullName } receiver { id username fullName } } }`,
   SendMessageV1: `mutation SendMessageV1($receiverId: ID!, $body: String!) { sendMessage(receiverId: $receiverId, body: $body) { id body read createdAt sender { id username fullName } receiver { id username fullName } } }`,
   MarkMessageReadV1: `mutation MarkMessageReadV1($messageId: ID!) { markRead(messageId: $messageId) }`,
   NotificationsV1: `query NotificationsV1 { myNotifications { id type payload read createdAt } }`,
-  MarkNotificationReadV1: `mutation MarkNotificationReadV1($notificationId: ID!) { markNotificationRead(notificationId: $notificationId) }`,} as const;
+  MarkNotificationReadV1: `mutation MarkNotificationReadV1($notificationId: ID!) { markNotificationRead(notificationId: $notificationId) }`,
+} as const;
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Operation variables are invalid.");
@@ -220,8 +233,7 @@ function profileVariables(value: unknown): { input: Record<string, unknown> } {
   const input = record(variables.input);
   const allowed = [
     "username", "fullName", "bio", "discipline", "university", "linkedinUrl", "githubUrl",
-    "portfolioUrl", "userIntent", "resumeVisibility", "discord", "availabilityNote",
-    "preferredProjectAreas", "skills", "tags",
+    "portfolioUrl", "skills",
   ];
   exactKeys(input, allowed);
   if (typeof input.username !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(input.username)) {
@@ -232,26 +244,16 @@ function profileVariables(value: unknown): { input: Record<string, unknown> } {
   }
   const parsed: Record<string, unknown> = { username: input.username, fullName: input.fullName.trim() };
   for (const [key, maximum] of [
-    ["bio", 2_000], ["discipline", 120], ["university", 120], ["userIntent", 32],
-    ["discord", 120], ["availabilityNote", 500],
+    ["bio", 2_000], ["discipline", 120], ["university", 120],
   ] as const) optionalString(input, key, maximum, parsed);
   for (const key of ["linkedinUrl", "githubUrl", "portfolioUrl"] as const) {
     optionalHTTPURL(input, key, parsed);
   }
-  if (input.resumeVisibility !== undefined) {
-    const accepted = ["PRIVATE", "TEAM_LEADS", "PROJECT_OWNERS", "PROJECT_OWNERS_AND_PROFESSORS", "PUBLIC"];
-    if (typeof input.resumeVisibility !== "string" || !accepted.includes(input.resumeVisibility)) {
+  if (input.skills !== undefined) {
+    if (!Array.isArray(input.skills) || input.skills.length > 50 || !input.skills.every((item) => typeof item === "string" && item.length > 0 && item.length <= 100)) {
       throw new Error("Operation variables are invalid.");
     }
-    parsed.resumeVisibility = input.resumeVisibility;
-  }
-  for (const key of ["preferredProjectAreas", "skills", "tags"] as const) {
-    const values = input[key];
-    if (values === undefined) continue;
-    if (!Array.isArray(values) || values.length > 50 || !values.every((item) => typeof item === "string" && item.length > 0 && item.length <= 100)) {
-      throw new Error("Operation variables are invalid.");
-    }
-    parsed[key] = values;
+    parsed.skills = input.skills;
   }
   return { input: parsed };
 }
@@ -463,7 +465,8 @@ export function resolveOperation(id: string, variables: unknown): RegisteredOper
     case "ConfirmProjectOfferOwnerV1":
       return { auth: "authenticated", document: documents.ConfirmProjectOfferOwnerV1, variables: namedIDVariables(variables, ["applicationId"]) };
     case "ConfirmProjectOfferTeamV1":
-      return { auth: "authenticated", document: documents.ConfirmProjectOfferTeamV1, variables: namedIDVariables(variables, ["applicationId"]) };    case "InboxV1":
+      return { auth: "authenticated", document: documents.ConfirmProjectOfferTeamV1, variables: namedIDVariables(variables, ["applicationId"]) };
+    case "InboxV1":
       return { auth: "authenticated", document: documents.InboxV1, variables: noVariables(variables) };
     case "MessageRecipientV1":
       return { auth: "authenticated", document: documents.MessageRecipientV1, variables: usernameVariables(variables) };
@@ -476,7 +479,8 @@ export function resolveOperation(id: string, variables: unknown): RegisteredOper
     case "NotificationsV1":
       return { auth: "authenticated", document: documents.NotificationsV1, variables: noVariables(variables) };
     case "MarkNotificationReadV1":
-      return { auth: "authenticated", document: documents.MarkNotificationReadV1, variables: namedIDVariables(variables, ["notificationId"]) };    default:
+      return { auth: "authenticated", document: documents.MarkNotificationReadV1, variables: namedIDVariables(variables, ["notificationId"]) };
+    default:
       throw new Error("Operation is not registered.");
   }
 }

@@ -1,7 +1,5 @@
 # Local setup
 
-The product still contains legacy Neon authentication while Auth V2 is being integrated. Do not add new Neon-specific behavior.
-
 For the current Auth V2 local services and database commands, use [`docs/auth/OPERATIONS.md`](docs/auth/OPERATIONS.md). Current implementation truth is in [`docs/auth/STATUS.md`](docs/auth/STATUS.md).
 
 ## Prerequisites
@@ -38,7 +36,7 @@ npm run dev:api
 npm run dev:web
 ```
 
-Legacy screens may still require the ignored environment files documented by their startup errors. Those variables are temporary and must disappear during Auth V2 cutover.
+Copy `apps/api/.env.example` to `apps/api/.env` and `apps/web/.env.example` to `apps/web/.env.local`, then provide a matching local Ed25519 assertion keypair. Keep both files out of git.
 
 ## Verification
 

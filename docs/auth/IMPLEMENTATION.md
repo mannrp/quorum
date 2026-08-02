@@ -1,279 +1,120 @@
 # Auth V2 implementation and finish plan
 
-This is the only Auth V2 delivery plan. `STATUS.md` states current reality and `AUTH_V2_CONTRACT.md` contains the durable rules. Do not create another roadmap, gate matrix, benchmark plan, or acceptance framework.
+This is the only Auth V2 delivery plan. `STATUS.md` states current reality, `AUTH_V2_CONTRACT.md` contains durable security rules, and git/CI hold implementation history. Do not create another roadmap, gate matrix, benchmark plan, or evidence archive.
 
 ## Definition of finished
 
-Auth V2 is finished when a fresh browser can register or sign in with email/password or Google, use every enabled Quorum workflow, manage its account and sessions, and access private files without any legacy identity path.
+Auth V2 is finished when a fresh browser can register or sign in with email/password or Google, enroll as Student or Sponsor, use every enabled Quorum workflow, manage its profile, credentials, and sessions, and sign out without any legacy identity path.
 
-The repository must then have:
+Admin and file-management features are disabled and are not Auth V2 completion blockers. Their old authority, upload, and public-URL paths must remain unreachable.
 
-- one Better Auth configuration and one browser auth client;
+The release must have:
+
+- one Better Auth configuration and browser client;
 - one opaque host-only session cookie;
 - one short-lived Next-to-Go assertion path;
 - current-state Go principal and authorization checks;
-- registered browser operations only - no browser-supplied GraphQL;
-- private object storage;
-- only Next exposed publicly;
+- registered browser operations only, with no browser-supplied GraphQL;
+- only Next exposed publicly and a protected production Next-to-Go transport;
 - no Neon Auth, legacy bearer verifier, `ADMIN_EMAILS`, demo identity, public file URL, or browser-visible Go endpoint;
 - green local, service-backed, browser, build, and pinned Ubuntu checks.
 
-Disabled features do not need speculative implementation, but their old routes and authority paths must be unreachable.
-
 ## Delivery rules
 
-- One phase is active at a time and ends in working behavior.
-- Start each behavior with a focused failing test against the real configuration or route.
+- P4 is the only active phase. Finish one working release path rather than starting another framework.
+- Start behavior changes with a focused failing test, then run the smallest relevant checks while iterating.
 - Prefer explicit route modules and small functions. Add an interface only at a real external boundary.
-- Reuse the existing Go domain/resolver logic while it remains correct; do not rewrite the product alongside authentication.
-- Keep internal GraphQL if useful, but the browser may send only a registered operation ID and typed variables.
-- Commit substantial green milestones. Update `STATUS.md` after each phase, not after every test.
+- Reuse correct Go domain/resolver logic; do not rewrite the product alongside authentication.
+- Internal GraphQL may remain private, but the browser sends only registered operation IDs and typed variables.
+- Keep security negative controls. Remove compatibility shims, dead helpers, and stale documentation instead of preserving them ceremonially.
+- Commit substantial green milestones. Update `STATUS.md` when release truth changes, not after every command.
 
 ## Phase summary
 
 | Phase | Status | Product result |
 |---|---|---|
-| C0 Cleanup | done | Retired spike/planning framework removed; lean sources of truth established |
-| P1 Authentication cutover and viewer | done | Better Auth replaces Neon and a verified user reaches `ViewerBootstrapV1` |
-| P2 Google and account lifecycle | done | Both sign-in methods, recovery, linking, and session management work |
-| P3 Product operation migration | done | Every enabled UI workflow uses registered operations and Go authorization |
-| P4 Files and release | in progress | Protected deployment, final audit, and release evidence |
+| C0 Cleanup | done | Lean contract, status, plan, and operations sources of truth |
+| P1 Authentication cutover and viewer | done | Better Auth replaced Neon and verified users reach the product through the signed Next-to-Go boundary |
+| P2 Google and account lifecycle | done | Google/password sign-in, recovery, linking, email/password changes, and session management |
+| P3 Product operation migration | done | Enabled UI workflows use registered operations and current-state Go authorization |
+| P4 Release | in progress | Production-shaped deployment, final cleanup, and release evidence |
 
-## P1 - Authentication cutover and viewer
+## Completed implementation
 
-**End state:** Better Auth is the repository's only browser authentication implementation. A Student or Sponsor can register, verify email through Mailpit, sign in, complete enrollment, load their viewer, refresh, and sign out. Existing product pages may still use the temporary internal GraphQL bridge, but Neon identity is gone.
+### P1 - Authentication cutover and viewer
 
-### P1.1 Dependency and configuration baseline
+- Better Auth `1.6.25` owns email/password authentication, verification mail, opaque database sessions, and host-only HttpOnly cookies.
+- Verified users self-enroll only as Student or Sponsor. Next derives session identity, signs a 15-second Ed25519 assertion, and private Go resolves current PostgreSQL state into `ViewerBootstrapV1`.
+- Legacy Neon modules, JWKS/bearer verification, `ADMIN_EMAILS`, demo persona/reset paths, and browser backend configuration are removed.
 
-Use these current stable versions, checked 2026-07-31:
+### P2 - Google and account lifecycle
 
-- `better-auth@1.6.25`
-- `pg@8.22.0`
-- `nodemailer@9.0.3`
-- Next `16.2.12` with its matching ESLint configuration
+- Google uses one exact callback and explicit account linking; implicit same-email merging is disabled.
+- Password reset/change, two-mailbox email change, session listing/revocation, logout-all, idle/absolute expiry, and cross-tab invalidation are implemented.
+- The deterministic OIDC provider remains a development/test harness only. It is rejected by production server configuration.
 
-Work:
+### P3 - Registered product operations
 
-1. Upgrade Next first in a standalone tested commit; replace deprecated `next lint` with the ESLint CLI.
-2. Add Better Auth, PostgreSQL, and mail packages as direct runtime dependencies.
-3. Re-run `npm audit --omit=dev`; resolve findings affecting enabled code. Do not use `audit fix --force` or accept a downgrade.
-4. Add one server-only configuration module with validated environment input, canonical origin, exact trusted origins, the `better_auth` schema, accepted password/session limits, explicit account-linking policy, and fail-closed startup.
-5. Update env examples with names actually consumed. Secrets remain server-only.
+- Home, profiles, teams, projects, dashboard, inbox, notifications, and account/profile settings use typed registered operations.
+- Next validates same-origin JSON and maps operation IDs to reviewed private documents. Go authorizes current users, relationships, resource state, and nested private fields.
+- Browser GraphQL text, its client/query modules, and `/api/graphql` are deleted. Go GraphQL remains private to avoid an unrelated product rewrite.
 
-Tests:
+## P4 - Release
 
-- Configuration rejects missing/weak secret, wrong origin, production-insecure cookie, invalid session limits, automatic same-email linking, and schema fallback to `public`.
-- A catalog test proves accepted auth objects exist only in `better_auth` and the auth runtime role cannot read or mutate product policy tables.
-- Lint, typecheck, build, web tests, and dependency audit are clean for the enabled dependency set.
-
-### P1.2 Real email/password and mail flow
-
-Work:
-
-1. Mount Better Auth at the existing `/api/auth/[...path]` route; do not add a second spike route.
-2. Replace `lib/neon-auth.ts` and all auth UI imports with one Better Auth client.
-3. Implement register, verification action page, login, logout, and safe relative return paths.
-4. Send verification mail through one Nodemailer adapter. Local/test uses Mailpit.
-5. Keep verification/reset values out of logs, screenshots, evidence, third-party resources, and browser storage.
-
-Tests against the actual handler:
-
-- Register -> Mailpit delivery -> one-use verification -> login -> signed opaque cookie -> logout.
-- Wrong origin, wrong content type, missing CSRF/Fetch Metadata, unverified login, invalid/expired/replayed verification, external return URL, raw database token, bearer token, and browser-readable credential reuse fail.
-- Cookie is host-only and HttpOnly, uses `SameSite=Lax`, and is `Secure` in production.
-- Auth/session responses contain projected fields only.
-
-### P1.3 Enrollment, principal, and viewer
-
-Use explicit endpoints, not a generic RPC framework:
-
-- Next: `POST /api/v1/enrollment`, `GET /api/v1/viewer`
-- Go private: `POST /internal/v1/enrollment`, `GET /internal/v1/viewer`
-
-Flow:
-
-1. After verification, the user chooses only `STUDENT` or `SPONSOR`.
-2. Next derives realm, stable Better Auth user ID, verified email, authentication time/method, and device context from the server session. It ignores browser identity/email/authority fields.
-3. Next signs the existing 15-second assertion and sends the requested self-service role separately over the protected internal call.
-4. Go validates the assertion, validates the allowed role, and calls the existing idempotent identity provisioning service.
-5. Go resolves `(realm, Better Auth user ID)` against current identity/account/grant state and returns the exact `ViewerBootstrapV1` projection.
-6. Next returns `private, no-store` and never returns the assertion or provider/session identifiers.
-
-Keep the implementation small:
-
-- one principal application package;
-- one SQLc query for current binding/account/self-service roles;
-- one HTTP adapter for the two endpoints;
-- no generated client, policy DSL, or generalized operation bus.
-
-Tests:
-
-- New enrollment, retry, concurrent retry, returning user, Student/Sponsor validation, same-email collision, unknown/ambiguous/unlinked/stale binding, and suspended/deactivated/deleted state.
-- Viewer excludes email, auth/provider ID, session values, Professor/Admin grants, private profile fields, and file URLs.
-- Assertion suite covers missing/malformed token, browser spoof, wrong algorithm/type/key/issuer/audience, early/expired/overlong token, key overlap, replay after expiry, anonymous confusion, and authority claims.
-- Cancellation, deadline, and correlation ID cross the boundary; no automatic retry occurs for enrollment.
-
-### P1.4 Remove legacy authentication
-
-Before P1 closes:
-
-- remove `@neondatabase/auth` and its nested vulnerable Better Auth copy;
-- delete Neon server/client modules and `NEON_AUTH_*` variables;
-- replace Go's Neon JWKS verifier/middleware with the internal assertion middleware;
-- resolve existing GraphQL users through the new principal context;
-- remove `ADMIN_EMAILS` bootstrap and make `/admin` unavailable;
-- remove demo persona/reset identity paths;
-- remove browser-visible backend URL fallbacks.
-
-The temporary `/api/graphql` bridge may remain only for existing pages during P3. It is same-origin, server-to-private-Go, uses the new assertion, and is explicitly not release-ready because it still accepts browser query text.
-
-P1 acceptance command set:
-
-```sh
-npm run lint
-npm run typecheck
-npm run build
-npm run test:web
-npm run test:e2e
-npm run test:docker-context
-cd apps/api && go test ./...
-```
-
-Also run the PostgreSQL/Mailpit integration flow with missing infrastructure configured to fail, not skip. End P1 with one Chromium test for register -> verify -> enroll -> viewer -> refresh -> logout.
-
-## P2 - Google and account lifecycle
-
-**End state:** users can choose Google or email/password and safely manage credentials, linked accounts, and sessions.
-
-### P2.1 Google and linking
+### P4.1 Disabled files
 
 **Status:** done
 
-1. Configure Better Auth Google using the canonical origin and one exact callback.
-2. Reintroduce a deterministic local OIDC provider only for the real route test.
-3. Implement Google login/cancellation/error UI and reviewed relative redirects. A first-time Google user continues through the same verified Student/Sponsor enrollment flow as email/password.
-4. Implement explicit link/unlink behind recent authentication.
-5. Never automatically link merely because emails match. Never use the Google subject as the Quorum identity key.
+No enabled UI uploads or serves files. The dormant signer, public URL API, and production object-storage requirement are removed. Historical database columns remain inert; do not edit applied migrations or add a migration solely to delete them.
 
-Tests:
+A later file feature is separate product work. It must store object keys, authorize every operation in Go, and issue short-lived scoped upload/download grants from private storage.
 
-- State, PKCE, nonce where applicable, exact callback, provider denial, missing/wrong cookie, wrong origin, expiry, replay, and encoded external redirects.
-- First Google login provisions once; returning login resolves the same user after email/name change.
-- Same-email different account collides safely; explicit link/unlink and last-login-method protection work.
+### P4.2 Production topology
 
-### P2.2 Password, email, and sessions
+The repository uses the first supported production shape: separate non-root Next and Go containers on one host, a restrictive shared Unix-domain socket for Next-to-Go traffic, PostgreSQL on its private/TLS path, and only loopback Next ingress for an external HTTPS proxy. Production rejects a plain HTTP Next-to-Go fallback.
 
-**Status:** done
+Implemented in the repository:
 
-1. Implement forgot/reset password, password change, email change/re-verification, session list, revoke-one, revoke-others, and logout-all using Better Auth APIs.
-2. Preserve real `authenticated_at`, `amr`, and assurance across refresh/rotation.
-3. Clear viewer/query caches on logout, account change, revocation response, and cross-tab sign-out.
-4. Go denies inactive accounts on every request. Do not build a generic worker until a real product operation can suspend/deactivate an account.
-5. Add database-backed rate limiting when tests or the selected runtime use multiple Next instances; otherwise schedule it at P4 before horizontal deployment.
+- web, API, and migrator use separate environment files;
+- canonical migrations run as a serialized one-shot service before the API;
+- both images run non-root, Next is direct PID 1, web mounts the shared socket read-only, and API handles restrictive permissions and stale sockets;
+- only loopback Next ingress is published by the production Compose shape.
 
-Tests:
+Remaining work is release-host validation: health and graceful shutdown, PostgreSQL TLS/private access, backup/restore, compatible rollback, assertion-key rotation, credential-safe logs, and real Google/transactional-email smoke tests. Do not add another deployment or provider framework.
 
-- Mailpit delivery and one-use/expiry/replay for reset and email change.
-- 24-hour idle, 7-day absolute, 10-minute recent-auth, session rotation, concurrent revoke, stale cookie, and cross-tab behavior.
-- Enumeration-safe errors and no credential/action value in URL history after exchange, logs, JSON, or storage.
+If the release host cannot support the one-host socket, replace only that transport with mTLS and record the concrete reason in `STATUS.md`.
 
-P2 closes with browser flows for Google, password reset, session revocation, and inactive-account denial.
+### P4.3 Final cleanup and release evidence
 
-## P3 - Product operation migration
-
-**End state:** the browser cannot submit GraphQL text. Every enabled page uses a registered operation with typed variables, explicit projection, and current-state Go authorization.
-
-### Transport shape
-
-Keep Go GraphQL private to minimize the rewrite. Replace `/api/graphql` with a same-origin registered-operation route:
-
-```text
-POST /api/v1/operations/{operationId}
-body: validated variables only
-```
-
-Next owns a small static map from operation ID to reviewed internal document and variable parser. Browser code imports operation IDs and TypeScript input/output types. Do not add code generation unless manual drift becomes an actual problem.
-
-For every operation:
-
-- Next rejects unknown ID, query text, extra variables, identity/role fields, wrong method/content type/origin, and oversized body.
-- Go resolves the current principal and authorizes root plus nested fields.
-- Lists have explicit bounds and responses expose only required fields.
-
-### Migration order
-
-**Progress:** public discovery, viewer shell, Teams, Projects, and communication are done. Files, deployment, and final release evidence remain.
-
-1. **Public discovery:** home, team/project lists and detail, public profile. Use anonymous assertions and approved public projections.
-2. **Viewer shell:** auth state, shell counts, dashboard context, `me`, onboarding/profile update, account self-service.
-3. **Teams:** create/update team, membership view, join request/cancel/respond, invite/cancel/respond, member removal/promotion/leave.
-4. **Projects:** create/edit project, project claim/review if enabled, applications, withdraw/respond/offer workflow.
-5. **Communication:** inbox, user search, messages/send/read, notifications/read, dashboard aggregates.
-6. **Files:** leave upload/download buttons disabled until P4 rather than returning public URLs.
-7. **Admin:** keep the page and operations unavailable. Admin is a later product feature requiring MFA/recovery before reactivation.
-
-Each numbered group is a separate tested commit. Delete its old browser query strings as it migrates. When the last group is done, delete `/api/graphql`, `lib/graphql.ts`, browser GraphQL configuration, and any public Go GraphQL ingress.
-
-Acceptance per group:
-
-- allowed role/relationship/resource-state cases pass;
-- anonymous, wrong role, inactive account, cross-user IDOR, stale membership/ownership, invalid transition, excessive page/amount, forged identity/role, forbidden nested field, and duplicate/concurrent mutation fail safely;
-- browser test covers the actual workflow;
-- query counts are bounded for that workflow, without a separate synthetic benchmark program.
-
-P3 closes only when repository and browser-network scans show no browser GraphQL document and no browser-reachable Go endpoint.
-
-## P4 - Private files and release
-
-**End state:** all enabled Quorum functionality runs on Auth V2 in one production-shaped, supportable deployment.
-
-### P4.1 Files
-
-No enabled UI currently uploads or serves files. Remove the dormant signer, public URL API, and R2 production requirement rather than leaving an untested feature reachable. Keep legacy columns as inert historical data; do not add a second migration history solely to delete them.
-
-If a product request later enables files, add the smallest typed upload/download flow then: Go authorizes every operation against current state, object storage stays private, grants are short-lived and scoped, and the new feature ships with its own ownership/replay/MIME/size tests and a real R2 smoke.
-
-### P4.2 One deployment topology
-
-Use the simplest accepted first shape: one host with separate Next and Go containers, a shared restrictive Unix-domain socket for Next-to-Go traffic, PostgreSQL over its private/TLS path, and only the HTTPS reverse proxy/Next port published.
-
-Work:
-
-- production Dockerfiles, non-root users, health/readiness, graceful shutdown, and `.dockerignore` verification;
-- restrictive socket ownership/mode and a Node socket client used only by server code;
-- serialized migration release job;
-- production secret inventory and assertion-key overlap/retirement procedure;
-- backup/restore, compatible rollback, logs/metrics without secrets;
-- real Google, transactional-email, and R2 test accounts.
-
-If the eventual host cannot provide the one-host socket shape, replace only this transport step with mTLS and record the concrete host reason in `STATUS.md`; do not reopen a vendor bake-off.
-
-### P4.3 Final deletion and audit
+Repository-owned cleanup is complete. The remaining items below are release verification, not another implementation phase.
 
 Delete or prove absent:
 
-- Neon Auth package, modules, environment variables, JWKS verifier, and legacy `auth_user_id` authority;
-- `ADMIN_EMAILS`, demo identity/reset routes, browser backend URLs, `/api/graphql`, browser GraphQL text, public Go/database ports;
-- public file URLs and reusable credentials in responses/logs/storage;
-- temporary Auth V2 flags and dual-auth branches;
-- unused schemas, helpers, tests, dependencies, and documentation made obsolete by cutover.
+- Neon packages, modules, environment variables, JWKS verification, and legacy `auth_user_id` authority;
+- `ADMIN_EMAILS`, demo identity/reset routes, browser backend URLs, `/api/graphql`, and browser GraphQL text;
+- public Go/database ports, public file URLs, and reusable credentials in responses, logs, URLs, or browser storage;
+- production feature flags or dual-auth branches; the deterministic OIDC harness may remain only behind its nonproduction guard;
+- unused runtime helpers, types, dependencies, and stale setup/auth documentation.
 
 Release verification:
 
-- clean install, lint, typecheck, production build, web/Go unit tests, PostgreSQL/Mailpit integration, Chromium flows, Docker-context/image inspection, migrations/restore/rollback, assertion rotation, transport tamper/plaintext rejection, and real Google/email/R2 smoke;
-- `npm audit --omit=dev` has no applicable high/critical finding in enabled runtime code;
-- pinned Ubuntu CI passes on the exact release commit;
-- a fresh browser completes every enabled workflow with Auth V2 only.
+- run the repository baseline commands from `AGENTS.md` and the required PostgreSQL/Mailpit flow from `OPERATIONS.md`;
+- verify clean install, production images/context, canonical migrations, backup/restore/rollback, assertion rotation, and transport plaintext/tamper rejection;
+- run real Google and transactional-email smoke tests;
+- review `npm audit --omit=dev` and resolve applicable high/critical findings in enabled runtime code without forced downgrades;
+- pass pinned Ubuntu CI on the exact release commit;
+- complete every enabled workflow in a fresh browser using Auth V2 only.
 
-When these checks pass, update `STATUS.md` to `complete`, make the pull request ready, and merge. There is no separate benchmark or ceremonial gate after P4.
+When these checks pass, update `STATUS.md` to `complete`, make the pull request ready, and merge. There is no additional gate or benchmark phase.
 
 ## Deliberately out of scope
 
-These require a separate product request, not Auth V2 completion:
+These require separate product requests:
 
-- re-enabling Admin (requires MFA, recovery, and a bootstrap policy);
+- re-enabling Admin, which first requires MFA, recovery, and bootstrap policy;
+- file upload/download and storage-vendor integration;
 - Professor invitation machinery not used by the enabled UI;
-- multi-provider support beyond Google and email/password;
-- generic workflow/worker platforms;
+- providers beyond Google and email/password;
+- generic workflow/worker or policy platforms;
 - GraphQL-versus-HTTP benchmarks without a measured production problem;
-- authorization and retention workflows for disabled features.
+- authorization or retention workflows for disabled features.

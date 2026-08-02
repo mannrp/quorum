@@ -60,6 +60,7 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) http
 	return logging(logger, mux)
 }
 
+// Domain errors are deliberate user feedback; dependency details stay server-side.
 func graphQLErrorPresenter(logger *slog.Logger) graphql.ErrorPresenterFunc {
 	return func(ctx context.Context, err error) *gqlerror.Error {
 		var queryError *pgconn.PgError

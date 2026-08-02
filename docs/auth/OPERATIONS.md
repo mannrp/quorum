@@ -45,7 +45,7 @@ npm run db:init:local
 npm run db:reset:local
 ```
 
-Reset requires the local test URL and matching instance marker. It must fail for remote, ambiguous, or production-shaped databases.
+Reset requires the operator `LOCAL_TEST_DATABASE_URL`, the scoped `MIGRATOR_DATABASE_URL`, and a matching instance marker. Both connections must target the same guarded local database; remote, ambiguous, or production-shaped targets fail closed.
 
 Migration rules:
 

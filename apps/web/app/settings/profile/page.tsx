@@ -1,10 +1,10 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Section, Status, Combobox, LoadingSkeleton } from "@/components/ui";
+import { Section, Combobox, LoadingSkeleton } from "@/components/ui";
 import { userFacingError } from "@/lib/operations/client";
 import { operationRequest } from "@/lib/operations/client";
-import { DISCIPLINE_OPTIONS, RESUME_VISIBILITY_OPTIONS, SKILL_OPTIONS } from "@/lib/policy";
+import { DISCIPLINE_OPTIONS, SKILL_OPTIONS } from "@/lib/policy";
 import type { User } from "@/types/domain";
 
 export default function ProfileSettingsPage() {
@@ -18,10 +18,10 @@ export default function ProfileSettingsPage() {
   const [githubUrl, setGithubUrl] = useState("");
   const [portfolioUrl, setPortfolioUrl] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
-  const [resumeVisibility, setResumeVisibility] = useState("PUBLIC");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     const loadProfile = async () => {
       try {
@@ -36,12 +36,11 @@ export default function ProfileSettingsPage() {
           setGithubUrl(res.me.githubUrl || "");
           setPortfolioUrl(res.me.portfolioUrl || "");
           setSkills((res.me.tags || []).map((t) => t.name));
-          setResumeVisibility(res.me.resumeVisibility || "PUBLIC");
         } else {
           router.push("/onboarding");
         }
-      } catch (err) {
-        setNotice(userFacingError(err));
+      } catch (cause) {
+        setError(userFacingError(cause));
       } finally {
         setLoading(false);
       }
@@ -52,33 +51,40 @@ export default function ProfileSettingsPage() {
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
     setNotice(null);
+    setError(null);
+
+    if (!bio.trim() || skills.length < 3) {
+      setError("Add a biography and at least three skills to complete your profile.");
+      return;
+    }
+
     setSaving(true);
-
     try {
-      await operationRequest("UpdateMyProfileV1", {
-        input: {
-          username: user?.username || "",
-          fullName,
-          bio,
-          discipline,
-          university,
-          linkedinUrl,
-          githubUrl,
-          portfolioUrl,
-          resumeVisibility,
-          skills,
-          tags: skills,
+      const result = await operationRequest<{ upsertMyProfile: { profileComplete: boolean } }>(
+        "UpdateMyProfileV1",
+        {
+          input: {
+            username: user?.username || "",
+            fullName,
+            bio,
+            discipline,
+            university,
+            linkedinUrl,
+            githubUrl,
+            portfolioUrl,
+            skills,
+          },
         },
-      });
-
-      setNotice("Profile successfully updated.");
-    } catch (err) {
-      setNotice(userFacingError(err));
+      );
+      setNotice(result.upsertMyProfile.profileComplete
+        ? "Profile successfully updated."
+        : "Profile saved, but required completion fields are still missing.");
+    } catch (cause) {
+      setError(userFacingError(cause));
     } finally {
       setSaving(false);
     }
   };
-
   if (loading) {
     return <Section title="Profile settings"><LoadingSkeleton rows={5} /></Section>;
   }
@@ -87,12 +93,17 @@ export default function ProfileSettingsPage() {
     <div className="max-w-3xl mx-auto py-4 space-y-6">
       <div className="border-b border-[var(--border-subtle)] pb-4">
         <h1 className="text-3xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">Profile Settings</h1>
-        <p className="text-sm text-stone-500 font-sans">Manage your academic credentials, portfolio links, and file attachments.</p>
+        <p className="text-sm text-stone-500 font-sans">Manage your academic profile, skills, and portfolio links.</p>
       </div>
 
       {notice && (
         <div className="p-3 bg-[var(--color-success-bg)] border border-[var(--color-success)] rounded-none text-xs font-mono font-semibold text-[var(--color-success)]">
           {notice}
+        </div>
+      )}
+      {error && (
+        <div className="p-3 bg-[var(--color-danger-bg)] border border-[var(--color-danger)] rounded-none text-xs font-mono font-semibold text-[var(--color-danger)]">
+          {error}
         </div>
       )}
 
@@ -123,7 +134,7 @@ export default function ProfileSettingsPage() {
 
           <div className="space-y-1">
             <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Biography</label>
-            <textarea value={bio} onChange={(e) => setBio(e.target.value)} className="input-field min-h-24 text-sm" />
+            <textarea required value={bio} onChange={(e) => setBio(e.target.value)} className="input-field min-h-24 text-sm" />
           </div>
         </Section>
 
@@ -151,24 +162,8 @@ export default function ProfileSettingsPage() {
           </div>
         </Section>
 
-        <Section title="Resume Document Visibility">
-          <div className="space-y-3">
-            <p className="text-xs text-stone-500">
-              Private resume upload and download will be enabled with authorization-checked file access in P4.
-            </p>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Future document access level</label>
-              <select value={resumeVisibility} onChange={(e) => setResumeVisibility(e.target.value)} className="input-field py-2 text-xs bg-[var(--surface-app)]">
-                {RESUME_VISIBILITY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </Section>
-
         <button type="submit" disabled={saving} className="btn-primary w-full py-3 text-xs">
-          {saving ? "Saving Changes..." : "Commit Settings Changes"}
+          {saving ? "Saving..." : "Save profile"}
         </button>
       </form>
     </div>

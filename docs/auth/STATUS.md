@@ -1,59 +1,62 @@
 # Auth V2 status
 
-**State:** P1, P2, and P3 complete; P4 release evidence remains
-**Active work:** P4 deployment and release evidence
+**State:** implementation complete; P4 release validation remains
+**Active work:** release-host evidence only
 **Branch:** `codex/auth-v2-rewrite`
 **Pull request:** `mannrp/quorum#10` (draft)
 **Updated:** 2026-08-02
 
-## What works now
+## Working product
 
-Quorum now has one browser authentication path: Better Auth `1.6.25` mounted by public Next at `/api/auth/[...path]`.
+Quorum has one browser authentication path: Better Auth `1.6.25` mounted by public Next at `/api/auth/[...path]`.
 
-- Email/password registration sends verification mail through SMTP/Mailpit.
-- Google sign-in uses one exact callback and the same verified Student/Sponsor enrollment path; implicit same-email linking is disabled.
-- Verification links are one-use; replay is rejected.
-- Verified users sign in with an opaque host-only HttpOnly `SameSite=Lax` cookie and can sign out.
-- A verified user can self-enroll only as Student or Sponsor through `POST /api/v1/enrollment`.
-- Next derives identity and verified email from the server session, signs a short-lived assertion, and calls private Go.
-- Go verifies the assertion, ignores browser identity/authority fields, provisions through the existing identity service, resolves current PostgreSQL state, and returns the narrow `ViewerBootstrapV1` projection.
-- `GET /api/v1/viewer` is private/no-store and excludes email, provider/session identifiers, elevated grants, private profile data, and file URLs.
-- Home, public team/project lists and details, and public profiles use signed anonymous registered operations with bounded inputs and narrow projections. Hidden teams, draft projects, inactive profiles, application details, permissions, durable file URLs, resumes, email, and auth identifiers are excluded.
-- All enabled browser workflows use bounded authenticated registered operations. The browser GraphQL client, query constants, and `/api/graphql` forwarding route are deleted.
-- Admin is unavailable until MFA/recovery. Legacy Neon, demo persona/reset, bearer verifier, `ADMIN_EMAILS`, browser backend URL, and legacy demo/e2e command paths are removed.
+- Email/password registration, verification, sign-in, reset, change, and explicit Google linking use opaque host-only HttpOnly sessions. Verification and reset links are one-use.
+- Google uses one exact callback. Implicit same-email linking is disabled. The deterministic OIDC provider is development/test-only and production rejects it.
+- Verified users self-enroll only as Student or Sponsor. Go receives a 15-second Next assertion, resolves current PostgreSQL identity/account/role state, and fails closed for inactive or unknown principals.
+- Canonical Student/Sponsor grants gate product entry points. Team membership, project ownership, workflow state, and private nested fields are authorized from current database state.
+- Public discovery and every enabled authenticated workflow use typed registered operations. Browser-supplied GraphQL, backend URLs, authority fields, file URLs, and reusable credentials are not accepted or projected.
+- Teams, projects, applications/offers, dashboard, direct messaging, notifications, profile completion, account methods, session management, and deactivation are wired through the Auth V2 path.
+- Deactivation updates both the product profile and canonical account state in one transaction, increments session revocation state, revokes browser sessions, and signs the user out.
+- Production images run non-root Next and Go containers. Only Next binds loopback ingress; Next reaches Go through a restrictive Unix socket. A one-shot migrator runs canonical migrations before the API, and each service receives a separate environment file.
+- Admin and files remain intentionally disabled. Their old public/legacy paths are absent rather than hidden behind runtime compatibility code.
 
-## Current phase board
+## Phase board
 
-| Phase | Status | Remaining result |
+| Phase | Status | Result |
 |---|---|---|
-| C0 Cleanup | done | Lean contract, status, implementation plan, and operations guide |
-| P1 Authentication cutover and viewer | done | Local and pinned Ubuntu acceptance green |
-| P2 Google and account lifecycle | done | Google, recovery/email changes, explicit linking, and session management |
-| P3 Product operation migration | done | Registered typed operations replace arbitrary browser GraphQL |
-| P4 Files and release | in progress | Protected deployment, final deletion, and release evidence |
+| C0 Cleanup | done | Lean contract, status, plan, and operations sources of truth |
+| P1 Authentication and viewer | done | Better Auth cutover and current-state viewer |
+| P2 Account lifecycle | done | Google, recovery, linking, credential changes, and sessions |
+| P3 Product operations | done | Enabled workflows use registered operations and Go authorization |
+| P4 Release | in review | Code complete; release-host/provider/CI evidence remains |
 
 ## Latest verified evidence
 
 Verified locally on 2026-08-02:
 
 ```text
-npm run lint                                      PASS
-npm run typecheck                                 PASS
-npm run build                                     PASS
-npm run test:web                                  PASS (14 files, 94 tests)
-npm run test:e2e                                  PASS (handler 10 + Chromium 5; no skips)
-npm run test:docker-context                       PASS
-cd apps/api && go test ./...                      PASS
-service-backed go test -count=1 ./...             PASS (PostgreSQL required; no skips)
+npm run lint                                                     PASS
+npm run typecheck --workspace=@quorum/web                        PASS
+npm run build                                                    PASS
+npm run test:web                                                 PASS (16 files, 114 tests)
+npm run test:docker-context                                      PASS
+cd apps/api && go test ./internal/auth ./internal/server ./internal/graph
+                                                                 PASS
+service-backed cd apps/api && go test -count=1 ./...             PASS (PostgreSQL required; no skips)
+npm run test:e2e                                                PASS (handler 10 + Chromium 5; no skips)
+production API and web Docker builds                            PASS
+production Next HTTP and read-only Unix-socket runtime probes    PASS
 ```
 
-The service-backed handler flow proves register -> Mailpit delivery -> invalid/expired/replayed verification rejection -> login -> opaque cookie -> raw-token projection -> bearer-reuse denial -> signed Next-to-Go enrollment -> viewer -> refresh -> logout. Database role bootstrap and all eight canonical migrations were verified before it ran. Docker services were pinned PostgreSQL `17.10-alpine3.24` and Mailpit `1.30.0` on loopback-only ports.
+The service-backed run used pinned PostgreSQL `17.10-alpine3.24` and Mailpit `1.30.0` on loopback-only ports. The production-image probes confirmed non-root execution, direct Next PID 1, migrator binary and canonical migrations in the API image, stale-socket restart handling, and a read-only socket mount in web.
 
-Repository scans found no active Neon Auth dependency/configuration, demo identity route, `ADMIN_EMAILS`, browser backend URL, bearer credential use, browser storage credential use, browser GraphQL client, query text, or `/api/graphql` forwarding route. `R2_PUBLIC_URL` configuration and durable signing output are removed.
+## Remaining release evidence
 
-## Real blockers and next work
+No further Auth V2 architecture or product implementation phase is planned. Before merge/release:
 
-P2 is complete. Account Security now provides password change, two-mailbox email change, explicit Google linking, projected session listing, revoke-one/revoke-others/logout-all, and credential-free cross-tab invalidation. Service-backed tests prove enumeration-safe reset, one-use email links and replay denial, password cookie rotation, 24-hour idle and 7-day absolute expiry, refresh preservation of authentication context, current-state inactive-account denial, and no reusable credential projection. The exact local acceptance above passed with pinned PostgreSQL `17.10-alpine3.24` and Mailpit `1.30.0`.
+1. On the release host, supply the three separate secret files and verify PostgreSQL private/TLS access, backup/restore, compatible rollback, graceful shutdown, socket ownership/mode, and assertion-key overlap/retirement.
+2. Run real Google and transactional-email smoke tests with production origins and callbacks.
+3. Run the repository baseline, Docker-context check, and pinned Ubuntu CI on the exact release commit.
+4. Recheck `npm audit --omit=dev`; the last run reported three high transitive findings in the current Next dependency tree with no non-breaking patched Next release offered by npm.
 
-P3 is complete. Public discovery, viewer shell/account, Teams, Projects, inbox, and notifications are registered typed operations; browser-supplied GraphQL is deleted. P4 remains: production image/socket deployment and release evidence. No file feature is enabled; the dormant R2 signer and public URL configuration are removed rather than shipped. Admin stays unavailable until MFA/recovery.
-`npm audit --omit=dev` most recently reported three high transitive findings in the current Next dependency tree (PostCSS/sharp) with no non-breaking patched Next release offered by npm. There is no longer a nested legacy Better Auth dependency. Recheck before release; do not weaken tests or force a downgrade.
+These are deployment/provider checks, not blockers to local product use. Admin remains unavailable until separate MFA/recovery work, and private files remain unavailable until a separately accepted file feature.

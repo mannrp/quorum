@@ -1,6 +1,5 @@
 "use client";
 import { use, useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Section, Combobox, LoadingSkeleton } from "@/components/ui";
 import { userFacingError } from "@/lib/operations/client";
@@ -10,8 +9,7 @@ import type { Project } from "@/types/domain";
 
 export default function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const router = useRouter();
-  const { data, error, loading, reload } = useOperation<{ project: Project | null }>("ProjectOwnerV1", { projectId: id });
+  const { data, error, loading } = useOperation<{ project: Project | null }>("ProjectOwnerV1", { projectId: id });
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -82,7 +80,7 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
 
       {/* Material change warning alert */}
       <div className="p-4 border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-950/10 text-xs leading-relaxed space-y-1">
-        <strong className="text-amber-800 dark:text-amber-400 block font-bold uppercase tracking-wider text-[9px]">⚠️ Warning: Material Scope Modification</strong>
+        <strong className="text-amber-800 dark:text-amber-400 block font-bold uppercase tracking-wider text-[9px]">Warning: Material Scope Modification</strong>
         <p className="text-stone-600 dark:text-slate-350">
           Updating the description, constraints, or disciplines after teams have submitted claims will automatically notify those groups and prompt their leads to review the changes.
         </p>

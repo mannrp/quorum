@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Section, Status, Badge } from "@/components/ui";
 import { userFacingError } from "@/lib/operations/client";
 import { operationRequest, useOperation } from "@/lib/operations/client";
 import type { Message, User } from "@/types/domain";
@@ -10,7 +9,7 @@ function InboxInner() {
   const searchParams = useSearchParams();
   const recipientUsername = searchParams.get("username");
 
-  const { data, error, loading } = useOperation<{ me: User | null; myInbox: User[] }>("InboxV1", {});
+  const { data, loading } = useOperation<{ me: User | null; myInbox: User[] }>("InboxV1", {});
   const [activeUser, setActiveUser] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
@@ -131,7 +130,7 @@ function InboxInner() {
               {activeUserData?.fullName || "Select conversation"}
             </span>
             <p className="text-[10px] text-[var(--muted-app)]">
-              {activeUserData ? `@${activeUserData.username} • ${activeUserData.discipline || "SOEN"}` : "Roster chats load after selection."}
+              {activeUserData ? `@${activeUserData.username} - ${activeUserData.discipline || "SOEN"}` : "Roster chats load after selection."}
             </p>
           </div>
           {activeUserData && (
