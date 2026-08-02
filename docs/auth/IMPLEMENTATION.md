@@ -202,7 +202,7 @@ For every operation:
 
 ### Migration order
 
-**Progress:** public discovery, viewer shell, and Teams are done. Projects, communication, files, and final deletion remain.
+**Progress:** public discovery, viewer shell, Teams, Projects, and communication are done. Files, deployment, and final release evidence remain.
 
 1. **Public discovery:** home, team/project lists and detail, public profile. Use anonymous assertions and approved public projections.
 2. **Viewer shell:** auth state, shell counts, dashboard context, `me`, onboarding/profile update, account self-service.
