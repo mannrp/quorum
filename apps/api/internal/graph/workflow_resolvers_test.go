@@ -733,6 +733,68 @@ WHERE id = $1`, applicationID); err != nil {
 	}
 }
 
+func TestAnonymousDiscoveryExcludesNonPublicCurrentState(t *testing.T) {
+	ctx, resolver, cleanup := workflowTestResolver(t)
+	defer cleanup()
+	queries := resolver.Queries
+	owner := createWorkflowUser(t, ctx, queries, "public_owner", true)
+	hiddenUser := createWorkflowUser(t, ctx, queries, "inactive_profile", true)
+	visibleTeam := createWorkflowTeam(t, ctx, queries, owner, "visible_team")
+	hiddenTeam := createWorkflowTeam(t, ctx, queries, owner, "hidden_team")
+	openProject := createWorkflowProject(t, ctx, queries, owner, "open_project")
+	draftProject := createWorkflowProject(t, ctx, queries, owner, "draft_project")
+
+	if _, err := resolver.Pool.Exec(ctx, `UPDATE teams SET visibility = 'HIDDEN' WHERE id = $1`, hiddenTeam.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolver.Pool.Exec(ctx, `UPDATE projects SET lifecycle_state = 'DRAFT' WHERE id = $1`, draftProject.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolver.Pool.Exec(ctx, `UPDATE users SET deactivated_at = now() WHERE id = $1`, hiddenUser.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	query := &queryResolver{resolver}
+	teams, err := query.Teams(ctx, nil, nil, nil, stringPointer(workflowPrefix(ctx)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(teams) != 1 || teams[0].ID != visibleTeam.ID.String() {
+		t.Fatalf("anonymous teams = %#v, want only visible team %s", teams, visibleTeam.ID.String())
+	}
+	team, err := query.Team(ctx, hiddenTeam.ID.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if team != nil {
+		t.Fatal("anonymous hidden team detail was exposed")
+	}
+
+	projects, err := query.Projects(ctx, nil, nil, stringPointer(workflowPrefix(ctx)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projects) != 1 || projects[0].ID != openProject.ID.String() {
+		t.Fatalf("anonymous projects = %#v, want only open project %s", projects, openProject.ID.String())
+	}
+	project, err := query.Project(ctx, draftProject.ID.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if project != nil {
+		t.Fatal("anonymous draft project detail was exposed")
+	}
+
+	profile, err := query.User(ctx, hiddenUser.Username)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile != nil {
+		t.Fatal("anonymous inactive profile was exposed")
+	}
+}
+
+func stringPointer(value string) *string { return &value }
 func workflowTestResolver(t *testing.T) (context.Context, *Resolver, func()) {
 	t.Helper()
 	dsn := os.Getenv("QUORUM_TEST_DATABASE_URL")

@@ -3,13 +3,12 @@
 import { use } from "react";
 import Link from "next/link";
 import { Section, Status, Badge, LoadingSkeleton } from "@/components/ui";
-import { useGraphQL } from "@/lib/graphql";
-import { PROFILE_QUERY } from "@/lib/queries";
+import { useOperation } from "@/lib/operations/client";
 import type { User } from "@/types/domain";
 
 export default function ProfilePage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = use(params);
-  const { data, error, loading } = useGraphQL<{ user: User | null }>(PROFILE_QUERY, { username }, { auth: "optional" });
+  const { data, error, loading } = useOperation<{ user: User | null }>("PublicProfileV1", { username });
   const user = data?.user;
 
   if (loading) {
@@ -62,11 +61,7 @@ export default function ProfilePage({ params }: { params: Promise<{ username: st
           </Section>
 
           <Section title="Resume Document">
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-4">
-                {user.resumeUrl ? <a href={user.resumeUrl} className="text-xs text-[var(--accent-app)] hover:underline font-bold">Current resume</a> : <span className="text-xs text-stone-500 italic font-mono">No resume uploaded.</span>}
-              </div>
-            </div>
+            <p className="text-xs text-stone-500 italic font-mono">Private resume access is not available yet.</p>
           </Section>
         </div>
       </div>

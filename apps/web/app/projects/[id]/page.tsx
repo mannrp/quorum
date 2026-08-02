@@ -2,13 +2,13 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { Section, Status, Badge, Modal, LoadingSkeleton } from "@/components/ui";
-import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
-import { PROJECT_QUERY } from "@/lib/queries";
+import { graphqlRequest, userFacingError } from "@/lib/graphql";
+import { useOperation } from "@/lib/operations/client";
 import type { Project, Team, User } from "@/types/domain";
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, error, loading, reload } = useGraphQL<{ project: Project | null }>(PROJECT_QUERY, { id }, { auth: "optional" });
+  const { data, error, loading, reload } = useOperation<{ project: Project | null }>("PublicProjectV1", { id });
   
   const [me, setMe] = useState<User | null>(null);
   const [myTeam, setMyTeam] = useState<Team | null>(null);
@@ -212,9 +212,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
           {/* Received applications */}
           <Section title="Received Roster Claims">
-            {project.applications.length > 0 ? (
+            {(project.applications ?? []).length > 0 ? (
               <div className="stagger-in space-y-3">
-                {project.applications.map((application) => (
+                {(project.applications ?? []).map((application) => (
                   <div key={application.id} className="signal-card flex items-start justify-between gap-4">
                     <div className="space-y-1">
                       <Link href={`/teams/${application.team.id}`} className="card-title text-sm">
@@ -263,28 +263,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </Section>
 
           <Section title="Challenge Documents">
-            <div className="space-y-3">
-              {project.fileUrl || project.videoUrl ? (
-                <div className="space-y-2">
-                  {project.fileUrl && (
-                    <a href={project.fileUrl} target="_blank" rel="noreferrer" className="action-row">
-                      <span>Specifications sheet</span>
-                      <span>-&gt;</span>
-                      📄 Specifications Sheet.pdf
-                    </a>
-                  )}
-                  {project.videoUrl && (
-                    <a href={project.videoUrl} target="_blank" rel="noreferrer" className="action-row">
-                      <span>Video brief</span>
-                      <span>-&gt;</span>
-                      🎬 Video Brief / Requirements
-                    </a>
-                  )}
-                </div>
-              ) : (
-                <p className="text-xs text-[var(--muted-app)]">No attachments attached.</p>
-              )}
-            </div>
+            <p className="text-xs text-[var(--muted-app)]">Private document access is not available yet.</p>
           </Section>
         </div>
       </div>

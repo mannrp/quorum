@@ -1635,6 +1635,9 @@ func (r *queryResolver) User(ctx context.Context, username string) (*model.User,
 	if err != nil {
 		return nil, err
 	}
+	if _, authenticated := auth.UserFromContext(ctx); !authenticated && (user.DeactivatedAt.Valid || user.ArchivedAt.Valid) {
+		return nil, nil
+	}
 	return r.user(ctx, user)
 }
 
@@ -1670,6 +1673,9 @@ func (r *queryResolver) Team(ctx context.Context, id string) (*model.Team, error
 	}
 	if err != nil {
 		return nil, err
+	}
+	if _, authenticated := auth.UserFromContext(ctx); !authenticated && (team.ArchivedAt.Valid || team.Visibility != string(model.TeamVisibilityVisible)) {
+		return nil, nil
 	}
 	return r.team(ctx, team)
 }
@@ -1708,6 +1714,10 @@ func (r *queryResolver) Teams(ctx context.Context, discipline *string, hasProjec
 	return out, nil
 }
 
+func publicProjectState(state string) bool {
+	return state != string(model.ProjectLifecycleStateDraft) && state != string(model.ProjectLifecycleStateArchived)
+}
+
 // Project is the resolver for the project field.
 func (r *queryResolver) Project(ctx context.Context, id string) (*model.Project, error) {
 	projectID, err := uuid(id)
@@ -1724,6 +1734,9 @@ func (r *queryResolver) Project(ctx context.Context, id string) (*model.Project,
 	if project.ArchivedAt.Valid {
 		return nil, nil
 	}
+	if _, authenticated := auth.UserFromContext(ctx); !authenticated && !publicProjectState(project.LifecycleState) {
+		return nil, nil
+	}
 	return r.project(ctx, project)
 }
 
@@ -1737,6 +1750,15 @@ func (r *queryResolver) Projects(ctx context.Context, discipline *string, status
 	projects, err := r.Queries.ListProjects(ctx, db.ListProjectsParams{Discipline: text(discipline), Status: text(statusText), Search: text(search)})
 	if err != nil {
 		return nil, err
+	}
+	if _, authenticated := auth.UserFromContext(ctx); !authenticated {
+		public := projects[:0]
+		for _, project := range projects {
+			if publicProjectState(project.LifecycleState) {
+				public = append(public, project)
+			}
+		}
+		projects = public
 	}
 	if len(projects) > defaultListLimit {
 		projects = projects[:defaultListLimit]

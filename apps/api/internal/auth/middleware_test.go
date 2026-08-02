@@ -77,6 +77,24 @@ func TestMiddlewareAllowsAnonymousAndRejectsInvalidOrUnavailableAssertions(t *te
 		t.Fatalf("anonymous status = %d", response.Code)
 	}
 
+	signedAnonymous := NewMiddleware(
+		middlewareUsers{},
+		middlewareVerifier{assertion: internalapi.Assertion{ActorKind: internalapi.ActorAnonymous}},
+		middlewarePrincipals{},
+	).Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := UserFromContext(r.Context()); ok {
+			t.Fatal("anonymous assertion resolved a product user")
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	request := httptest.NewRequest(http.MethodPost, "/graphql", nil)
+	request.Header.Set("X-Quorum-Assertion", "signed")
+	response = httptest.NewRecorder()
+	signedAnonymous.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("signed anonymous status = %d", response.Code)
+	}
+
 	for _, middleware := range []*Middleware{
 		NewMiddleware(middlewareUsers{}, middlewareVerifier{err: errors.New("invalid")}, middlewarePrincipals{}),
 		NewMiddleware(middlewareUsers{}, middlewareVerifier{assertion: internalapi.Assertion{ActorKind: internalapi.ActorAuthenticated}}, middlewarePrincipals{err: principal.ErrInactiveAccount}),

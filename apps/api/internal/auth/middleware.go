@@ -47,7 +47,15 @@ func (m *Middleware) Wrap(next http.Handler) http.Handler {
 			return
 		}
 		assertion, err := m.verifier.Verify(r.Context(), token)
-		if err != nil || assertion.ActorKind != internalapi.ActorAuthenticated {
+		if err != nil {
+			http.Error(w, "invalid internal assertion", http.StatusUnauthorized)
+			return
+		}
+		if assertion.ActorKind == internalapi.ActorAnonymous {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if assertion.ActorKind != internalapi.ActorAuthenticated {
 			http.Error(w, "invalid internal assertion", http.StatusUnauthorized)
 			return
 		}

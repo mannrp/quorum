@@ -2,13 +2,13 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { ActionButton, Section, Status, Badge, Modal, LoadingSkeleton } from "@/components/ui";
-import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
-import { TEAM_QUERY } from "@/lib/queries";
+import { graphqlRequest, userFacingError } from "@/lib/graphql";
+import { useOperation } from "@/lib/operations/client";
 import type { Team, TeamRole, User } from "@/types/domain";
 
 export default function TeamDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, error, loading, reload } = useGraphQL<{ team: Team | null }>(TEAM_QUERY, { id }, { auth: "optional" });
+  const { data, error, loading, reload } = useOperation<{ team: Team | null }>("PublicTeamV1", { id });
   
   const [me, setMe] = useState<User | null>(null);
   const [isJoinOpen, setIsJoinOpen] = useState(false);
