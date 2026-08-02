@@ -8,7 +8,6 @@ package graph
 import (
 	"context"
 	"errors"
-	"sort"
 	"strings"
 	"time"
 
@@ -19,13 +18,7 @@ import (
 	"github.com/local/quorum/apps/api/internal/db"
 	"github.com/local/quorum/apps/api/internal/graph/generated"
 	"github.com/local/quorum/apps/api/internal/graph/model"
-	"github.com/local/quorum/apps/api/internal/storage"
 	"golang.org/x/sync/errgroup"
-)
-
-const (
-	defaultListLimit         = 50
-	defaultConversationLimit = 100
 )
 
 // BootstrapProfile is the resolver for the bootstrapProfile field.
@@ -100,7 +93,6 @@ func (r *mutationResolver) UpsertMyProfile(ctx context.Context, input model.Upse
 				LinkedinUrl:           textOrCurrent(input.LinkedinURL, current.LinkedinUrl),
 				GithubUrl:             textOrCurrent(input.GithubURL, current.GithubUrl),
 				PortfolioUrl:          textOrCurrent(input.PortfolioURL, current.PortfolioUrl),
-				ResumeUrl:             textOrCurrent(input.ResumeURL, current.ResumeUrl),
 				AvatarUrl:             textOrCurrent(input.AvatarURL, current.AvatarUrl),
 				UserIntent:            derefString(input.UserIntent, current.UserIntent),
 				ResumeVisibility:      derefResumeVisibility(input.ResumeVisibility, current.ResumeVisibility),
@@ -180,7 +172,6 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input model.Update
 			LinkedinUrl:           textOrCurrent(input.LinkedinURL, current.LinkedinUrl),
 			GithubUrl:             textOrCurrent(input.GithubURL, current.GithubUrl),
 			PortfolioUrl:          textOrCurrent(input.PortfolioURL, current.PortfolioUrl),
-			ResumeUrl:             textOrCurrent(input.ResumeURL, current.ResumeUrl),
 			AvatarUrl:             textOrCurrent(input.AvatarURL, current.AvatarUrl),
 			UserIntent:            derefString(input.UserIntent, current.UserIntent),
 			ResumeVisibility:      derefResumeVisibility(input.ResumeVisibility, current.ResumeVisibility),
@@ -839,7 +830,7 @@ func (r *mutationResolver) CreateProject(ctx context.Context, input model.Create
 		project, err = q.CreateProject(ctx, db.CreateProjectParams{
 			Title: input.Title, Summary: derefString(input.Summary, ""), Description: input.Description,
 			Constraints: text(input.Constraints), Disciplines: input.Disciplines, TeamSizeMin: int32(minSize), TeamSizeMax: int32(maxSize),
-			OwnerID: current.ID, FileUrl: text(input.FileURL), VideoUrl: text(input.VideoURL), LifecycleState: lifecycle, ApprovalState: approval,
+			OwnerID: current.ID, VideoUrl: text(input.VideoURL), LifecycleState: lifecycle, ApprovalState: approval,
 			RequiredSkills: input.RequiredSkills, NiceToHaveSkills: input.NiceToHaveSkills, Deliverables: text(input.Deliverables),
 			Timeline: text(input.Timeline), EvaluationCriteria: text(input.EvaluationCriteria), ExternalResources: input.ExternalResources,
 			OwnerContactPreference: text(input.OwnerContactPreference), ApplicationQuestions: questions,
@@ -874,7 +865,7 @@ func (r *mutationResolver) UpdateProject(ctx context.Context, id string, input m
 			ID: projectID, Title: input.Title, Summary: derefString(input.Summary, before.Summary), Description: input.Description, Constraints: textOrCurrent(input.Constraints, before.Constraints),
 			Disciplines: input.Disciplines, TeamSizeMin: int32(input.TeamSizeMin), TeamSizeMax: int32(input.TeamSizeMax),
 			LifecycleState: lifecycleForProjectUpdate(input.LifecycleState, input.Status, before.LifecycleState),
-			FileUrl:        textOrCurrent(input.FileURL, before.FileUrl), VideoUrl: textOrCurrent(input.VideoURL, before.VideoUrl),
+			VideoUrl:       textOrCurrent(input.VideoURL, before.VideoUrl),
 			ApprovalState:  derefProjectApproval(input.ApprovalState, before.ApprovalState),
 			RequiredSkills: stringsOrCurrent(input.RequiredSkills, before.RequiredSkills), NiceToHaveSkills: stringsOrCurrent(input.NiceToHaveSkills, before.NiceToHaveSkills), Deliverables: textOrCurrent(input.Deliverables, before.Deliverables),
 			Timeline: textOrCurrent(input.Timeline, before.Timeline), EvaluationCriteria: textOrCurrent(input.EvaluationCriteria, before.EvaluationCriteria), ExternalResources: stringsOrCurrent(input.ExternalResources, before.ExternalResources),
@@ -1385,36 +1376,6 @@ func (r *mutationResolver) SetUniversalDeadline(ctx context.Context, deadlineAt 
 	return r.deadline(ctx, deadline)
 }
 
-// SignUpload is the resolver for the signUpload field.
-func (r *mutationResolver) SignUpload(ctx context.Context, input model.SignUploadInput) (*model.UploadSignature, error) {
-	current, err := requireActiveUser(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if r.Storage == nil {
-		return nil, errors.New("storage signing is not configured")
-	}
-	post, err := r.Storage.PresignPost(ctx, storage.AssetKind(input.Kind), uuidString(current.ID), input.Filename, input.ContentType, int64(input.Size))
-	if err != nil {
-		return nil, err
-	}
-	fields := make([]*model.UploadField, 0, len(post.Fields))
-	names := make([]string, 0, len(post.Fields))
-	for name := range post.Fields {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		fields = append(fields, &model.UploadField{Name: name, Value: post.Fields[name]})
-	}
-	return &model.UploadSignature{
-		URL:       post.URL,
-		Key:       post.Key,
-		ExpiresAt: post.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
-		Fields:    fields,
-	}, nil
-}
-
 // RemoveUser is the resolver for the removeUser field.
 func (r *mutationResolver) RemoveUser(ctx context.Context, userID string, reason *string) (bool, error) {
 	current, err := r.requireAdmin(ctx)
@@ -1709,10 +1670,6 @@ func (r *queryResolver) Teams(ctx context.Context, discipline *string, hasProjec
 		return nil, err
 	}
 	return out, nil
-}
-
-func publicProjectState(state string) bool {
-	return state != string(model.ProjectLifecycleStateDraft) && state != string(model.ProjectLifecycleStateArchived)
 }
 
 // Project is the resolver for the project field.

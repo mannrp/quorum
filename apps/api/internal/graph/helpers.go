@@ -630,7 +630,6 @@ func userModel(user db.User, tags []*model.Tag) *model.User {
 		LinkedinURL:           textPointer(user.LinkedinUrl),
 		GithubURL:             textPointer(user.GithubUrl),
 		PortfolioURL:          textPointer(user.PortfolioUrl),
-		ResumeURL:             textPointer(user.ResumeUrl),
 		AvatarURL:             textPointer(user.AvatarUrl),
 		UserIntent:            user.UserIntent,
 		ResumeVisibility:      model.ResumeVisibility(user.ResumeVisibility),
@@ -659,7 +658,6 @@ func (r *Resolver) userModel(ctx context.Context, user db.User, tags []*model.Ta
 		mapped.Email = nil
 	}
 	if !r.canViewResume(ctx, user, isSelf, isAdmin) {
-		mapped.ResumeURL = nil
 	}
 	return mapped
 }
@@ -824,7 +822,6 @@ func projectModel(project db.Project, owner *model.User, team *model.Team, appli
 		Permissions:            &model.ProjectPermissions{},
 		Owner:                  owner,
 		Team:                   team,
-		FileURL:                textPointer(project.FileUrl),
 		VideoURL:               textPointer(project.VideoUrl),
 		Applications:           applications,
 		CreatedAt:              timeString(project.CreatedAt),

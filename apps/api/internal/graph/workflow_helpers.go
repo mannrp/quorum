@@ -12,6 +12,15 @@ import (
 	"github.com/local/quorum/apps/api/internal/graph/model"
 )
 
+const (
+	defaultListLimit         = 50
+	defaultConversationLimit = 100
+)
+
+func publicProjectState(state string) bool {
+	return state != string(model.ProjectLifecycleStateDraft) && state != string(model.ProjectLifecycleStateArchived)
+}
+
 var terminalApplicationStatuses = map[string]bool{
 	string(model.ApplicationStatusMatched):   true,
 	string(model.ApplicationStatusRejected):  true,

@@ -19,7 +19,6 @@ export type ApplicationStatus =
   | "MATCHED"
   | "WITHDRAWN"
   | "EXPIRED";
-export type UploadAssetKind = "RESUME" | "PROJECT_FILE" | "AVATAR" | "VIDEO";
 
 export type Tag = { id: string; name: string; isPredefined: boolean };
 
@@ -35,7 +34,6 @@ export type User = {
   linkedinUrl?: string | null;
   githubUrl?: string | null;
   portfolioUrl?: string | null;
-  resumeUrl?: string | null;
   avatarUrl?: string | null;
   userIntent?: string;
   resumeVisibility?: string;
@@ -139,7 +137,6 @@ export type Project = {
   };
   owner: User;
   team?: Team | null;
-  fileUrl?: string | null;
   videoUrl?: string | null;
   applications: ProjectApplication[];
   createdAt?: string;
@@ -162,10 +159,3 @@ export type Notification = {
   createdAt: string;
 };
 
-export type UploadSignature = {
-  url: string;
-  key: string;
-  publicUrl?: string | null;
-  expiresAt: string;
-  fields: { name: string; value: string }[];
-};
