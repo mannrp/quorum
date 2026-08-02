@@ -213,6 +213,12 @@ type projectHydrationOptions struct {
 }
 
 func (r *Resolver) projectWithOptions(ctx context.Context, project db.Project, options projectHydrationOptions) (*model.Project, error) {
+	if options.includeApplications {
+		if err := r.requireProjectOwner(ctx, project.ID); err != nil {
+			return nil, err
+		}
+	}
+
 	var ownerModel *model.User
 	if options.includeOwner {
 		owner, err := r.cachedUser(ctx, project.OwnerID)
@@ -542,6 +548,9 @@ func (r *Resolver) audit(ctx context.Context, actorID pgtype.UUID, actionType st
 func (r *mutationResolver) applyToProject(ctx context.Context, projectID string, teamID string, message *string, answers []byte) (*model.ProjectApplication, error) {
 	current, err := requireCompleteUser(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err := requireRole(ctx, auth.RoleStudent); err != nil {
 		return nil, err
 	}
 	if err := r.requireDeadlineOpen(ctx); err != nil {

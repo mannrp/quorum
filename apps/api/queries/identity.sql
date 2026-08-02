@@ -17,6 +17,16 @@ FROM app.role_grants AS grant_record
 WHERE grant_record.user_id = $1
   AND grant_record.revoked_at IS NULL
 ORDER BY grant_record.granted_at, grant_record.id;
+-- name: DeactivateAccountState :execrows
+UPDATE app.account_states
+SET status = 'DEACTIVATED',
+    state_version = state_version + 1,
+    session_revocation_version = session_revocation_version + 1,
+    deactivated_at = now(),
+    updated_at = now()
+WHERE user_id = $1
+  AND status = 'ACTIVE';
+
 -- name: GetViewerBootstrapByRealmSubject :one
 SELECT
   product_user.id::text AS product_user_id,

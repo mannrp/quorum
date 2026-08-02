@@ -1,7 +1,7 @@
 import "server-only";
 
 type RegisteredOperation = Readonly<{
-  auth: "anonymous" | "authenticated";
+  auth: "anonymous" | "authenticated" | "optional";
   document: string;
   variables: Record<string, unknown>;
 }>;
@@ -29,7 +29,6 @@ const publicUserFields = `
   linkedinUrl
   githubUrl
   portfolioUrl
-  avatarUrl
   tags { id name isPredefined }
 `;
 
@@ -81,7 +80,7 @@ const documents = {
     }
   }`,
   UpdateMyProfileV1: `mutation UpdateMyProfileV1($input: UpsertMyProfileInput!) {
-    upsertMyProfile(input: $input) { id }
+    upsertMyProfile(input: $input) { id profileComplete }
   }`,
   DeactivateAccountV1: `mutation DeactivateAccountV1($reason: String) { deactivateAccount(reason: $reason) }`,
   DashboardV1: `query DashboardV1 {
@@ -108,7 +107,7 @@ const documents = {
     }
   }`,
   TeamManageV1: `query TeamManageV1($teamId: ID!) {
-    team(id: $teamId) { ${publicTeamFields} }
+    team(id: $teamId) { ${publicTeamFields} discordLink }
     teamJoinRequests(teamId: $teamId, status: PENDING) {
       id message status createdAt user { id fullName username discipline }
     }
@@ -124,7 +123,7 @@ const documents = {
   RemoveTeamMemberV1: `mutation RemoveTeamMemberV1($teamId: ID!, $userId: ID!) { removeMember(teamId: $teamId, userId: $userId) }`,
   PromoteTeamMemberV1: `mutation PromoteTeamMemberV1($teamId: ID!, $userId: ID!, $role: TeamRole!) { promoteMember(teamId: $teamId, userId: $userId, role: $role) { id role } }`,
   ProjectSessionV1: `query ProjectSessionV1 { me { id username fullName } dashboardContext { myTeams { id name maxSize members { user { id } role } } } }`,
-  ProjectOwnerV1: `query ProjectOwnerV1($projectId: ID!) { project(id: $projectId) { ${publicProjectFields} applications { id status message answers reviewMessage offerMessage expiresAt teamConfirmedAt ownerConfirmedAt withdrawnAt createdAt team { ${publicTeamFields} } } } }`,
+  ProjectOwnerV1: `query ProjectOwnerV1($projectId: ID!) { project(id: $projectId) { ${publicProjectFields} permissions { canEdit canReviewApplications canSubmitForApproval canApprove canArchive } applications { id status message answers reviewMessage offerMessage expiresAt teamConfirmedAt ownerConfirmedAt withdrawnAt createdAt team { ${publicTeamFields} } } } }`,
   CreateProjectV1: `mutation CreateProjectV1($input: CreateProjectInput!) { createProject(input: $input) { id } }`,
   UpdateProjectV1: `mutation UpdateProjectV1($projectId: ID!, $input: UpdateProjectInput!) { updateProject(id: $projectId, input: $input) { id } }`,
   ApplyToProjectV1: `mutation ApplyToProjectV1($input: ApplyToProjectInput!) { applyToProjectInput(input: $input) { id status } }`,
@@ -133,6 +132,7 @@ const documents = {
   SendProjectOfferV1: `mutation SendProjectOfferV1($applicationId: ID!, $message: String) { sendProjectOffer(applicationId: $applicationId, message: $message) { id status offerMessage expiresAt } }`,
   ConfirmProjectOfferOwnerV1: `mutation ConfirmProjectOfferOwnerV1($applicationId: ID!) { confirmProjectOfferByOwner(applicationId: $applicationId) { id status ownerConfirmedAt } }`,
   ConfirmProjectOfferTeamV1: `mutation ConfirmProjectOfferTeamV1($applicationId: ID!) { confirmProjectOfferByTeam(applicationId: $applicationId) { id status teamConfirmedAt } }`,  InboxV1: `query InboxV1 { me { id username fullName } myInbox { id username fullName discipline } }`,
+  MessageRecipientV1: `query MessageRecipientV1($username: String!) { user(username: $username) { id username fullName discipline } }`,
   ThreadMessagesV1: `query ThreadMessagesV1($withUser: ID!) { myMessages(withUser: $withUser) { id body read createdAt sender { id username fullName } receiver { id username fullName } } }`,
   SendMessageV1: `mutation SendMessageV1($receiverId: ID!, $body: String!) { sendMessage(receiverId: $receiverId, body: $body) { id body read createdAt sender { id username fullName } receiver { id username fullName } } }`,
   MarkMessageReadV1: `mutation MarkMessageReadV1($messageId: ID!) { markRead(messageId: $messageId) }`,
@@ -176,6 +176,33 @@ function optionalString(
   output[key] = value;
 }
 
+function optionalHTTPURL(
+  source: Record<string, unknown>,
+  key: string,
+  output: Record<string, unknown>,
+  allowNull = false,
+): void {
+  const value = source[key];
+  if (value === undefined) return;
+  if (value === null && allowNull) {
+    output[key] = null;
+    return;
+  }
+  if (typeof value !== "string" || value.length > 2_048) throw new Error("Operation variables are invalid.");
+  const normalized = value.trim();
+  if (!normalized) {
+    output[key] = "";
+    return;
+  }
+  try {
+    const url = new URL(normalized);
+    if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error();
+  } catch {
+    throw new Error("Operation variables are invalid.");
+  }
+  output[key] = normalized;
+}
+
 function deactivationVariables(value: unknown): { reason?: string } {
   const variables = record(value);
   exactKeys(variables, ["reason"]);
@@ -205,10 +232,12 @@ function profileVariables(value: unknown): { input: Record<string, unknown> } {
   }
   const parsed: Record<string, unknown> = { username: input.username, fullName: input.fullName.trim() };
   for (const [key, maximum] of [
-    ["bio", 2_000], ["discipline", 120], ["university", 120], ["linkedinUrl", 2_048],
-    ["githubUrl", 2_048], ["portfolioUrl", 2_048], ["userIntent", 32], ["discord", 120],
-    ["availabilityNote", 500],
+    ["bio", 2_000], ["discipline", 120], ["university", 120], ["userIntent", 32],
+    ["discord", 120], ["availabilityNote", 500],
   ] as const) optionalString(input, key, maximum, parsed);
+  for (const key of ["linkedinUrl", "githubUrl", "portfolioUrl"] as const) {
+    optionalHTTPURL(input, key, parsed);
+  }
   if (input.resumeVisibility !== undefined) {
     const accepted = ["PRIVATE", "TEAM_LEADS", "PROJECT_OWNERS", "PROJECT_OWNERS_AND_PROFESSORS", "PUBLIC"];
     if (typeof input.resumeVisibility !== "string" || !accepted.includes(input.resumeVisibility)) {
@@ -234,13 +263,24 @@ function projectInput(value: unknown, updating: boolean): Record<string, unknown
   if (typeof input.description !== "string" || !input.description.trim() || input.description.length > 10_000) throw new Error("Operation variables are invalid.");
   if (!Array.isArray(input.disciplines) || input.disciplines.length < 1 || input.disciplines.length > 20 || !input.disciplines.every((item) => typeof item === "string" && item.length > 0 && item.length <= 100)) throw new Error("Operation variables are invalid.");
   if (input.teamSizeMin !== 10 || input.teamSizeMax !== 12) throw new Error("Operation variables are invalid.");
-  for (const [key, maximum] of [["summary", 1_000], ["constraints", 4_000], ["videoUrl", 2_048], ["deliverables", 4_000], ["timeline", 4_000], ["evaluationCriteria", 4_000], ["ownerContactPreference", 500], ["applicationQuestions", 4_000]] as const) optionalString(input, key, maximum, input);
-  for (const key of ["requiredSkills", "niceToHaveSkills", "externalResources"] as const) {
+  for (const [key, maximum] of [["summary", 1_000], ["constraints", 4_000], ["deliverables", 4_000], ["timeline", 4_000], ["evaluationCriteria", 4_000], ["ownerContactPreference", 500], ["applicationQuestions", 4_000]] as const) optionalString(input, key, maximum, input);
+  optionalHTTPURL(input, "videoUrl", input);
+  for (const key of ["requiredSkills", "niceToHaveSkills"] as const) {
     const items = input[key];
     if (items !== undefined && (!Array.isArray(items) || items.length > 50 || !items.every((item) => typeof item === "string" && item.length > 0 && item.length <= 200))) throw new Error("Operation variables are invalid.");
   }
-  if (input.lifecycleState !== undefined && !["DRAFT", "OPEN", "OFFER_SENT", "CLAIMED", "ARCHIVED"].includes(input.lifecycleState as string)) throw new Error("Operation variables are invalid.");
-  if (input.approvalState !== undefined && !["UNVERIFIED", "SUBMITTED_FOR_APPROVAL", "PROFESSOR_APPROVED", "PROFESSOR_REJECTED"].includes(input.approvalState as string)) throw new Error("Operation variables are invalid.");
+  const resources = input.externalResources;
+  if (resources !== undefined) {
+    if (!Array.isArray(resources) || resources.length > 50) throw new Error("Operation variables are invalid.");
+    input.externalResources = resources.map((resource) => {
+      const parsed: Record<string, unknown> = {};
+      optionalHTTPURL({ resource }, "resource", parsed);
+      if (typeof parsed.resource !== "string" || !parsed.resource) throw new Error("Operation variables are invalid.");
+      return parsed.resource;
+    });
+  }
+  if (input.lifecycleState !== undefined && !["DRAFT", "OPEN", "REVIEWING", "OFFER_SENT", "MATCHED", "CLOSED", "ARCHIVED"].includes(input.lifecycleState as string)) throw new Error("Operation variables are invalid.");
+  if (input.approvalState !== undefined && !["UNVERIFIED", "SUBMITTED_FOR_APPROVAL", "PROFESSOR_APPROVED", "CHANGES_REQUESTED"].includes(input.approvalState as string)) throw new Error("Operation variables are invalid.");
   if (updating && input.status !== undefined && !["OPEN", "IN_REVIEW", "CLAIMED", "CLOSED"].includes(input.status as string)) throw new Error("Operation variables are invalid.");
   if (!updating && input.status !== undefined) throw new Error("Operation variables are invalid.");
   return input;
@@ -318,7 +358,7 @@ function teamInput(value: unknown, updating: boolean): Record<string, unknown> {
   if (!updating && input.isComplete !== undefined) throw new Error("Operation variables are invalid.");
   if (input.recruitingState !== undefined && !["RECRUITING", "PAUSED"].includes(input.recruitingState as string)) throw new Error("Operation variables are invalid.");
   if (input.visibility !== undefined && !["VISIBLE", "HIDDEN"].includes(input.visibility as string)) throw new Error("Operation variables are invalid.");
-  if (input.discordLink !== undefined && input.discordLink !== null && (typeof input.discordLink !== "string" || input.discordLink.length > 2_048)) throw new Error("Operation variables are invalid.");
+  optionalHTTPURL(input, "discordLink", input, true);
   for (const key of ["existingSkills", "neededSkills", "projectInterests"] as const) {
     const items = input[key];
     if (items !== undefined && (!Array.isArray(items) || items.length > 50 || !items.every((item) => typeof item === "string" && item.length > 0 && item.length <= 100))) throw new Error("Operation variables are invalid.");
@@ -357,11 +397,11 @@ export function resolveOperation(id: string, variables: unknown): RegisteredOper
     case "PublicTeamsV1":
       return { auth: "anonymous", document: documents.PublicTeamsV1, variables: searchVariables(variables) };
     case "PublicTeamV1":
-      return { auth: "anonymous", document: documents.PublicTeamV1, variables: idVariables(variables) };
+      return { auth: "optional", document: documents.PublicTeamV1, variables: idVariables(variables) };
     case "PublicProjectsV1":
       return { auth: "anonymous", document: documents.PublicProjectsV1, variables: searchVariables(variables) };
     case "PublicProjectV1":
-      return { auth: "anonymous", document: documents.PublicProjectV1, variables: idVariables(variables) };
+      return { auth: "optional", document: documents.PublicProjectV1, variables: idVariables(variables) };
     case "PublicProfileV1":
       return { auth: "anonymous", document: documents.PublicProfileV1, variables: usernameVariables(variables) };
     case "ShellCountsV1":
@@ -425,6 +465,8 @@ export function resolveOperation(id: string, variables: unknown): RegisteredOper
     case "ConfirmProjectOfferTeamV1":
       return { auth: "authenticated", document: documents.ConfirmProjectOfferTeamV1, variables: namedIDVariables(variables, ["applicationId"]) };    case "InboxV1":
       return { auth: "authenticated", document: documents.InboxV1, variables: noVariables(variables) };
+    case "MessageRecipientV1":
+      return { auth: "authenticated", document: documents.MessageRecipientV1, variables: usernameVariables(variables) };
     case "ThreadMessagesV1":
       return { auth: "authenticated", document: documents.ThreadMessagesV1, variables: namedIDVariables(variables, ["withUser"]) };
     case "SendMessageV1":

@@ -47,7 +47,7 @@ func TestMiddlewareResolvesAssertionThroughCurrentPrincipal(t *testing.T) {
 	middleware := NewMiddleware(
 		middlewareUsers{user: db.User{ID: id}},
 		middlewareVerifier{assertion: internalapi.Assertion{ActorKind: internalapi.ActorAuthenticated, IdentityRealm: "primary", Subject: "auth-user-1"}},
-		middlewarePrincipals{viewer: principal.Viewer{ProductUserID: "11111111-1111-1111-1111-111111111111", AccountState: "ACTIVE"}},
+		middlewarePrincipals{viewer: principal.Viewer{ProductUserID: "11111111-1111-1111-1111-111111111111", AccountState: "ACTIVE", SelfServiceRoles: []string{RoleStudent}}},
 	)
 	handler := middleware.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := UserFromContext(r.Context()); !ok {
@@ -55,6 +55,9 @@ func TestMiddlewareResolvesAssertionThroughCurrentPrincipal(t *testing.T) {
 		}
 		if subject, ok := SubjectFromContext(r.Context()); !ok || subject != "auth-user-1" {
 			t.Fatal("assertion subject missing")
+		}
+		if !HasRole(r.Context(), RoleStudent) || HasRole(r.Context(), RoleSponsor) {
+			t.Fatal("current product roles missing or incorrect")
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}))

@@ -34,6 +34,7 @@ type Querier interface {
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateTeamInvitation(ctx context.Context, arg CreateTeamInvitationParams) (TeamInvitation, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeactivateAccountState(ctx context.Context, userID pgtype.UUID) (int64, error)
 	DeactivateUser(ctx context.Context, id pgtype.UUID) error
 	ExpireDueJoinRequests(ctx context.Context, expiresAt pgtype.Timestamptz) error
 	ExpireDueProjectOffers(ctx context.Context, expiresAt pgtype.Timestamptz) error

@@ -3,12 +3,16 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/local/quorum/apps/api/internal/auth"
 	"github.com/local/quorum/apps/api/internal/config"
@@ -18,12 +22,14 @@ import (
 	"github.com/local/quorum/apps/api/internal/identity"
 	"github.com/local/quorum/apps/api/internal/internalapi"
 	"github.com/local/quorum/apps/api/internal/principal"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
 func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handler {
 	queries := db.New(pool)
 	resolver := &graph.Resolver{Pool: pool, Queries: queries}
 	gql := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: resolver}))
+	gql.SetErrorPresenter(graphQLErrorPresenter(logger))
 	principalService := principal.NewService(principal.NewSQLViewerStore(queries), identity.NewService(pool))
 	var assertionVerifier *internalapi.Verifier
 	if len(cfg.InternalAssertionKeys) > 0 {
@@ -52,6 +58,22 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) http
 	}
 
 	return logging(logger, mux)
+}
+
+func graphQLErrorPresenter(logger *slog.Logger) graphql.ErrorPresenterFunc {
+	return func(ctx context.Context, err error) *gqlerror.Error {
+		var queryError *pgconn.PgError
+		var connectionError *pgconn.ConnectError
+		switch {
+		case errors.As(err, &queryError):
+			logger.Error("graphql database operation failed", "database_code", queryError.Code)
+		case errors.As(err, &connectionError), errors.Is(err, pgx.ErrNoRows), errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
+			logger.Error("graphql dependency operation failed")
+		default:
+			return graphql.DefaultErrorPresenter(ctx, err)
+		}
+		return gqlerror.Errorf("request could not be completed")
+	}
 }
 
 func NewHTTPServer(cfg config.Config, handler http.Handler) *http.Server {

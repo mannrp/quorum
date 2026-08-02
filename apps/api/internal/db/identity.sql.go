@@ -11,6 +11,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const deactivateAccountState = `-- name: DeactivateAccountState :execrows
+UPDATE app.account_states
+SET status = 'DEACTIVATED',
+    state_version = state_version + 1,
+    session_revocation_version = session_revocation_version + 1,
+    deactivated_at = now(),
+    updated_at = now()
+WHERE user_id = $1
+  AND status = 'ACTIVE'
+`
+
+func (q *Queries) DeactivateAccountState(ctx context.Context, userID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deactivateAccountState, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getIdentityRealmByKey = `-- name: GetIdentityRealmByKey :one
 SELECT id, realm_key, auth_system, issuer, created_at, updated_at
 FROM app.identity_realms

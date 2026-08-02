@@ -19,7 +19,11 @@ function baseURL(): string {
 }
 
 export function internalAPIBaseURL(): string {
-  return socketPath() ? "http://quorum.internal" : baseURL();
+  if (socketPath()) return "http://quorum.internal";
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("INTERNAL_API_SOCKET_PATH is required in production.");
+  }
+  return baseURL();
 }
 
 function requestPath(input: InternalInput): string {

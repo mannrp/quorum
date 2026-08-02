@@ -26,6 +26,34 @@ func TestCreateTeamRequiresCompleteProfile(t *testing.T) {
 	}
 }
 
+func TestWorkflowEntryPointsRequireCanonicalRoles(t *testing.T) {
+	complete := db.User{ProfileComplete: true}
+	base := auth.WithUser(context.Background(), complete)
+	student := auth.WithRoles(base, []string{auth.RoleStudent})
+	sponsor := auth.WithRoles(base, []string{auth.RoleSponsor})
+	resolver := &mutationResolver{&Resolver{}}
+
+	if err := requireRole(student, auth.RoleStudent); err != nil {
+		t.Fatalf("student role rejected: %v", err)
+	}
+	if err := requireRole(sponsor, auth.RoleSponsor); err != nil {
+		t.Fatalf("sponsor role rejected: %v", err)
+	}
+
+	_, err := resolver.CreateTeam(sponsor, model.CreateTeamInput{})
+	assertErrorContains(t, err, "STUDENT role required")
+	_, err = resolver.RequestJoin(sponsor, "not-used", nil)
+	assertErrorContains(t, err, "STUDENT role required")
+	_, err = resolver.ConfirmJoinRequest(sponsor, "not-used")
+	assertErrorContains(t, err, "STUDENT role required")
+	_, err = resolver.RespondToTeamInvitation(sponsor, "not-used", true)
+	assertErrorContains(t, err, "STUDENT role required")
+	_, err = resolver.ApplyToProject(sponsor, "not-used", "not-used", nil)
+	assertErrorContains(t, err, "STUDENT role required")
+	_, err = resolver.CreateProject(student, model.CreateProjectInput{})
+	assertErrorContains(t, err, "SPONSOR role required")
+}
+
 func TestNonLeadCannotInviteTeamMember(t *testing.T) {
 	ctx, r, cleanup := workflowTestResolver(t)
 	defer cleanup()
@@ -60,7 +88,7 @@ RETURNING id`, team.ID, invitee.ID, lead.ID).Scan(&invitationID); err != nil {
 		t.Fatal(err)
 	}
 
-	invitation, err := (&mutationResolver{r}).RespondToTeamInvitation(auth.WithUser(ctx, invitee), uuidString(invitationID), true)
+	invitation, err := (&mutationResolver{r}).RespondToTeamInvitation(studentUserContext(ctx, invitee), uuidString(invitationID), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +160,9 @@ func TestNonOwnerCannotReviewOrFinalizeApplications(t *testing.T) {
 	teamConfirmed := createWorkflowApplicationForProject(t, ctx, r.Pool, project.ID, team.ID, lead.ID, string(model.ApplicationStatusTeamConfirmed), "Permission Finalize Project")
 
 	mutation := &mutationResolver{r}
-	_, err := mutation.RejectApplication(auth.WithUser(ctx, otherOwner), uuidString(submitted), nil)
+	_, err := r.projectWithOptions(auth.WithUser(ctx, otherOwner), project, projectHydrationOptions{includeApplications: true})
+	assertErrorContains(t, err, "project owner access required")
+	_, err = mutation.RejectApplication(auth.WithUser(ctx, otherOwner), uuidString(submitted), nil)
 	assertErrorContains(t, err, "project owner access required")
 	_, err = mutation.SendProjectOffer(auth.WithUser(ctx, otherOwner), uuidString(submitted), nil)
 	assertErrorContains(t, err, "project owner access required")
@@ -178,11 +208,11 @@ func TestDuplicateWorkflowRequestsAreIdempotentUntilTerminal(t *testing.T) {
 	project := createWorkflowProject(t, ctx, r.Queries, owner, "Duplicate Project")
 	mutation := &mutationResolver{r}
 
-	join1, err := mutation.RequestJoin(auth.WithUser(ctx, requester), uuidString(team.ID), nil)
+	join1, err := mutation.RequestJoin(studentUserContext(ctx, requester), uuidString(team.ID), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	join2, err := mutation.RequestJoin(auth.WithUser(ctx, requester), uuidString(team.ID), nil)
+	join2, err := mutation.RequestJoin(studentUserContext(ctx, requester), uuidString(team.ID), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +222,7 @@ func TestDuplicateWorkflowRequestsAreIdempotentUntilTerminal(t *testing.T) {
 	if _, err := r.Pool.Exec(ctx, `UPDATE team_join_requests SET status = 'REJECTED' WHERE id = $1`, join1.ID); err != nil {
 		t.Fatal(err)
 	}
-	_, err = mutation.RequestJoin(auth.WithUser(ctx, requester), uuidString(team.ID), nil)
+	_, err = mutation.RequestJoin(studentUserContext(ctx, requester), uuidString(team.ID), nil)
 	assertErrorContains(t, err, "already requested")
 
 	invite1, err := mutation.InviteTeamMember(auth.WithUser(ctx, lead), uuidString(team.ID), uuidString(invitee.ID), nil)
@@ -212,11 +242,11 @@ func TestDuplicateWorkflowRequestsAreIdempotentUntilTerminal(t *testing.T) {
 	_, err = mutation.InviteTeamMember(auth.WithUser(ctx, lead), uuidString(team.ID), uuidString(invitee.ID), nil)
 	assertErrorContains(t, err, "already been invited")
 
-	app1, err := mutation.ApplyToProject(auth.WithUser(ctx, lead), uuidString(project.ID), uuidString(team.ID), nil)
+	app1, err := mutation.ApplyToProject(studentUserContext(ctx, lead), uuidString(project.ID), uuidString(team.ID), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	app2, err := mutation.ApplyToProject(auth.WithUser(ctx, lead), uuidString(project.ID), uuidString(team.ID), nil)
+	app2, err := mutation.ApplyToProject(studentUserContext(ctx, lead), uuidString(project.ID), uuidString(team.ID), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +256,7 @@ func TestDuplicateWorkflowRequestsAreIdempotentUntilTerminal(t *testing.T) {
 	if _, err := r.Pool.Exec(ctx, `UPDATE project_applications SET status = 'WITHDRAWN' WHERE id = $1`, app1.ID); err != nil {
 		t.Fatal(err)
 	}
-	_, err = mutation.ApplyToProject(auth.WithUser(ctx, lead), uuidString(project.ID), uuidString(team.ID), nil)
+	_, err = mutation.ApplyToProject(studentUserContext(ctx, lead), uuidString(project.ID), uuidString(team.ID), nil)
 	assertErrorContains(t, err, "already applied")
 }
 
@@ -516,7 +546,7 @@ func TestCoLeadAllowedActionsExceptLeadOnlyArchive(t *testing.T) {
 	if _, err := mutation.InviteTeamMember(auth.WithUser(ctx, coLead), uuidString(team.ID), uuidString(invitee.ID), nil); err != nil {
 		t.Fatalf("InviteTeamMember as co-lead: %v", err)
 	}
-	joinRequest, err := mutation.RequestJoin(auth.WithUser(ctx, requester), uuidString(team.ID), nil)
+	joinRequest, err := mutation.RequestJoin(studentUserContext(ctx, requester), uuidString(team.ID), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -526,7 +556,7 @@ func TestCoLeadAllowedActionsExceptLeadOnlyArchive(t *testing.T) {
 	if ok, err := mutation.RemoveMember(auth.WithUser(ctx, coLead), uuidString(team.ID), uuidString(member.ID)); err != nil || !ok {
 		t.Fatalf("RemoveMember as co-lead ok=%v err=%v", ok, err)
 	}
-	application, err := mutation.ApplyToProject(auth.WithUser(ctx, coLead), uuidString(project.ID), uuidString(team.ID), nil)
+	application, err := mutation.ApplyToProject(studentUserContext(ctx, coLead), uuidString(project.ID), uuidString(team.ID), nil)
 	if err != nil {
 		t.Fatalf("ApplyToProject as co-lead: %v", err)
 	}
@@ -565,15 +595,15 @@ func TestTeamJoinRequestsRequiresLeadAndFilters(t *testing.T) {
 	}
 
 	mutation := &mutationResolver{r}
-	pendingRequest, err := mutation.RequestJoin(auth.WithUser(ctx, requester1), uuidString(team.ID), textStringPointer("Interested in joining."))
+	pendingRequest, err := mutation.RequestJoin(studentUserContext(ctx, requester1), uuidString(team.ID), textStringPointer("Interested in joining."))
 	if err != nil {
 		t.Fatal(err)
 	}
-	rejectedRequest, err := mutation.RequestJoin(auth.WithUser(ctx, requester2), uuidString(team.ID), nil)
+	rejectedRequest, err := mutation.RequestJoin(studentUserContext(ctx, requester2), uuidString(team.ID), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	acceptedRequest, err := mutation.RequestJoin(auth.WithUser(ctx, requester3), uuidString(team.ID), nil)
+	acceptedRequest, err := mutation.RequestJoin(studentUserContext(ctx, requester3), uuidString(team.ID), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -795,6 +825,10 @@ func TestAnonymousDiscoveryExcludesNonPublicCurrentState(t *testing.T) {
 }
 
 func stringPointer(value string) *string { return &value }
+func studentUserContext(ctx context.Context, user db.User) context.Context {
+	return auth.WithRoles(auth.WithUser(ctx, user), []string{auth.RoleStudent})
+}
+
 func workflowTestResolver(t *testing.T) (context.Context, *Resolver, func()) {
 	t.Helper()
 	dsn := os.Getenv("QUORUM_TEST_DATABASE_URL")

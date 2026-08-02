@@ -6,6 +6,7 @@ import { ConfirmDialog, Section, Status, LoadingSkeleton } from "@/components/ui
 import { DeadlineDisplay } from "@/components/deadline-display";
 import { userFacingError } from "@/lib/operations/client";
 import { viewerClient } from "@/lib/auth-v2/viewer-client";
+import type { SelfServiceRole } from "@/lib/auth-v2/viewer-contract";
 import { operationRequest } from "@/lib/operations/client";
 import type { User } from "@/types/domain";
 
@@ -104,6 +105,7 @@ export default function DashboardPage() {
   const [invitations, setInvitations] = useState<DashboardInvitation[]>([]);
   const [myRequests, setMyRequests] = useState<DashboardJoinRequest[]>([]);
   const [deadline, setDeadline] = useState<Deadline | null>(null);
+  const [selfServiceRoles, setSelfServiceRoles] = useState<SelfServiceRole[]>([]);
   const [loading, setLoading] = useState(true);  const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
@@ -114,13 +116,16 @@ export default function DashboardPage() {
       setError(null);
       const viewer = await viewerClient.viewer();
       if (viewer.state === "unauthenticated") {
+        setSelfServiceRoles([]);
         router.push("/auth/login");
         return;
       }
       if (viewer.state !== "ready") {
+        setSelfServiceRoles([]);
         router.push("/onboarding");
         return;
       }
+      setSelfServiceRoles(viewer.viewer.selfServiceRoles);
 
       const result = await operationRequest<DashboardPageData>("DashboardV1", {});
       if (!result.me) {
@@ -227,6 +232,8 @@ export default function DashboardPage() {
     );
   }
 
+  const isStudent = selfServiceRoles.includes("STUDENT");
+  const isSponsor = selfServiceRoles.includes("SPONSOR");
   const projectApplicationCount = applications.length;
   const pendingOfferCount = applications.filter((application) => application.status === "OFFER_SENT").length;
   const memberCount = team?.members.length || 0;
@@ -330,7 +337,7 @@ export default function DashboardPage() {
           </Section>
 
           {/* Pending Invitations */}
-          <Section title="Team Invitations" variant="tall">
+          {isStudent && <Section title="Team Invitations" variant="tall">
             {invitations.length > 0 ? (
               <div className="stagger-in space-y-3">
                 {invitations.map((inv) => (
@@ -354,10 +361,10 @@ export default function DashboardPage() {
             ) : (
               <p className="text-xs text-[var(--muted-app)]">No pending team invitations.</p>
             )}
-          </Section>
+          </Section>}
 
           {/* Accepted Join Requests */}
-          <Section title="Accepted Join Requests" variant="tall">
+          {isStudent && <Section title="Accepted Join Requests" variant="tall">
             {myRequests.length > 0 ? (
               <div className="stagger-in space-y-3">
                 {myRequests.map((req) => (
@@ -382,13 +389,13 @@ export default function DashboardPage() {
             ) : (
               <p className="text-xs text-[var(--muted-app)]">No accepted join requests.</p>
             )}
-          </Section>
+          </Section>}
         </div>
 
         {/* Center / Right Columns: Teams and Project Postings */}
         <div className="space-y-5">
           {/* My Team Section */}
-          <Section title="My Capstone Team">
+          {isStudent && <Section title="My Capstone Team">
             {team ? (
               <div className="space-y-4">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -432,10 +439,10 @@ export default function DashboardPage() {
                 </div>
               </div>
             )}
-          </Section>
+          </Section>}
 
           {/* Project Sponsor Section (If Project Owner) */}
-          {project ? (
+          {isSponsor && (project ? (
             <Section title="My Sponsored Project Dashboard">
               <div className="space-y-4">
                 <div className="flex items-start justify-between gap-4">
@@ -459,14 +466,14 @@ export default function DashboardPage() {
                 </div>
               </div>
             </Section>
-          ) : me?.userIntent === "SPONSOR" ? (
+          ) : (
             <Section title="Project Sponsor Account">
               <div className="text-center py-8 border border-dashed border-[var(--border-app)] p-6 space-y-3">
-                <p className="text-xs text-stone-500 font-mono">You have project owner intent but haven&apos;t submitted a capstone challenge yet.</p>
+                <p className="text-xs text-stone-500 font-mono">Your Sponsor account has not submitted a capstone challenge yet.</p>
                 <Link href="/projects/new" className="btn-primary py-2 px-4 text-xs inline-block">Sponsor New Project</Link>
               </div>
             </Section>
-          ) : null}
+          ))}
 
           {/* Recent Notifications preview */}
           <Section title="Recent Activity">

@@ -1,13 +1,17 @@
 import "server-only";
 import type { SelfServiceRole } from "./viewer-contract";
 
-export async function readSameOriginJSON(request: Request, canonicalOrigin: string): Promise<Record<string, unknown>> {
+export async function readSameOriginJSON(
+  request: Request,
+  canonicalOrigin: string,
+  maximumBytes = 1_024,
+): Promise<Record<string, unknown>> {
   if (request.headers.get("origin") !== new URL(canonicalOrigin).origin) throw new Error("Request origin rejected.");
   if (request.headers.get("sec-fetch-site") !== "same-origin") throw new Error("Cross-site request rejected.");
   const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
   if (contentType !== "application/json") throw new Error("JSON content type is required.");
   const text = await request.text();
-  if (new TextEncoder().encode(text).byteLength > 1_024) throw new Error("Request is too large.");
+  if (new TextEncoder().encode(text).byteLength > maximumBytes) throw new Error("Request is too large.");
   let value: unknown;
   try {
     value = JSON.parse(text);

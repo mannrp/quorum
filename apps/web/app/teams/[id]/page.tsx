@@ -116,7 +116,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
             </button>
           )}
           {viewerID && viewerID !== team.createdBy.id && (
-            <Link href={`/inbox?userId=${team.createdBy.id}`} className="btn-secondary w-full sm:w-auto text-center text-xs flex items-center justify-center gap-1">
+            <Link href={`/inbox?username=${encodeURIComponent(team.createdBy.username)}`} className="btn-secondary w-full sm:w-auto text-center text-xs flex items-center justify-center gap-1">
               ✉ Message Lead
             </Link>
           )}

@@ -215,6 +215,13 @@ func (r *mutationResolver) DeactivateAccount(ctx context.Context, reason *string
 		if err := q.DeactivateUser(ctx, current.ID); err != nil {
 			return err
 		}
+		updated, err := q.DeactivateAccountState(ctx, current.ID)
+		if err != nil {
+			return err
+		}
+		if updated != 1 {
+			return errors.New("account state is unavailable")
+		}
 		return r.auditChange(ctx, q, current.ID, "USER_DEACTIVATED", "USER", current.ID, map[string]any{"deactivated": false}, map[string]any{"deactivated": true}, reason)
 	}); err != nil {
 		return false, err
@@ -226,6 +233,9 @@ func (r *mutationResolver) DeactivateAccount(ctx context.Context, reason *string
 func (r *mutationResolver) CreateTeam(ctx context.Context, input model.CreateTeamInput) (*model.Team, error) {
 	current, err := requireCompleteUser(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err := requireRole(ctx, auth.RoleStudent); err != nil {
 		return nil, err
 	}
 	count, err := r.Queries.CountUserTeams(ctx, current.ID)
@@ -426,6 +436,9 @@ func (r *mutationResolver) RequestJoin(ctx context.Context, teamID string, messa
 	if err != nil {
 		return nil, err
 	}
+	if err := requireRole(ctx, auth.RoleStudent); err != nil {
+		return nil, err
+	}
 	if err := r.requireDeadlineOpen(ctx); err != nil {
 		return nil, err
 	}
@@ -545,6 +558,9 @@ func (r *mutationResolver) RespondToJoinRequest(ctx context.Context, requestID s
 func (r *mutationResolver) ConfirmJoinRequest(ctx context.Context, requestID string) (*model.TeamJoinRequest, error) {
 	current, err := requireCompleteUser(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err := requireRole(ctx, auth.RoleStudent); err != nil {
 		return nil, err
 	}
 	id, err := uuid(requestID)
@@ -706,6 +722,11 @@ func (r *mutationResolver) RespondToTeamInvitation(ctx context.Context, invitati
 	if err != nil {
 		return nil, err
 	}
+	if accept {
+		if err := requireRole(ctx, auth.RoleStudent); err != nil {
+			return nil, err
+		}
+	}
 	id, err := uuid(invitationID)
 	if err != nil {
 		return nil, err
@@ -804,6 +825,9 @@ func (r *mutationResolver) RespondToTeamInvitation(ctx context.Context, invitati
 func (r *mutationResolver) CreateProject(ctx context.Context, input model.CreateProjectInput) (*model.Project, error) {
 	current, err := requireCompleteUser(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err := requireRole(ctx, auth.RoleSponsor); err != nil {
 		return nil, err
 	}
 	minSize := 10
@@ -1688,8 +1712,13 @@ func (r *queryResolver) Project(ctx context.Context, id string) (*model.Project,
 	if project.ArchivedAt.Valid {
 		return nil, nil
 	}
-	if _, authenticated := auth.UserFromContext(ctx); !authenticated && !publicProjectState(project.LifecycleState) {
-		return nil, nil
+	if !publicProjectState(project.LifecycleState) {
+		current, authenticated := auth.UserFromContext(ctx)
+		if !authenticated || !sameUUID(current.ID, project.OwnerID) {
+			if !project.TeamID.Valid || r.requireTeamMember(ctx, project.TeamID) != nil {
+				return nil, nil
+			}
+		}
 	}
 	return r.project(ctx, project)
 }

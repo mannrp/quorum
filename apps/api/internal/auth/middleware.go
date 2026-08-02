@@ -82,7 +82,7 @@ func (m *Middleware) Wrap(next http.Handler) http.Handler {
 			http.Error(w, "principal lookup failed", http.StatusInternalServerError)
 			return
 		}
-		ctx := WithSubject(r.Context(), assertion.Subject)
+		ctx := WithRoles(WithSubject(r.Context(), assertion.Subject), viewer.SelfServiceRoles)
 		next.ServeHTTP(w, r.WithContext(WithUser(ctx, user)))
 	})
 }

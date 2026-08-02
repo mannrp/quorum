@@ -8,40 +8,52 @@ import type { Message, User } from "@/types/domain";
 
 function InboxInner() {
   const searchParams = useSearchParams();
-  const queryUserId = searchParams.get("userId");
+  const recipientUsername = searchParams.get("username");
 
   const { data, error, loading } = useOperation<{ me: User | null; myInbox: User[] }>("InboxV1", {});
   const [activeUser, setActiveUser] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
-  const [extraUser, setExtraUser] = useState<User | null>(null);
+  const [newRecipient, setNewRecipient] = useState<User | null>(null);
 
-  const rawUsers = useMemo(() => data?.myInbox || [], [data?.myInbox]);
-  const me = data?.me;
-
-  // Append queryUserId to inbox roster if they aren't already present
+  const inboxUsers = useMemo(() => data?.myInbox ?? [], [data?.myInbox]);
   const users = useMemo(() => {
-    if (extraUser && !rawUsers.some((u) => u.id === extraUser.id)) {
-      return [extraUser, ...rawUsers];
+    if (newRecipient && !inboxUsers.some((user) => user.id === newRecipient.id)) {
+      return [newRecipient, ...inboxUsers];
     }
-    return rawUsers;
-  }, [rawUsers, extraUser]);
-
+    return inboxUsers;
+  }, [inboxUsers, newRecipient]);
+  const me = data?.me;
   const activeUserData = users.find((user) => user.id === activeUser);
 
-  // A direct-recipient URL can focus only an existing authorized conversation.
   useEffect(() => {
-    const target = rawUsers.find((user) => user.id === queryUserId);
-    if (target) setActiveUser(target.id);
-    else if (!activeUser && rawUsers.length > 0) setActiveUser(rawUsers[0].id);
-  }, [queryUserId, rawUsers, activeUser]);  // 2. Fetch thread messages
+    if (!recipientUsername) {
+      if (!activeUser && inboxUsers.length > 0) setActiveUser(inboxUsers[0].id);
+      return;
+    }
+
+    const existing = users.find((user) => user.username === recipientUsername);
+    if (existing) {
+      setActiveUser(existing.id);
+      return;
+    }
+
+    void operationRequest<{ user: User | null }>("MessageRecipientV1", { username: recipientUsername })
+      .then((result) => {
+        if (!result.user) throw new Error("Message recipient was not found.");
+        setNewRecipient(result.user);
+        setActiveUser(result.user.id);
+      })
+      .catch((cause) => setNotice(userFacingError(cause)));
+  }, [activeUser, inboxUsers, recipientUsername, users]);
+
   useEffect(() => {
     if (!activeUser) return;
-    operationRequest<{ myMessages: Message[] }>("ThreadMessagesV1", { withUser: activeUser })
+    void operationRequest<{ myMessages: Message[] }>("ThreadMessagesV1", { withUser: activeUser })
       .then((result) => setMessages(result.myMessages))
-      .catch((err) => setNotice(userFacingError(err)));
-  }, [activeUser, activeUserData, me]);
+      .catch((cause) => setNotice(userFacingError(cause)));
+  }, [activeUser]);
 
   const handleSend = async (event: React.FormEvent) => {
     event.preventDefault();

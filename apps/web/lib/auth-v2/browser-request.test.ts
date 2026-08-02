@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { readEnrollmentRequest, readSessionRevocationRequest } from "./browser-request";
+import { readEnrollmentRequest, readSameOriginJSON, readSessionRevocationRequest } from "./browser-request";
 
 function request(body: string, headers: Record<string, string> = {}) {
   return new Request("https://quorum.example/api/v1/enrollment", {
@@ -31,6 +31,16 @@ describe("enrollment browser boundary", () => {
     ["email spoof", request('{"role":"STUDENT","verifiedEmail":"attacker@example.test"}')],
   ])("rejects %s", async (_name, input) => {
     await expect(readEnrollmentRequest(input, "https://quorum.example")).rejects.toThrow();
+  });
+});
+describe("same-origin JSON boundary", () => {
+  it("allows a larger explicit limit for registered product operations", async () => {
+    const body = JSON.stringify({ description: "x".repeat(10_000) });
+
+    await expect(readSameOriginJSON(request(body), "https://quorum.example", 32 * 1_024)).resolves.toEqual({
+      description: "x".repeat(10_000),
+    });
+    await expect(readSameOriginJSON(request(body), "https://quorum.example")).rejects.toThrow("too large");
   });
 });
 describe("session revocation browser boundary", () => {

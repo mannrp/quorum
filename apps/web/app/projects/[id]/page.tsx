@@ -11,6 +11,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const { data, error, loading, reload } = useOperation<{ project: Project | null }>("PublicProjectV1", { id });
   
   const [me, setMe] = useState<User | null>(null);
+  const [ownerProject, setOwnerProject] = useState<Project | null>(null);
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [isApplyOpen, setIsApplyOpen] = useState(false);
   const [interest, setInterest] = useState("");
@@ -25,7 +26,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [isSubmitApprovalOpen, setIsSubmitApprovalOpen] = useState(false);
   const [submittingApproval, setSubmittingApproval] = useState(false);
 
-  const project = data?.project;
+  const publicProject = data?.project;
+  const project = ownerProject ?? publicProject;
 
   useEffect(() => {
     const fetchSessionData = async () => {
@@ -39,12 +41,19 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           );
           if (userTeam) setMyTeam(userTeam);
         }
-      } catch (err) {
-        setNotice(userFacingError(err));
+      } catch {
+        // Public project browsing does not require an authenticated session.
       }
     };
     void fetchSessionData();
   }, []);
+
+  useEffect(() => {
+    if (!me || !publicProject || me.id !== publicProject.owner.id) return;
+    void operationRequest<{ project: Project | null }>("ProjectOwnerV1", { projectId: id })
+      .then((result) => setOwnerProject(result.project))
+      .catch((error) => setNotice(userFacingError(error)));
+  }, [id, me, publicProject]);
 
   const handleApplySubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -90,13 +99,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     setSubmittingApproval(true);
     setNotice(null);
     try {
-      await operationRequest(
+      const result = await operationRequest<{ submitProjectForApproval: Project }>(
         "SubmitProjectApprovalV1",
         { projectId: id },
       );
+      setOwnerProject(result.submitProjectForApproval);
       setNotice("Project successfully submitted for professor approval!");
       setIsSubmitApprovalOpen(false);
-      await reload();
     } catch (err) {
       setNotice(userFacingError(err));
       setIsSubmitApprovalOpen(false);
@@ -239,7 +248,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               </div>
               {me && me.id !== project.owner.id && (
                 <div className="pt-2">
-                  <Link href={`/inbox?userId=${project.owner.id}`} className="btn-secondary w-full py-1.5 text-[11px] block text-center">
+                  <Link href={`/inbox?username=${encodeURIComponent(project.owner.username)}`} className="btn-secondary w-full py-1.5 text-[11px] block text-center">
                     ✉ Message Owner
                   </Link>
                 </div>

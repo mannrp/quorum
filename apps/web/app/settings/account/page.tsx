@@ -5,7 +5,7 @@ import { Section, Modal, LoadingSkeleton } from "@/components/ui";
 import { clearOperationCache, userFacingError } from "@/lib/operations/client";
 import { operationRequest } from "@/lib/operations/client";
 import type { User } from "@/types/domain";
-import { linkGoogle, listSignInMethods, unlinkGoogle, type SignInMethod } from "@/lib/auth-v2/client-actions";
+import { linkGoogle, listSignInMethods, signOut, unlinkGoogle, type SignInMethod } from "@/lib/auth-v2/client-actions";
 import { sessionClient, type BrowserSession } from "@/lib/auth-v2/session-client";
 import { CredentialsPanel } from "./credentials-panel";
 
@@ -90,7 +90,17 @@ export default function AccountSettingsPage() {
     setNotice(null);
     try {
       await operationRequest("DeactivateAccountV1", { reason: "Self-service deactivation from settings" });
-      router.push("/");
+      try {
+        await sessionClient.revoke({ scope: "ALL" });
+      } catch {
+        // Canonical account state already fails closed; continue clearing this browser session.
+      }
+      try {
+        await signOut();
+      } catch {
+        // Revoking all sessions may already have invalidated the current Better Auth session.
+      }
+      window.location.assign("/");
     } catch (err) {
       setNotice(userFacingError(err));
     } finally {
@@ -205,7 +215,7 @@ export default function AccountSettingsPage() {
           <div className="space-y-1">
             <h4 className="text-sm font-bold text-stone-850 dark:text-stone-200">Deactivate Account</h4>
             <p className="text-xs text-stone-500 leading-relaxed">
-              Terminating your Quorum profile will immediately withdraw all pending project applications, remove you from your active team membership roster, and deactivate your academic profile.
+              Deactivation disables your Quorum profile and product access, revokes every browser session, and signs you out. Existing team and project records remain intact.
             </p>
           </div>
 
@@ -225,9 +235,9 @@ export default function AccountSettingsPage() {
             Are you absolutely sure you want to deactivate your Quorum profile? This operation is <strong className="text-[var(--color-danger)]">final and cannot be undone</strong>.
           </p>
           <ul className="list-disc pl-5 text-xs text-stone-500 space-y-1 leading-relaxed">
-            <li>You will be removed from your capstone team.</li>
-            <li>All applications submitted by you will be withdrawn.</li>
-            <li>Your inbox and profile details will be deactivated/archived.</li>
+            <li>Your profile and product access will be disabled.</li>
+            <li>Every browser session will be revoked.</li>
+            <li>Existing workflow records remain for project integrity.</li>
           </ul>
           <div className="flex gap-3 justify-end pt-4 border-t border-[var(--border-subtle)]">
             <button onClick={() => setIsDeleteOpen(false)} className="btn-secondary py-2 text-xs">

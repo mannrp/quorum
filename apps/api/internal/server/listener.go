@@ -25,6 +25,17 @@ func Listen(cfg config.Config) (net.Listener, error) {
 		return nil, fmt.Errorf("internal socket directory is not a directory")
 	}
 
+	if existing, err := os.Lstat(cfg.InternalSocketPath); err == nil {
+		if existing.Mode()&os.ModeSocket == 0 {
+			return nil, fmt.Errorf("internal socket path exists and is not a socket")
+		}
+		if err := os.Remove(cfg.InternalSocketPath); err != nil {
+			return nil, fmt.Errorf("remove stale internal socket: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("inspect internal socket path: %w", err)
+	}
+
 	listener, err := net.Listen("unix", cfg.InternalSocketPath)
 	if err != nil {
 		return nil, fmt.Errorf("internal socket listener: %w", err)

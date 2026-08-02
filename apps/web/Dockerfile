@@ -4,6 +4,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/package.json
 RUN npm ci --workspace=@quorum/web
+COPY packages/tsconfig packages/tsconfig
 COPY apps/web apps/web
 RUN npm run build --workspace=@quorum/web && npm prune --omit=dev --workspace=@quorum/web
 
@@ -17,4 +18,4 @@ COPY --from=build --chown=quorum:quorum /app/apps/web ./apps/web
 USER quorum
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node -e "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
-CMD ["npm", "run", "start", "--workspace=@quorum/web"]
+CMD ["node", "node_modules/next/dist/bin/next", "start", "apps/web"]

@@ -15,10 +15,17 @@ export function createAuthMailer(environment: Environment) {
     throw new Error("SMTP_PORT must be a valid TCP port.");
   }
 
+  const user = environment.SMTP_USER?.trim();
+  const password = environment.SMTP_PASSWORD;
+  if (Boolean(user) !== Boolean(password)) {
+    throw new Error("SMTP_USER and SMTP_PASSWORD must be configured together.");
+  }
+
   const transporter = nodemailer.createTransport({
     host: required(environment, "SMTP_HOST"),
     port,
     secure: environment.SMTP_SECURE === "true",
+    ...(user && password ? { auth: { user, pass: password } } : {}),
   });
   const from = required(environment, "SMTP_FROM");
 

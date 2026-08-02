@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/local/quorum/apps/api/internal/auth"
 	"github.com/local/quorum/apps/api/internal/db"
 	"github.com/local/quorum/apps/api/internal/graph/model"
 )
@@ -74,6 +75,13 @@ func requireCompleteUser(ctx context.Context) (db.User, error) {
 		return db.User{}, errors.New("complete your profile before continuing")
 	}
 	return user, nil
+}
+
+func requireRole(ctx context.Context, role string) error {
+	if !auth.HasRole(ctx, role) {
+		return errors.New(role + " role required")
+	}
+	return nil
 }
 
 func (r *Resolver) requireDeadlineOpen(ctx context.Context) error {
