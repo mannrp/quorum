@@ -57,6 +57,6 @@ No further Auth V2 architecture or product implementation phase is planned. Befo
 
 1. On the release host, supply the three separate secret files and verify PostgreSQL private/TLS access, backup/restore, compatible rollback, graceful shutdown, socket ownership/mode, and assertion-key overlap/retirement.
 2. Run real Google and transactional-email smoke tests with production origins and callbacks.
-3. Recheck `npm audit --omit=dev`; the last run reported three high transitive findings in the current Next dependency tree with no non-breaking patched Next release offered by npm.
+3. Track the three high transitive findings reported by `npm audit --omit=dev` on 2026-08-02. They are Next `16.2.12` dependencies (`postcss@8.4.31` and `sharp@0.34.5`); `16.2.12` is the current npm release and npm offers only a forced downgrade to Next `9.3.3`, so no safe package update is currently available.
 
 These are deployment/provider checks, not blockers to local product use. Admin remains unavailable until separate MFA/recovery work, and private files remain unavailable until a separately accepted file feature.

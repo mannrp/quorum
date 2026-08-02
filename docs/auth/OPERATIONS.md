@@ -71,29 +71,17 @@ go test -count=1 ./...
 
 Tests that require PostgreSQL must fail rather than skip when `QUORUM_REQUIRE_INTEGRATION=true`.
 
-## Runtime configuration categories
+## Production secret files
 
-Exact variable names are introduced with the code that consumes them.
+`compose.production.yml` expects three untracked files on the release host:
 
-Next will require:
+- `.env.production.migrate`: `MIGRATOR_DATABASE_URL` for the migration role only.
+- `.env.production.api`: `DATABASE_URL`, `INTERNAL_ASSERTION_ISSUER`, `INTERNAL_ASSERTION_AUDIENCE`, and `INTERNAL_ASSERTION_PUBLIC_KEYS` for the product runtime role and accepted Ed25519 public keys.
+- `.env.production.web`: `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `AUTH_DATABASE_URL`, SMTP variables, the optional Google credential pair, and `INTERNAL_ASSERTION_ISSUER`, `INTERNAL_ASSERTION_AUDIENCE`, `INTERNAL_ASSERTION_KEY_ID`, and `INTERNAL_ASSERTION_PRIVATE_KEY`.
 
-- canonical public origin and trusted origins;
-- Better Auth database connection and secret;
-- Google credentials and exact callback when Google is enabled;
-- SMTP configuration;
-- private Go endpoint;
-- internal assertion private key and active key ID;
-- session limits and feature flag.
+Use `apps/api/.env.example` and `apps/web/.env.example` as the variable reference, but replace every local URL and placeholder. The database URLs use separate least-privilege roles and TLS. `BETTER_AUTH_URL` is the canonical HTTPS origin; its Google callback is exactly `<BETTER_AUTH_URL>/api/auth/callback/google`. SMTP credentials are either both present or both absent. `NEXT_PUBLIC_AUTH_TEST_OIDC` must not be set in production.
 
-Go will require:
-
-- application runtime database URL;
-- exact assertion issuer, audience, type, and bounded public key set;
-- request/deadline limits;
-- private object-storage configuration only when files are enabled.
-
-Secrets remain server-only. Production must reject dangerous legacy variables at cutover rather than silently accepting ambiguous behavior.
-
+The active web signing key ID must match one API public-key entry. Rotation adds the new public key first, switches the web signer, waits beyond the assertion lifetime, and then removes the retired public key. Secrets remain server-only and out of git.
 ## Deployment boundary
 
 Only Next receives public traffic.
@@ -126,4 +114,4 @@ Before cutover:
 7. Legacy Neon routes/verifier, arbitrary GraphQL forwarding, demo identity, `ADMIN_EMAILS`, public file URLs, and browser-visible backend origins are absent.
 8. Rollback uses a compatible image or disables the affected feature; it never restores weaker authentication.
 
-Host, email, Admin bootstrap, and retention choices remain listed in `STATUS.md` until selected. Do not add vendor comparison documents before a release environment is actually being chosen.
+The repository cannot supply the release hostname, PostgreSQL credentials, Google application, SMTP account, HTTPS proxy, or backup destination. Those owner/operator inputs are the only remaining external prerequisites. Admin and files are separate disabled features; do not add their vendor or policy choices to this release checklist.
