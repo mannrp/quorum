@@ -1,7 +1,7 @@
 # Auth V2 status
 
-**State:** implementation complete; P4 release validation remains
-**Active work:** release-host evidence only
+**State:** implementation complete; P4 release-host/provider validation remains
+**Active work:** release-host and real-provider evidence only
 **Branch:** `codex/auth-v2-rewrite`
 **Pull request:** `mannrp/quorum#10` (draft)
 **Updated:** 2026-08-02
@@ -28,7 +28,7 @@ Quorum has one browser authentication path: Better Auth `1.6.25` mounted by publ
 | P1 Authentication and viewer | done | Better Auth cutover and current-state viewer |
 | P2 Account lifecycle | done | Google, recovery, linking, credential changes, and sessions |
 | P3 Product operations | done | Enabled workflows use registered operations and Go authorization |
-| P4 Release | in review | Code complete; release-host/provider/CI evidence remains |
+| P4 Release | in review | Code and pinned Ubuntu CI green; release-host/provider evidence remains |
 
 ## Latest verified evidence
 
@@ -46,6 +46,7 @@ service-backed cd apps/api && go test -count=1 ./...             PASS (PostgreSQ
 npm run test:e2e                                                PASS (handler 10 + Chromium 5; no skips)
 production API and web Docker builds                            PASS
 production Next HTTP and read-only Unix-socket runtime probes    PASS
+pinned Ubuntu Verify workflow                                  PASS (2m37s)
 ```
 
 The service-backed run used pinned PostgreSQL `17.10-alpine3.24` and Mailpit `1.30.0` on loopback-only ports. The production-image probes confirmed non-root execution, direct Next PID 1, migrator binary and canonical migrations in the API image, stale-socket restart handling, and a read-only socket mount in web.
@@ -56,7 +57,6 @@ No further Auth V2 architecture or product implementation phase is planned. Befo
 
 1. On the release host, supply the three separate secret files and verify PostgreSQL private/TLS access, backup/restore, compatible rollback, graceful shutdown, socket ownership/mode, and assertion-key overlap/retirement.
 2. Run real Google and transactional-email smoke tests with production origins and callbacks.
-3. Run the repository baseline, Docker-context check, and pinned Ubuntu CI on the exact release commit.
-4. Recheck `npm audit --omit=dev`; the last run reported three high transitive findings in the current Next dependency tree with no non-breaking patched Next release offered by npm.
+3. Recheck `npm audit --omit=dev`; the last run reported three high transitive findings in the current Next dependency tree with no non-breaking patched Next release offered by npm.
 
 These are deployment/provider checks, not blockers to local product use. Admin remains unavailable until separate MFA/recovery work, and private files remain unavailable until a separately accepted file feature.
