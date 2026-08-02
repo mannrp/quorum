@@ -29,7 +29,6 @@ const (
 type PresignedPost struct {
 	URL       string
 	Key       string
-	PublicURL string
 	ExpiresAt time.Time
 	Fields    map[string]string
 }
@@ -39,7 +38,6 @@ type R2Signer struct {
 	accessKey string
 	secretKey string
 	bucket    string
-	publicURL string
 	now       func() time.Time
 }
 
@@ -49,7 +47,6 @@ func NewR2Signer(cfg config.Config) *R2Signer {
 		accessKey: strings.TrimSpace(cfg.R2AccessKeyID),
 		secretKey: strings.TrimSpace(cfg.R2SecretAccessKey),
 		bucket:    strings.TrimSpace(cfg.R2BucketName),
-		publicURL: strings.TrimRight(strings.TrimSpace(cfg.R2PublicURL), "/"),
 		now:       time.Now,
 	}
 }
@@ -100,14 +97,9 @@ func (s *R2Signer) PresignPost(_ context.Context, kind AssetKind, userID, filena
 	signature := sign(encodedPolicy, s.secretKey, credentialDate)
 
 	url := fmt.Sprintf("https://%s.r2.cloudflarestorage.com/%s", s.accountID, s.bucket)
-	publicURL := ""
-	if s.publicURL != "" {
-		publicURL = s.publicURL + "/" + key
-	}
 	return PresignedPost{
 		URL:       url,
 		Key:       key,
-		PublicURL: publicURL,
 		ExpiresAt: expires,
 		Fields: map[string]string{
 			"key":              key,

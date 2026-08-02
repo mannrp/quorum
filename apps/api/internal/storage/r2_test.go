@@ -15,7 +15,6 @@ func TestPresignPostBuildsResumeUpload(t *testing.T) {
 		R2AccessKeyID:     "access",
 		R2SecretAccessKey: "secret",
 		R2BucketName:      "bucket",
-		R2PublicURL:       "https://assets.example",
 	})
 	signer.now = func() time.Time { return time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC) }
 
@@ -28,9 +27,6 @@ func TestPresignPostBuildsResumeUpload(t *testing.T) {
 	}
 	if !strings.HasPrefix(post.Key, "resumes/user-1/") {
 		t.Fatalf("key = %q", post.Key)
-	}
-	if post.PublicURL == "" {
-		t.Fatal("public URL was empty")
 	}
 	for _, name := range []string{"key", "policy", "x-amz-signature", "x-amz-credential"} {
 		if post.Fields[name] == "" {

@@ -18,7 +18,6 @@ type Config struct {
 	R2AccessKeyID             string
 	R2SecretAccessKey         string
 	R2BucketName              string
-	R2PublicURL               string
 	Port                      string
 	InternalAssertionIssuer   string
 	InternalAssertionAudience string
@@ -45,7 +44,6 @@ func Load() (Config, error) {
 		R2AccessKeyID:             os.Getenv("R2_ACCESS_KEY_ID"),
 		R2SecretAccessKey:         os.Getenv("R2_SECRET_ACCESS_KEY"),
 		R2BucketName:              os.Getenv("R2_BUCKET_NAME"),
-		R2PublicURL:               strings.TrimRight(os.Getenv("R2_PUBLIC_URL"), "/"),
 		Port:                      env("PORT", "8080"),
 		InternalAssertionIssuer:   env("INTERNAL_ASSERTION_ISSUER", "quorum-next"),
 		InternalAssertionAudience: env("INTERNAL_ASSERTION_AUDIENCE", "quorum-go"),

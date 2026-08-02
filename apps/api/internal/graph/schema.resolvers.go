@@ -1407,14 +1407,9 @@ func (r *mutationResolver) SignUpload(ctx context.Context, input model.SignUploa
 	for _, name := range names {
 		fields = append(fields, &model.UploadField{Name: name, Value: post.Fields[name]})
 	}
-	var publicURL *string
-	if post.PublicURL != "" {
-		publicURL = &post.PublicURL
-	}
 	return &model.UploadSignature{
 		URL:       post.URL,
 		Key:       post.Key,
-		PublicURL: publicURL,
 		ExpiresAt: post.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 		Fields:    fields,
 	}, nil

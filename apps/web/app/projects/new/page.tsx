@@ -12,7 +12,6 @@ export default function CreateProjectPage() {
   const [description, setDescription] = useState("");
   const [constraints, setConstraints] = useState("");
   const [disciplines, setDisciplines] = useState<string[]>([]);
-  const [fileUrl, setFileUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [customQuestion, setCustomQuestion] = useState("");
   const [customQuestions, setCustomQuestions] = useState<string[]>([]);
