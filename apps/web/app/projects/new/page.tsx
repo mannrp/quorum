@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Combobox } from "@/components/ui";
-import { graphqlRequest } from "@/lib/graphql";
+import { operationRequest } from "@/lib/operations/client";
 import { DISCIPLINE_OPTIONS, PROJECT_TEAM_SIZE_MAX, PROJECT_TEAM_SIZE_MIN } from "@/lib/policy";
 
 export default function CreateProjectPage() {
@@ -35,27 +35,16 @@ export default function CreateProjectPage() {
     setSaving(true);
 
     try {
-      const result = await graphqlRequest<{ createProject: { id: string } }>(
-        `mutation CreateProject($input: CreateProjectInput!) {
-          createProject(input: $input) { id }
-        }`,
+      const result = await operationRequest<{ createProject: { id: string } }>(
+        "CreateProjectV1",
         {
           input: {
-            title,
-            summary,
-            description,
-            constraints,
-            disciplines,
-            teamSizeMin: PROJECT_TEAM_SIZE_MIN,
-            teamSizeMax: PROJECT_TEAM_SIZE_MAX,
-            fileUrl,
-            videoUrl,
-            lifecycleState: "OPEN",
-            approvalState: "UNVERIFIED",
-            applicationQuestions: JSON.stringify(customQuestions)
-          }
+            title, summary, description, constraints, disciplines,
+            teamSizeMin: PROJECT_TEAM_SIZE_MIN, teamSizeMax: PROJECT_TEAM_SIZE_MAX,
+            videoUrl, lifecycleState: "OPEN", approvalState: "UNVERIFIED",
+            applicationQuestions: JSON.stringify(customQuestions),
+          },
         },
-        { auth: true }
       );
       router.push(`/projects/${result.createProject.id}`);
     } catch (err) {
@@ -108,10 +97,6 @@ export default function CreateProjectPage() {
               <textarea value={constraints} onChange={(e) => setConstraints(e.target.value)} placeholder="Specify if students need NDAs, specialized labs, or Concordia hardware access..." className="input-field min-h-20 text-xs" />
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Project File URL (Specs sheet)</label>
-                <input type="url" value={fileUrl} onChange={(e) => setFileUrl(e.target.value)} placeholder="https://..." className="input-field text-xs" />
-              </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Video Brief URL</label>
                 <input type="url" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://youtube.com/..." className="input-field text-xs" />

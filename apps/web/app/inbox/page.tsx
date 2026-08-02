@@ -2,15 +2,15 @@
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Section, Status, Badge } from "@/components/ui";
-import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
-import { INBOX_QUERY, MESSAGES_QUERY } from "@/lib/queries";
+import { userFacingError } from "@/lib/operations/client";
+import { operationRequest, useOperation } from "@/lib/operations/client";
 import type { Message, User } from "@/types/domain";
 
 function InboxInner() {
   const searchParams = useSearchParams();
   const queryUserId = searchParams.get("userId");
 
-  const { data, error, loading } = useGraphQL<{ me: User | null; myInbox: User[] }>(INBOX_QUERY, {}, { auth: true });
+  const { data, error, loading } = useOperation<{ me: User | null; myInbox: User[] }>("InboxV1", {});
   const [activeUser, setActiveUser] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
@@ -30,42 +30,15 @@ function InboxInner() {
 
   const activeUserData = users.find((user) => user.id === activeUser);
 
-  // 1. Resolve search parameter focus
+  // A direct-recipient URL can focus only an existing authorized conversation.
   useEffect(() => {
-    if (queryUserId) {
-      const exists = rawUsers.find((u) => u.id === queryUserId);
-      if (exists) {
-        setActiveUser(exists.id);
-      } else {
-        // Fetch new target user profile details to start message
-        const fetchTarget = async () => {
-          try {
-            const res = await graphqlRequest<{ users: User[] }>(
-              `query inboxTargetQuery { users { id username fullName discipline } }`,
-              {},
-              { auth: true }
-            );
-            
-            const target = res.users.find((u) => u.id === queryUserId);
-            if (target) {
-              setExtraUser(target);
-              setActiveUser(target.id);
-            }
-          } catch (err) {
-            setNotice(userFacingError(err));
-          }
-        };
-        void fetchTarget();
-      }
-    } else if (!activeUser && rawUsers.length > 0) {
-      setActiveUser(rawUsers[0].id);
-    }
-  }, [queryUserId, rawUsers, activeUser]);
-
-  // 2. Fetch thread messages
+    const target = rawUsers.find((user) => user.id === queryUserId);
+    if (target) setActiveUser(target.id);
+    else if (!activeUser && rawUsers.length > 0) setActiveUser(rawUsers[0].id);
+  }, [queryUserId, rawUsers, activeUser]);  // 2. Fetch thread messages
   useEffect(() => {
     if (!activeUser) return;
-    graphqlRequest<{ myMessages: Message[] }>(MESSAGES_QUERY, { withUser: activeUser }, { auth: true })
+    operationRequest<{ myMessages: Message[] }>("ThreadMessagesV1", { withUser: activeUser })
       .then((result) => setMessages(result.myMessages))
       .catch((err) => setNotice(userFacingError(err)));
   }, [activeUser, activeUserData, me]);
@@ -74,10 +47,9 @@ function InboxInner() {
     event.preventDefault();
     if (!text.trim() || !activeUser) return;
     try {
-      const result = await graphqlRequest<{ sendMessage: Message }>(
-        `mutation Send($receiverId: ID!, $body: String!) { sendMessage(receiverId: $receiverId, body: $body) { id body read createdAt sender { id username fullName } receiver { id username fullName } } }`,
+      const result = await operationRequest<{ sendMessage: Message }>(
+        "SendMessageV1",
         { receiverId: activeUser, body: text.trim() },
-        { auth: true }
       );
       setMessages((prev) => [...prev, result.sendMessage]);
       setText("");
@@ -91,7 +63,7 @@ function InboxInner() {
       const unread = messages.filter((message) => message.receiver.id === me?.id && !message.read);
       await Promise.all(
         unread.map((message) =>
-          graphqlRequest(`mutation MarkRead($id: ID!) { markRead(messageId: $id) }`, { id: message.id }, { auth: true })
+          operationRequest("MarkMessageReadV1", { messageId: message.id })
         )
       );
       setMessages((prev) =>

@@ -6,6 +6,13 @@ type OperationEnvelope<T> = Readonly<{
   data?: T;
   errors?: Array<Readonly<{ message: string }>>;
 }>;
+export function userFacingError(error: unknown): string {
+  return error instanceof Error && error.message ? error.message : "Operation failed.";
+}
+
+export function clearOperationCache(): void {
+  // Registered operations do not retain a client-side cache.
+}
 
 export async function operationRequest<T>(
   operationId: string,

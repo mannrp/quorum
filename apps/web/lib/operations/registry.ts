@@ -123,7 +123,21 @@ const documents = {
   RespondTeamInvitationV1: `mutation RespondTeamInvitationV1($invitationId: ID!, $accept: Boolean!) { respondToTeamInvitation(invitationId: $invitationId, accept: $accept) { id status } }`,
   RemoveTeamMemberV1: `mutation RemoveTeamMemberV1($teamId: ID!, $userId: ID!) { removeMember(teamId: $teamId, userId: $userId) }`,
   PromoteTeamMemberV1: `mutation PromoteTeamMemberV1($teamId: ID!, $userId: ID!, $role: TeamRole!) { promoteMember(teamId: $teamId, userId: $userId, role: $role) { id role } }`,
-} as const;
+  ProjectSessionV1: `query ProjectSessionV1 { me { id username fullName } dashboardContext { myTeams { id name maxSize members { user { id } role } } } }`,
+  ProjectOwnerV1: `query ProjectOwnerV1($projectId: ID!) { project(id: $projectId) { ${publicProjectFields} applications { id status message answers reviewMessage offerMessage expiresAt teamConfirmedAt ownerConfirmedAt withdrawnAt createdAt team { ${publicTeamFields} } } } }`,
+  CreateProjectV1: `mutation CreateProjectV1($input: CreateProjectInput!) { createProject(input: $input) { id } }`,
+  UpdateProjectV1: `mutation UpdateProjectV1($projectId: ID!, $input: UpdateProjectInput!) { updateProject(id: $projectId, input: $input) { id } }`,
+  ApplyToProjectV1: `mutation ApplyToProjectV1($input: ApplyToProjectInput!) { applyToProjectInput(input: $input) { id status } }`,
+  SubmitProjectApprovalV1: `mutation SubmitProjectApprovalV1($projectId: ID!) { submitProjectForApproval(projectId: $projectId) { id approvalState } }`,
+  RejectProjectApplicationV1: `mutation RejectProjectApplicationV1($applicationId: ID!, $message: String) { rejectApplication(applicationId: $applicationId, message: $message) { id status reviewMessage } }`,
+  SendProjectOfferV1: `mutation SendProjectOfferV1($applicationId: ID!, $message: String) { sendProjectOffer(applicationId: $applicationId, message: $message) { id status offerMessage expiresAt } }`,
+  ConfirmProjectOfferOwnerV1: `mutation ConfirmProjectOfferOwnerV1($applicationId: ID!) { confirmProjectOfferByOwner(applicationId: $applicationId) { id status ownerConfirmedAt } }`,
+  ConfirmProjectOfferTeamV1: `mutation ConfirmProjectOfferTeamV1($applicationId: ID!) { confirmProjectOfferByTeam(applicationId: $applicationId) { id status teamConfirmedAt } }`,  InboxV1: `query InboxV1 { me { id username fullName } myInbox { id username fullName discipline } }`,
+  ThreadMessagesV1: `query ThreadMessagesV1($withUser: ID!) { myMessages(withUser: $withUser) { id body read createdAt sender { id username fullName } receiver { id username fullName } } }`,
+  SendMessageV1: `mutation SendMessageV1($receiverId: ID!, $body: String!) { sendMessage(receiverId: $receiverId, body: $body) { id body read createdAt sender { id username fullName } receiver { id username fullName } } }`,
+  MarkMessageReadV1: `mutation MarkMessageReadV1($messageId: ID!) { markRead(messageId: $messageId) }`,
+  NotificationsV1: `query NotificationsV1 { myNotifications { id type payload read createdAt } }`,
+  MarkNotificationReadV1: `mutation MarkNotificationReadV1($notificationId: ID!) { markNotificationRead(notificationId: $notificationId) }`,} as const;
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Operation variables are invalid.");
@@ -211,6 +225,52 @@ function profileVariables(value: unknown): { input: Record<string, unknown> } {
     parsed[key] = values;
   }
   return { input: parsed };
+}
+function projectInput(value: unknown, updating: boolean): Record<string, unknown> {
+  const input = record(value);
+  const allowed = ["title", "summary", "description", "constraints", "disciplines", "teamSizeMin", "teamSizeMax", "status", "lifecycleState", "approvalState", "videoUrl", "requiredSkills", "niceToHaveSkills", "deliverables", "timeline", "evaluationCriteria", "externalResources", "ownerContactPreference", "applicationQuestions"];
+  exactKeys(input, allowed);
+  if (typeof input.title !== "string" || !input.title.trim() || input.title.trim().length > 200) throw new Error("Operation variables are invalid.");
+  if (typeof input.description !== "string" || !input.description.trim() || input.description.length > 10_000) throw new Error("Operation variables are invalid.");
+  if (!Array.isArray(input.disciplines) || input.disciplines.length < 1 || input.disciplines.length > 20 || !input.disciplines.every((item) => typeof item === "string" && item.length > 0 && item.length <= 100)) throw new Error("Operation variables are invalid.");
+  if (input.teamSizeMin !== 10 || input.teamSizeMax !== 12) throw new Error("Operation variables are invalid.");
+  for (const [key, maximum] of [["summary", 1_000], ["constraints", 4_000], ["videoUrl", 2_048], ["deliverables", 4_000], ["timeline", 4_000], ["evaluationCriteria", 4_000], ["ownerContactPreference", 500], ["applicationQuestions", 4_000]] as const) optionalString(input, key, maximum, input);
+  for (const key of ["requiredSkills", "niceToHaveSkills", "externalResources"] as const) {
+    const items = input[key];
+    if (items !== undefined && (!Array.isArray(items) || items.length > 50 || !items.every((item) => typeof item === "string" && item.length > 0 && item.length <= 200))) throw new Error("Operation variables are invalid.");
+  }
+  if (input.lifecycleState !== undefined && !["DRAFT", "OPEN", "OFFER_SENT", "CLAIMED", "ARCHIVED"].includes(input.lifecycleState as string)) throw new Error("Operation variables are invalid.");
+  if (input.approvalState !== undefined && !["UNVERIFIED", "SUBMITTED_FOR_APPROVAL", "PROFESSOR_APPROVED", "PROFESSOR_REJECTED"].includes(input.approvalState as string)) throw new Error("Operation variables are invalid.");
+  if (updating && input.status !== undefined && !["OPEN", "IN_REVIEW", "CLAIMED", "CLOSED"].includes(input.status as string)) throw new Error("Operation variables are invalid.");
+  if (!updating && input.status !== undefined) throw new Error("Operation variables are invalid.");
+  return input;
+}
+
+function projectInputVariables(value: unknown, updating: boolean): Record<string, unknown> {
+  const variables = record(value);
+  exactKeys(variables, updating ? ["projectId", "input"] : ["input"]);
+  const input = projectInput(variables.input, updating);
+  return updating ? { projectId: uuidValue(variables.projectId), input } : { input };
+}
+
+function applicationVariables(value: unknown): { input: Record<string, string> } {
+  const variables = record(value);
+  exactKeys(variables, ["input"]);
+  const input = record(variables.input);
+  exactKeys(input, ["projectId", "teamId", "message", "answers"]);
+  const parsed: Record<string, string> = { projectId: uuidValue(input.projectId), teamId: uuidValue(input.teamId) };
+  for (const key of ["message", "answers"] as const) {
+    if (input[key] === undefined) continue;
+    if (typeof input[key] !== "string" || input[key].length > 8_000) throw new Error("Operation variables are invalid.");
+    parsed[key] = input[key];
+  }
+  return { input: parsed };
+}
+function sendMessageVariables(value: unknown): { receiverId: string; body: string } {
+  const variables = record(value);
+  exactKeys(variables, ["receiverId", "body"]);
+  if (typeof variables.body !== "string" || !variables.body.trim() || variables.body.trim().length > 4_000) throw new Error("Operation variables are invalid.");
+  return { receiverId: uuidValue(variables.receiverId), body: variables.body.trim() };
 }
 function uuidValue(value: unknown): string {
   if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
@@ -344,7 +404,37 @@ export function resolveOperation(id: string, variables: unknown): RegisteredOper
       if (source.role !== "MEMBER" && source.role !== "CO_LEAD") throw new Error("Operation variables are invalid.");
       return { auth: "authenticated", document: documents.PromoteTeamMemberV1, variables: { teamId: uuidValue(source.teamId), userId: uuidValue(source.userId), role: source.role } };
     }
-    default:
+    case "ProjectSessionV1":
+      return { auth: "authenticated", document: documents.ProjectSessionV1, variables: noVariables(variables) };
+    case "ProjectOwnerV1":
+      return { auth: "authenticated", document: documents.ProjectOwnerV1, variables: namedIDVariables(variables, ["projectId"]) };
+    case "CreateProjectV1":
+      return { auth: "authenticated", document: documents.CreateProjectV1, variables: projectInputVariables(variables, false) };
+    case "UpdateProjectV1":
+      return { auth: "authenticated", document: documents.UpdateProjectV1, variables: projectInputVariables(variables, true) };
+    case "ApplyToProjectV1":
+      return { auth: "authenticated", document: documents.ApplyToProjectV1, variables: applicationVariables(variables) };
+    case "SubmitProjectApprovalV1":
+      return { auth: "authenticated", document: documents.SubmitProjectApprovalV1, variables: namedIDVariables(variables, ["projectId"]) };
+    case "RejectProjectApplicationV1":
+      return { auth: "authenticated", document: documents.RejectProjectApplicationV1, variables: messageVariables(variables, "applicationId") };
+    case "SendProjectOfferV1":
+      return { auth: "authenticated", document: documents.SendProjectOfferV1, variables: messageVariables(variables, "applicationId") };
+    case "ConfirmProjectOfferOwnerV1":
+      return { auth: "authenticated", document: documents.ConfirmProjectOfferOwnerV1, variables: namedIDVariables(variables, ["applicationId"]) };
+    case "ConfirmProjectOfferTeamV1":
+      return { auth: "authenticated", document: documents.ConfirmProjectOfferTeamV1, variables: namedIDVariables(variables, ["applicationId"]) };    case "InboxV1":
+      return { auth: "authenticated", document: documents.InboxV1, variables: noVariables(variables) };
+    case "ThreadMessagesV1":
+      return { auth: "authenticated", document: documents.ThreadMessagesV1, variables: namedIDVariables(variables, ["withUser"]) };
+    case "SendMessageV1":
+      return { auth: "authenticated", document: documents.SendMessageV1, variables: sendMessageVariables(variables) };
+    case "MarkMessageReadV1":
+      return { auth: "authenticated", document: documents.MarkMessageReadV1, variables: namedIDVariables(variables, ["messageId"]) };
+    case "NotificationsV1":
+      return { auth: "authenticated", document: documents.NotificationsV1, variables: noVariables(variables) };
+    case "MarkNotificationReadV1":
+      return { auth: "authenticated", document: documents.MarkNotificationReadV1, variables: namedIDVariables(variables, ["notificationId"]) };    default:
       throw new Error("Operation is not registered.");
   }
 }

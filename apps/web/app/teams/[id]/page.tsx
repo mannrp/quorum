@@ -2,7 +2,7 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { ActionButton, Section, Status, Badge, Modal, LoadingSkeleton } from "@/components/ui";
-import { userFacingError } from "@/lib/graphql";
+import { userFacingError } from "@/lib/operations/client";
 import { operationRequest, useOperation } from "@/lib/operations/client";
 import { viewerClient } from "@/lib/auth-v2/viewer-client";
 import type { Team, TeamRole } from "@/types/domain";

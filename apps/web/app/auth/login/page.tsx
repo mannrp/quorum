@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Section } from "@/components/ui";
 import { authDestination } from "@/lib/auth-routing";
-import { userFacingError } from "@/lib/graphql";
+import { userFacingError } from "@/lib/operations/client";
 import { signInWithEmail, signInWithGoogle } from "@/lib/auth-v2/client-actions";
 
 export default function LoginPage() {

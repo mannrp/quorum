@@ -3,7 +3,7 @@ import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Section, Status, Badge, Modal, LoadingSkeleton } from "@/components/ui";
-import { userFacingError } from "@/lib/graphql";
+import { userFacingError } from "@/lib/operations/client";
 import { operationRequest, useOperation } from "@/lib/operations/client";
 import type { Team } from "@/types/domain";
 

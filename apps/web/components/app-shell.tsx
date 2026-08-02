@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useState, useEffect, useCallback } from "react";
-import { clearGraphQLCache } from "@/lib/graphql";
+import { clearOperationCache } from "@/lib/operations/client";
 import { getCurrentUser, signOut } from "@/lib/auth-v2/client-actions";
 import { subscribeToSessionInvalidation } from "@/lib/auth-v2/session-events";
 import { viewerClient } from "@/lib/auth-v2/viewer-client";
@@ -77,7 +77,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [fetchSession]);
 
   useEffect(() => subscribeToSessionInvalidation(() => {
-    clearGraphQLCache();
+    clearOperationCache();
     void getCurrentUser()
       .then((user) => {
         if (user) return fetchSession();
@@ -95,7 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }), [fetchSession, router]);
   const handleLogout = async () => {
     await signOut().catch(() => undefined);
-    clearGraphQLCache();
+    clearOperationCache();
     setMe(null);
     router.push("/");
   };

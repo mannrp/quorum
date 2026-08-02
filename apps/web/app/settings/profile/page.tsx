@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Status, Combobox, LoadingSkeleton } from "@/components/ui";
-import { userFacingError } from "@/lib/graphql";
+import { userFacingError } from "@/lib/operations/client";
 import { operationRequest } from "@/lib/operations/client";
 import { DISCIPLINE_OPTIONS, RESUME_VISIBILITY_OPTIONS, SKILL_OPTIONS } from "@/lib/policy";
 import type { User } from "@/types/domain";

@@ -2,8 +2,8 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { ConfirmDialog, Section, Status, Modal, LoadingSkeleton } from "@/components/ui";
-import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
-import { PROJECT_QUERY } from "@/lib/queries";
+import { userFacingError } from "@/lib/operations/client";
+import { operationRequest, useOperation } from "@/lib/operations/client";
 import type { Project, ProjectApplication } from "@/types/domain";
 
 type ConfirmAction = {
@@ -16,7 +16,7 @@ type ConfirmAction = {
 
 export default function ProjectApplicationsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, error, loading, reload } = useGraphQL<{ project: Project | null }>(PROJECT_QUERY, { id }, { auth: true });
+  const { data, error, loading, reload } = useOperation<{ project: Project | null }>("ProjectOwnerV1", { projectId: id });
 
   const [apps, setApps] = useState<ProjectApplication[]>([]);
   const [selectedApp, setSelectedApp] = useState<ProjectApplication | null>(null);
@@ -44,12 +44,9 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
     setNotice(null);
     setSubmitting(true);
     try {
-      await graphqlRequest(
-        `mutation SendOffer($applicationId: ID!, $message: String) {
-          sendProjectOffer(applicationId: $applicationId, message: $message) { id status offerMessage expiresAt }
-        }`,
+      await operationRequest(
+        "SendProjectOfferV1",
         { applicationId: selectedApp.id, message: offerMessage },
-        { auth: true }
       );
       setNotice(`Offer sent to team "${selectedApp.team.name}".`);
       setIsOfferOpen(false);
@@ -82,12 +79,9 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
       onConfirm: async () => {
         setNotice(null);
         try {
-          await graphqlRequest(
-            `mutation RejectApp($applicationId: ID!, $message: String) {
-              rejectApplication(applicationId: $applicationId, message: $message) { id status reviewMessage }
-            }`,
+          await operationRequest(
+            "RejectProjectApplicationV1",
             { applicationId: appId, message: "Declined by project owner." },
-            { auth: true }
           );
           setNotice("Application declined.");
           await reload();
@@ -106,16 +100,9 @@ export default function ProjectApplicationsPage({ params }: { params: Promise<{ 
       onConfirm: async () => {
         setNotice(null);
         try {
-          await graphqlRequest(
-            `mutation ConfirmOfferByOwner($applicationId: ID!) {
-              confirmProjectOfferByOwner(applicationId: $applicationId) {
-                id
-                status
-                ownerConfirmedAt
-              }
-            }`,
+          await operationRequest(
+            "ConfirmProjectOfferOwnerV1",
             { applicationId: appId },
-            { auth: true }
           );
           setNotice("Match finalized successfully! The project is now claimed.");
           await reload();

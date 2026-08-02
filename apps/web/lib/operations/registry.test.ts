@@ -54,6 +54,16 @@ describe("registered browser operations", () => {
     expect(operation.document).toContain(documentName);
     expect(operation.document).not.toMatch(/authUserId|email|resumeUrl|fileUrl|publicUrl/);
   });  it.each([
+    ["ProjectSessionV1", {}, "query ProjectSessionV1"],
+    ["CreateProjectV1", { input: { title: "Challenge", summary: "Summary", description: "Full description", disciplines: ["SOEN"], teamSizeMin: 10, teamSizeMax: 12, lifecycleState: "OPEN", approvalState: "UNVERIFIED" } }, "mutation CreateProjectV1"],
+    ["ApplyToProjectV1", { input: { projectId: "11111111-1111-4111-8111-111111111111", teamId: "22222222-2222-4222-8222-222222222222", message: "Application" } }, "mutation ApplyToProjectV1"],
+    ["SendProjectOfferV1", { applicationId: "11111111-1111-4111-8111-111111111111", message: "Offer" }, "mutation SendProjectOfferV1"],
+  ])("resolves bounded authenticated Project operation %s", (id, variables, documentName) => {
+    const operation = resolveOperation(id, variables);
+    expect(operation.auth).toBe("authenticated");
+    expect(operation.document).toContain(documentName);
+    expect(operation.document).not.toMatch(/authUserId|email|resumeUrl|fileUrl|publicUrl/);
+  });  it.each([
     ["PublicTeamsV1", {}, "query PublicTeamsV1"],
     ["PublicTeamsV1", { search: "robotics" }, "query PublicTeamsV1"],
     ["PublicProjectsV1", {}, "query PublicProjectsV1"],
@@ -87,6 +97,9 @@ describe("registered browser operations", () => {
     ["CreateTeamV1", { input: { name: "Aegis", description: "Team", discipline: "SOEN", maxSize: 4, isComplete: false, visibility: "VISIBLE", existingSkills: [], neededSkills: [] } }],
     ["RequestTeamJoinV1", { teamId: "11111111-1111-4111-8111-111111111111", message: "x".repeat(1001) }],
     ["RespondTeamInvitationV1", { invitationId: "11111111-1111-4111-8111-111111111111", accept: "yes" }],
+    ["CreateProjectV1", { input: { title: "Challenge", summary: "Summary", description: "Full description", disciplines: ["SOEN"], teamSizeMin: 10, teamSizeMax: 12, lifecycleState: "OPEN", approvalState: "UNVERIFIED", fileUrl: "https://public.example/file" } }],
+    ["ApplyToProjectV1", { input: { projectId: "not-a-uuid", teamId: "22222222-2222-4222-8222-222222222222" } }],
+    ["SendProjectOfferV1", { applicationId: "11111111-1111-4111-8111-111111111111", message: "x".repeat(1001) }],
   ])("rejects unregistered or expanded input for %s", (id, variables) => {
     expect(() => resolveOperation(id, variables)).toThrow();
   });

@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Modal, LoadingSkeleton } from "@/components/ui";
-import { clearGraphQLCache, userFacingError } from "@/lib/graphql";
+import { clearOperationCache, userFacingError } from "@/lib/operations/client";
 import { operationRequest } from "@/lib/operations/client";
 import type { User } from "@/types/domain";
 import { linkGoogle, listSignInMethods, unlinkGoogle, type SignInMethod } from "@/lib/auth-v2/client-actions";
@@ -157,7 +157,7 @@ export default function AccountSettingsPage() {
       <CredentialsPanel
         passwordEnabled={signInMethods.includes("password")}
         onPasswordChanged={async () => {
-          clearGraphQLCache();
+          clearOperationCache();
           setSessions(await sessionClient.list());
         }}
       />

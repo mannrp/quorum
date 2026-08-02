@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, Section, Status, LoadingSkeleton } from "@/components/ui";
 import { DeadlineDisplay } from "@/components/deadline-display";
-import { userFacingError } from "@/lib/graphql";
+import { userFacingError } from "@/lib/operations/client";
 import { viewerClient } from "@/lib/auth-v2/viewer-client";
 import { operationRequest } from "@/lib/operations/client";
 import type { User } from "@/types/domain";

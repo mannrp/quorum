@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Section } from "@/components/ui";
 import { authDestination } from "@/lib/auth-routing";
-import { userFacingError } from "@/lib/graphql";
+import { userFacingError } from "@/lib/operations/client";
 
 export default function AuthCompletePage() {
   const router = useRouter();

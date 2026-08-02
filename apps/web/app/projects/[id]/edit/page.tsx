@@ -3,15 +3,15 @@ import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Section, Combobox, LoadingSkeleton } from "@/components/ui";
-import { useGraphQL, graphqlRequest, userFacingError } from "@/lib/graphql";
+import { userFacingError } from "@/lib/operations/client";
+import { operationRequest, useOperation } from "@/lib/operations/client";
 import { DISCIPLINE_OPTIONS, PROJECT_TEAM_SIZE_MAX, PROJECT_TEAM_SIZE_MIN } from "@/lib/policy";
-import { PROJECT_QUERY } from "@/lib/queries";
 import type { Project } from "@/types/domain";
 
 export default function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { data, error, loading, reload } = useGraphQL<{ project: Project | null }>(PROJECT_QUERY, { id }, { auth: true });
+  const { data, error, loading, reload } = useOperation<{ project: Project | null }>("ProjectOwnerV1", { projectId: id });
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -37,23 +37,16 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
     setSaving(true);
 
     try {
-      await graphqlRequest(
-        `mutation UpdateProjectDetails($id: ID!, $input: UpdateProjectInput!) {
-          updateProject(id: $id, input: $input) { id }
-        }`,
+      await operationRequest(
+        "UpdateProjectV1",
         {
-          id,
+          projectId: id,
           input: {
-            title,
-            description,
-            constraints,
-            disciplines,
+            title, summary: data?.project?.summary ?? "", description, constraints, disciplines,
             teamSizeMin: data?.project?.teamSizeMin ?? PROJECT_TEAM_SIZE_MIN,
-            teamSizeMax: data?.project?.teamSizeMax ?? PROJECT_TEAM_SIZE_MAX,
-            status,
-          }
+            teamSizeMax: data?.project?.teamSizeMax ?? PROJECT_TEAM_SIZE_MAX, status,
+          },
         },
-        { auth: true }
       );
       setNotice("Project updated successfully. Applicants notified of material changes.");
     } catch (err) {

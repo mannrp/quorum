@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Section } from "@/components/ui";
 import { signUpWithEmail } from "@/lib/auth-v2/client-actions";
-import { userFacingError } from "@/lib/graphql";
+import { userFacingError } from "@/lib/operations/client";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
