@@ -24,62 +24,6 @@ export const USER_FIELDS = `
   tags { id name isPredefined }
 `;
 
-export const AUTH_STATE_QUERY = `
-  query AuthState {
-    authState {
-      authenticated
-      hasProfile
-      profileComplete
-      profile { ${USER_FIELDS} }
-    }
-  }
-`;
-
-export const SHELL_AUTH_QUERY = `
-  query ShellAuth {
-    authState {
-      authenticated
-      hasProfile
-      profileComplete
-      profile {
-        id
-        authUserId
-        username
-        fullName
-      }
-    }
-  }
-`;
-
-export const DASHBOARD_AUTH_QUERY = `
-  query DashboardAuth {
-    authState {
-      authenticated
-      hasProfile
-      profileComplete
-      profile {
-        id
-        authUserId
-        username
-        email
-        fullName
-        discipline
-        userIntent
-      }
-    }
-  }
-`;
-
-export const SHELL_COUNTS_QUERY = `
-  query ShellCounts {
-    dashboardContext {
-      unreadMessages
-      unreadNotifications
-      isAdmin
-    }
-  }
-`;
-
 export const TEAM_CARD_FIELDS = `
   id
   name
@@ -185,12 +129,6 @@ export const PROFILE_QUERY = `
   }
 `;
 
-export const ME_QUERY = `
-  query Me {
-    me { ${USER_FIELDS} }
-  }
-`;
-
 export const INBOX_QUERY = `
   query Inbox {
     me { id username fullName }
@@ -223,83 +161,5 @@ export const ADMIN_QUERY = `
     teams { ${TEAM_CARD_FIELDS} }
     projects { ${PROJECT_CARD_FIELDS} applications { id status message answers reviewMessage offerMessage expiresAt createdAt team { id name isComplete maxSize createdBy { id username fullName } members { id role joinedAt user { id username fullName } } } } }
     auditLogs(limit: 100) { id actionType targetEntityType targetEntityId reason createdAt actor { id username email fullName } }
-  }
-`;
-
-export const DASHBOARD_CONTEXT_QUERY = `
-  query DashboardContext {
-    dashboardContext {
-      unreadMessages
-      unreadNotifications
-      isAdmin
-      universalDeadline { id deadlineAt updatedAt }
-      myTeams { ${TEAM_CARD_FIELDS} }
-      myProjects {
-        id
-        title
-        description
-        status
-        applications { id status createdAt }
-      }
-      myInvitations { id status message expiresAt createdAt team { id name createdBy { id username fullName } } invitedBy { id username fullName } }
-    }
-    myNotifications { id type payload read createdAt }
-  }
-`;
-
-export const DASHBOARD_PAGE_QUERY = `
-  query DashboardPage($requestStatus: JoinRequestStatus) {
-    authState {
-      authenticated
-      hasProfile
-      profileComplete
-      profile {
-        id
-        authUserId
-        username
-        email
-        fullName
-        discipline
-        userIntent
-      }
-    }
-    dashboardContext {
-      unreadMessages
-      unreadNotifications
-      isAdmin
-      universalDeadline { id deadlineAt updatedAt }
-      myTeams { ${TEAM_CARD_FIELDS} }
-      myProjects {
-        id
-        title
-        description
-        status
-        applications { id status createdAt }
-      }
-      myInvitations { id status message expiresAt createdAt team { id name createdBy { id username fullName } } invitedBy { id username fullName } }
-    }
-    myNotifications { id type payload read createdAt }
-    myJoinRequests(status: $requestStatus) {
-      id
-      status
-      message
-      expiresAt
-      createdAt
-      team { id name }
-    }
-    projects {
-      id
-      title
-      status
-      owner { id fullName username }
-      applications {
-        id
-        status
-        offerMessage
-        expiresAt
-        createdAt
-        team { id }
-      }
-    }
   }
 `;

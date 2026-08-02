@@ -45,6 +45,11 @@ async function verificationURL(email: string, subject = "Verify your Quorum emai
 test("verified user enrolls, refreshes the viewer, and logs out", async ({ page }) => {
   test.skip(!integration, "requires pinned PostgreSQL and Mailpit services");
 
+  const legacyBodies: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/graphql") legacyBodies.push(request.postData() ?? "");
+  });
+
   const email = `auth-browser-${Date.now()}@example.test`;
   const password = "correct horse battery staple 123";
 
@@ -68,6 +73,7 @@ test("verified user enrolls, refreshes the viewer, and logs out", async ({ page 
   await page.getByLabel("Role").selectOption("STUDENT");
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByRole("heading", { name: /Good to see you/ })).toBeVisible();
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const viewer = await page.evaluate(async () => {
@@ -85,6 +91,8 @@ test("verified user enrolls, refreshes the viewer, and logs out", async ({ page 
     expect(viewer.body.viewer).not.toHaveProperty("authUserId");
     await page.reload();
   }
+
+  expect(legacyBodies.join("\n")).not.toMatch(/query (ShellAuth|ShellCounts|DashboardPage|DashboardContext|DashboardAuth|AuthState|Me)\b/);
 
   await suspendProductAccount(email);
   const inactiveViewer = await page.evaluate(() => fetch("/api/v1/viewer", { cache: "no-store" }).then((response) => response.status));
@@ -124,6 +132,7 @@ test("Google-style OAuth user reaches the same Sponsor enrollment and logout flo
   await page.getByLabel("Role").selectOption("SPONSOR");
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByRole("heading", { name: /Good to see you/ })).toBeVisible();
 
   const viewer = await page.evaluate(async () => {
     const response = await fetch("/api/v1/viewer", { cache: "no-store" });

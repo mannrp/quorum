@@ -11,6 +11,38 @@ describe("registered browser operations", () => {
     expect(operation.document).not.toContain("fileUrl");
   });
 
+  it("resolves shell counts only as an authenticated no-input operation", () => {
+    const operation = resolveOperation("ShellCountsV1", {});
+    expect(operation.auth).toBe("authenticated");
+    expect(operation.variables).toEqual({});
+    expect(operation.document).toContain("query ShellCountsV1");
+    expect(operation.document).not.toMatch(/isAdmin|role|email|userId/);
+  });
+  it.each([
+    ["ViewerProfileV1", {}, "query ViewerProfileV1"],
+    ["DashboardV1", {}, "query DashboardV1"],
+    ["DeactivateAccountV1", {}, "mutation DeactivateAccountV1"],
+    ["DeactivateAccountV1", { reason: "No longer needed" }, "mutation DeactivateAccountV1"],
+    ["UpdateMyProfileV1", {
+      input: {
+        username: "current-user",
+        fullName: "Current User",
+        bio: "Builder",
+        discipline: "SOEN",
+        university: "Concordia",
+        linkedinUrl: "https://linkedin.example/current",
+        githubUrl: "",
+        portfolioUrl: "https://example.test",
+        resumeVisibility: "PRIVATE",
+        skills: ["Go", "TypeScript"],
+      },
+    }, "mutation UpdateMyProfileV1"],
+  ])("resolves authenticated self-service operation %s", (id, variables, documentName) => {
+    const operation = resolveOperation(id, variables);
+    expect(operation.auth).toBe("authenticated");
+    expect(operation.document).toContain(documentName);
+    expect(operation.document).not.toMatch(/authUserId|resumeUrl|fileUrl|publicUrl/);
+  });
   it.each([
     ["PublicTeamsV1", {}, "query PublicTeamsV1"],
     ["PublicTeamsV1", { search: "robotics" }, "query PublicTeamsV1"],
@@ -35,6 +67,12 @@ describe("registered browser operations", () => {
     ["PublicTeamsV1", { search: "ok", role: "ADMIN" }],
     ["PublicProjectV1", { id: "not-a-uuid" }],
     ["PublicProfileV1", { username: "../admin" }],
+    ["ShellCountsV1", { userId: "forged" }],
+    ["ViewerProfileV1", { userId: "forged" }],
+    ["DashboardV1", { role: "ADMIN" }],
+    ["DeactivateAccountV1", { reason: "x".repeat(501) }],
+    ["UpdateMyProfileV1", { input: { username: "current-user", fullName: "Name", email: "forged@example.test" } }],
+    ["UpdateMyProfileV1", { input: { username: "current-user", fullName: "Name", resumeUrl: "https://public.example/file" } }],
   ])("rejects unregistered or expanded input for %s", (id, variables) => {
     expect(() => resolveOperation(id, variables)).toThrow();
   });

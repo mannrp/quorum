@@ -2,8 +2,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Modal, LoadingSkeleton } from "@/components/ui";
-import { clearGraphQLCache, graphqlRequest, userFacingError } from "@/lib/graphql";
-import { ME_QUERY } from "@/lib/queries";
+import { clearGraphQLCache, userFacingError } from "@/lib/graphql";
+import { operationRequest } from "@/lib/operations/client";
 import type { User } from "@/types/domain";
 import { linkGoogle, listSignInMethods, unlinkGoogle, type SignInMethod } from "@/lib/auth-v2/client-actions";
 import { sessionClient, type BrowserSession } from "@/lib/auth-v2/session-client";
@@ -24,7 +24,7 @@ export default function AccountSettingsPage() {
   useEffect(() => {
     const checkUser = async () => {
       try {
-        const res = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, { auth: true });
+        const res = await operationRequest<{ me: User | null }>("ViewerProfileV1", {});
         if (!res.me) {
           router.push("/onboarding");
           return;
@@ -89,11 +89,7 @@ export default function AccountSettingsPage() {
     setDeleting(true);
     setNotice(null);
     try {
-      await graphqlRequest(
-        `mutation DeactivateAccount($reason: String) { deactivateAccount(reason: $reason) }`,
-        { reason: "Self-service deactivation from settings" },
-        { auth: true }
-      );
+      await operationRequest("DeactivateAccountV1", { reason: "Self-service deactivation from settings" });
       router.push("/");
     } catch (err) {
       setNotice(userFacingError(err));

@@ -6,6 +6,7 @@ const port = Number.parseInt(process.env.OIDC_TEST_PORT ?? "19090", 10);
 const issuer = `http://${hostname}:${port}`;
 const clientId = process.env.OIDC_TEST_CLIENT_ID ?? "quorum-test-client";
 const clientSecret = process.env.OIDC_TEST_CLIENT_SECRET ?? "quorum-test-secret";
+const subject = process.env.OIDC_TEST_SUBJECT ?? "deterministic-google-subject";
 const expectedRedirectURI = process.env.OIDC_TEST_REDIRECT_URI ?? "http://127.0.0.1:3000/api/auth/oauth2/callback/quorum-test-oidc";
 const codes = new Map();
 const accessTokens = new Set();
@@ -101,8 +102,8 @@ const server = createServer(async (request, response) => {
     userInfoRequests += 1;
     const returning = userInfoRequests > 1;
     return json(response, 200, {
-      sub: "deterministic-google-subject",
-      email: returning ? "oidc-user-renamed@example.test" : "oidc-user@example.test",
+      sub: subject,
+      email: returning ? `oidc-renamed-${identitySuffix}@example.test` : `oidc-${identitySuffix}@example.test`,
       email_verified: true,
       name: returning ? "OIDC Renamed User" : "OIDC Test User",
     });

@@ -2,11 +2,12 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useState, useEffect, useCallback } from "react";
-import { clearGraphQLCache, graphqlRequest, userFacingError } from "@/lib/graphql";
+import { clearGraphQLCache } from "@/lib/graphql";
 import { getCurrentUser, signOut } from "@/lib/auth-v2/client-actions";
 import { subscribeToSessionInvalidation } from "@/lib/auth-v2/session-events";
-import { SHELL_AUTH_QUERY, SHELL_COUNTS_QUERY } from "@/lib/queries";
-import type { AuthState, User } from "@/types/domain";
+import { viewerClient } from "@/lib/auth-v2/viewer-client";
+import { operationRequest } from "@/lib/operations/client";
+import type { User } from "@/types/domain";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -16,7 +17,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [unreadMsg, setUnreadMsg] = useState(0);
   const [unreadNotif, setUnreadNotif] = useState(0);
-  const [adminAccess, setAdminAccess] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
   // Initialize theme from document class
@@ -38,33 +38,32 @@ export function AppShell({ children }: { children: ReactNode }) {
   const fetchSession = useCallback(async () => {
     try {
       setSessionError(null);
-      const res = await graphqlRequest<{ authState: AuthState }>(SHELL_AUTH_QUERY, {}, { auth: "optional", cacheMs: 60_000 });
-      if (res.authState.profile) {
-        setMe(res.authState.profile);
-      } else {
+      const result = await viewerClient.viewer();
+      if (result.state !== "ready" || !result.viewer.username || !result.viewer.displayName) {
         setMe(null);
-        setAdminAccess(false);
         setUnreadNotif(0);
         setUnreadMsg(0);
+        return;
       }
 
-      if (res.authState.profileComplete) {
-        const counts = await graphqlRequest<{
-          dashboardContext: { unreadMessages: number; unreadNotifications: number; isAdmin: boolean };
-        }>(SHELL_COUNTS_QUERY, {}, { auth: true });
-
+      setMe({
+        id: result.viewer.productUserId,
+        username: result.viewer.username,
+        fullName: result.viewer.displayName,
+      });
+      if (result.viewer.onboardingState === "COMPLETE") {
+        const counts = await operationRequest<{
+          dashboardContext: { unreadMessages: number; unreadNotifications: number };
+        }>("ShellCountsV1", {});
         setUnreadNotif(counts.dashboardContext.unreadNotifications);
         setUnreadMsg(counts.dashboardContext.unreadMessages);
-        setAdminAccess(counts.dashboardContext.isAdmin);
       } else {
-        setAdminAccess(false);
         setUnreadNotif(0);
         setUnreadMsg(0);
       }
-    } catch (err) {
-      setSessionError(userFacingError(err));
+    } catch (error) {
+      setSessionError(error instanceof Error ? error.message : "Unable to load account state.");
       setMe(null);
-      setAdminAccess(false);
       setUnreadNotif(0);
       setUnreadMsg(0);
     } finally {
@@ -83,14 +82,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       .then((user) => {
         if (user) return fetchSession();
         setMe(null);
-        setAdminAccess(false);
         setUnreadNotif(0);
         setUnreadMsg(0);
         router.push("/auth/login");
       })
       .catch(() => {
         setMe(null);
-        setAdminAccess(false);
         setUnreadNotif(0);
         setUnreadMsg(0);
         router.push("/auth/login");
@@ -100,7 +97,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     await signOut().catch(() => undefined);
     clearGraphQLCache();
     setMe(null);
-    setAdminAccess(false);
     router.push("/");
   };
 

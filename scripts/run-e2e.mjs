@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { generateKeyPairSync } from "node:crypto";
+import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { existsSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -67,11 +67,13 @@ required("MAILPIT_API_URL");
 const oidcBaseURL = "http://127.0.0.1:19090";
 const oidcClientId = "quorum-test-client";
 const oidcClientSecret = "quorum-test-secret";
+const oidcSubject = `quorum-e2e-${randomUUID()}`;
 const oidcRedirectURI = "http://127.0.0.1:3000/api/auth/oauth2/callback/quorum-test-oidc";
 Object.assign(childEnv, {
   AUTH_TEST_OIDC_BASE_URL: oidcBaseURL,
   AUTH_TEST_OIDC_CLIENT_ID: oidcClientId,
   AUTH_TEST_OIDC_CLIENT_SECRET: oidcClientSecret,
+  OIDC_TEST_SUBJECT: oidcSubject,
   NEXT_PUBLIC_AUTH_TEST_OIDC: "true",
   GOOGLE_CLIENT_ID: "quorum-link-test-client",
   GOOGLE_CLIENT_SECRET: "quorum-link-test-secret",
@@ -83,6 +85,7 @@ const oidcProvider = spawnChild(process.execPath, ["scripts/oidc-test-provider.m
     OIDC_TEST_CLIENT_ID: oidcClientId,
     OIDC_TEST_CLIENT_SECRET: oidcClientSecret,
     OIDC_TEST_REDIRECT_URI: oidcRedirectURI,
+    OIDC_TEST_SUBJECT: oidcSubject,
   },
   stdio: "ignore",
 });

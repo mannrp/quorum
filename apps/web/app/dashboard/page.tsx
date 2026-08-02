@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, Section, Status, LoadingSkeleton } from "@/components/ui";
 import { DeadlineDisplay } from "@/components/deadline-display";
-import { getCachedGraphQLData, graphqlRequest, userFacingError } from "@/lib/graphql";
-import { DASHBOARD_PAGE_QUERY } from "@/lib/queries";
-import type { AuthState, User, Team, Project, ProjectApplication, Notification } from "@/types/domain";
+import { graphqlRequest, userFacingError } from "@/lib/graphql";
+import { viewerClient } from "@/lib/auth-v2/viewer-client";
+import { operationRequest } from "@/lib/operations/client";
+import type { User } from "@/types/domain";
 
 type DashboardInvitation = {
   id: string;
@@ -37,45 +38,50 @@ type ConfirmAction = {
   onConfirm: () => Promise<void>;
 };
 
+type DashboardMember = { id: string; role: "LEAD" | "CO_LEAD" | "MEMBER"; user: { id: string; fullName: string } };
+type DashboardTeam = {
+  id: string;
+  name: string;
+  description?: string | null;
+  isComplete: boolean;
+  maxSize: number;
+  members: DashboardMember[];
+};
+type DashboardApplication = { id: string; status: string };
+type DashboardProject = {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  applications: DashboardApplication[];
+};
+type DashboardNotification = { id: string; type: string; read: boolean; createdAt: string };
+
 type DashboardPageData = {
-  authState: AuthState;
+  me: User | null;
   dashboardContext: {
-    myTeams: Team[];
-    myProjects: Project[];
+    myTeams: DashboardTeam[];
+    myProjects: DashboardProject[];
     myInvitations: DashboardInvitation[];
     universalDeadline: Deadline | null;
   };
-  myNotifications: Notification[];
+  myNotifications: DashboardNotification[];
   myJoinRequests: DashboardJoinRequest[];
-  projects: Project[];
 };
 
 function dashboardView(result: DashboardPageData) {
-  const team = result.dashboardContext.myTeams[0] || null;
   const project = result.dashboardContext.myProjects[0] || null;
-  const teamApps: ProjectApplication[] = [];
-  if (team) {
-    for (const candidate of result.projects || []) {
-      for (const application of candidate.applications || []) {
-        if (application.team?.id === team.id) {
-          teamApps.push({ ...application, project: candidate });
-        }
-      }
-    }
-  }
   return {
-    me: result.authState.profile || null,
-    team,
+    me: result.me,
+    team: result.dashboardContext.myTeams[0] || null,
     project,
     applications: project?.applications || [],
-    teamApps,
     notifs: result.myNotifications.slice(0, 3),
     invitations: result.dashboardContext.myInvitations,
     myRequests: result.myJoinRequests || [],
     deadline: result.dashboardContext.universalDeadline,
   };
 }
-
 function getRemainingTimeText(expiresAtStr: string): string {
   const expiresAt = new Date(expiresAtStr);
   const diffMs = expiresAt.getTime() - Date.now();
@@ -90,44 +96,34 @@ function getRemainingTimeText(expiresAtStr: string): string {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const cachedView = (() => {
-    const cached = getCachedGraphQLData<DashboardPageData>(
-      DASHBOARD_PAGE_QUERY,
-      { requestStatus: "ACCEPTED_PENDING_CONFIRMATION" },
-      true
-    );
-    return cached ? dashboardView(cached) : null;
-  })();
-  const [me, setMe] = useState<User | null>(cachedView?.me || null);
-  const [team, setTeam] = useState<Team | null>(cachedView?.team || null);
-  const [project, setProject] = useState<Project | null>(cachedView?.project || null);
-  const [applications, setApplications] = useState<ProjectApplication[]>(cachedView?.applications || []);
-  const [teamApps, setTeamApps] = useState<ProjectApplication[]>(cachedView?.teamApps || []);
-  const [notifs, setNotifs] = useState<Notification[]>(cachedView?.notifs || []);
-  const [invitations, setInvitations] = useState<DashboardInvitation[]>(cachedView?.invitations || []);
-  const [myRequests, setMyRequests] = useState<DashboardJoinRequest[]>(cachedView?.myRequests || []);
-  const [deadline, setDeadline] = useState<Deadline | null>(cachedView?.deadline || null);
-  const [loading, setLoading] = useState(!cachedView);
-  const [error, setError] = useState<string | null>(null);
+  const [me, setMe] = useState<User | null>(null);
+  const [team, setTeam] = useState<DashboardTeam | null>(null);
+  const [project, setProject] = useState<DashboardProject | null>(null);
+  const [applications, setApplications] = useState<DashboardApplication[]>([]);
+  const [notifs, setNotifs] = useState<DashboardNotification[]>([]);
+  const [invitations, setInvitations] = useState<DashboardInvitation[]>([]);
+  const [myRequests, setMyRequests] = useState<DashboardJoinRequest[]>([]);
+  const [deadline, setDeadline] = useState<Deadline | null>(null);
+  const [loading, setLoading] = useState(true);  const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [confirming, setConfirming] = useState(false);
 
-  const fetchDashboardData = async (force = false) => {
+  const fetchDashboardData = async () => {
     try {
       setError(null);
-      const queryOptions = { auth: true, cacheMs: 60_000, force } as const;
-      const result = await graphqlRequest<DashboardPageData>(
-        DASHBOARD_PAGE_QUERY,
-        { requestStatus: "ACCEPTED_PENDING_CONFIRMATION" },
-        queryOptions
-      );
-
-      if (!result.authState.authenticated) {
+      const viewer = await viewerClient.viewer();
+      if (viewer.state === "unauthenticated") {
         router.push("/auth/login");
         return;
       }
-      if (!result.authState.profile || !result.authState.profileComplete) {
+      if (viewer.state !== "ready") {
+        router.push("/onboarding");
+        return;
+      }
+
+      const result = await operationRequest<DashboardPageData>("DashboardV1", {});
+      if (!result.me) {
         router.push("/onboarding");
         return;
       }
@@ -140,15 +136,12 @@ export default function DashboardPage() {
       setDeadline(view.deadline);
       setNotifs(view.notifs);
       setMyRequests(view.myRequests);
-      setTeamApps(view.teamApps);
-
     } catch (err) {
       setError(userFacingError(err));
     } finally {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     void fetchDashboardData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -187,7 +180,7 @@ export default function DashboardPage() {
             { auth: true }
           );
           setNotice(`Invitation successfully ${accept ? "accepted" : "declined"}.`);
-          await fetchDashboardData(true);
+          await fetchDashboardData();
         } catch (err) {
           const msg = userFacingError(err);
           if (accept && msg.toLowerCase().includes("already")) {
@@ -220,74 +213,13 @@ export default function DashboardPage() {
             { auth: true }
           );
           setNotice("You have successfully confirmed your membership on the team!");
-          await fetchDashboardData(true);
+          await fetchDashboardData();
         } catch (err) {
           setError(userFacingError(err));
         }
       }
     });
   };
-
-  const handleConfirmOffer = (applicationId: string) => {
-    setConfirmAction({
-      title: "Confirm Project Offer",
-      message: "Confirming indicates your team's agreement to match with this project.",
-      confirmLabel: "Confirm Offer",
-      onConfirm: async () => {
-        setNotice(null);
-        setError(null);
-        try {
-          await graphqlRequest(
-            `mutation ConfirmOffer($applicationId: ID!) {
-              confirmProjectOfferByTeam(applicationId: $applicationId) {
-                id
-                status
-                teamConfirmedAt
-              }
-            }`,
-            { applicationId },
-            { auth: true }
-          );
-          setNotice("Offer confirmed by your team! Waiting for the project owner's final match confirmation.");
-          await fetchDashboardData(true);
-        } catch (err) {
-          setError(userFacingError(err));
-        }
-      }
-    });
-  };
-
-  const handleWithdrawApplication = (applicationId: string) => {
-    setConfirmAction({
-      title: "Withdraw Application",
-      message: "Are you sure you want to withdraw this project application?",
-      confirmLabel: "Withdraw Application",
-      variant: "danger",
-      onConfirm: async () => {
-        setNotice(null);
-        setError(null);
-        try {
-          await graphqlRequest(
-            `mutation WithdrawApp($applicationId: ID!) {
-              withdrawApplication(applicationId: $applicationId) {
-                id
-                status
-                withdrawnAt
-              }
-            }`,
-            { applicationId },
-            { auth: true }
-          );
-          setNotice("Application successfully withdrawn.");
-          await fetchDashboardData(true);
-        } catch (err) {
-          setError(userFacingError(err));
-        }
-      }
-    });
-  };
-
-  const myRoleOnTeam = team?.members.find((m) => m.user.id === me?.id)?.role;
 
   if (loading) {
     return (
@@ -313,8 +245,8 @@ export default function DashboardPage() {
     );
   }
 
-  const teamApplicationCount = teamApps.length;
-  const pendingOfferCount = teamApps.filter((app) => app.status === "OFFER_SENT").length;
+  const projectApplicationCount = applications.length;
+  const pendingOfferCount = applications.filter((application) => application.status === "OFFER_SENT").length;
   const memberCount = team?.members.length || 0;
   const maxMembers = team?.maxSize || 0;
 
@@ -357,8 +289,8 @@ export default function DashboardPage() {
               <p className="mt-2 text-3xl font-bold text-[var(--text-app)]">{memberCount}/{maxMembers || "-"}</p>
             </div>
             <div className="metric-tile">
-              <p className="text-[10px] font-semibold text-[var(--muted-app)]">Applications</p>
-              <p className="mt-2 text-3xl font-bold text-[var(--text-app)]">{teamApplicationCount}</p>
+              <p className="text-[10px] font-semibold text-[var(--muted-app)]">Project applications</p>
+              <p className="mt-2 text-3xl font-bold text-[var(--text-app)]">{projectApplicationCount}</p>
             </div>
             <div className="metric-tile">
               <p className="text-[10px] font-semibold text-[var(--muted-app)]">Offers</p>
@@ -508,75 +440,6 @@ export default function DashboardPage() {
                   </Link>
                 </div>
 
-                {/* Team Applications & Offers Sub-section */}
-                <div className="space-y-3 border-t border-[var(--border-subtle)] pt-4">
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-app)]">Project Applications & Offers</h4>
-                  {teamApps.length > 0 ? (
-                    <div className="stagger-in space-y-3">
-                      {teamApps.map((app) => {
-                        const hasOffer = app.status === "OFFER_SENT";
-                        const isLeadOrCoLead = myRoleOnTeam === "LEAD" || myRoleOnTeam === "CO_LEAD";
-                        return (
-                          <div key={app.id} className={`signal-card space-y-3 ${hasOffer ? "border-[var(--color-warning)] bg-[var(--color-warning-bg)]" : ""}`}>
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <h5 className="font-serif text-lg font-bold text-[var(--text-app)]">{app.project?.title}</h5>
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-app)]">Sponsored by {app.project?.owner.fullName}</p>
-                              </div>
-                              <Status value={app.status} />
-                            </div>
-
-                            {hasOffer && app.offerMessage && (
-                              <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-app)] p-3 text-xs italic text-[var(--text-app)]">
-                                &quot;{app.offerMessage}&quot;
-                              </div>
-                            )}
-
-                            <div className="space-y-1 text-[10px] font-bold uppercase tracking-wider text-[var(--muted-app)]">
-                              <div>
-                                Applied: {new Date(app.createdAt).toLocaleDateString()}
-                              </div>
-                              {app.expiresAt && (
-                                <DeadlineDisplay deadlineAt={app.expiresAt} label="Offer Match Window" />
-                              )}
-                            </div>
-
-                            <div className="flex gap-2 pt-1">
-                              {hasOffer && (
-                                <button
-                                  onClick={() => handleConfirmOffer(app.id)}
-                                  disabled={!isLeadOrCoLead}
-                                  className="btn-primary py-1 px-3 text-[10px]"
-                                  title={!isLeadOrCoLead ? "Only Team Leads/Co-Leads can confirm offers" : ""}
-                                >
-                                  Confirm Offer
-                                </button>
-                              )}
-                              {app.status === "PENDING" && (
-                                <button
-                                  onClick={() => handleWithdrawApplication(app.id)}
-                                  disabled={!isLeadOrCoLead}
-                                  className="btn-secondary text-rose-500 border-rose-300 dark:border-rose-900 py-1 px-3 text-[10px]"
-                                  title={!isLeadOrCoLead ? "Only Team Leads/Co-Leads can withdraw applications" : ""}
-                                >
-                                  Withdraw
-                                </button>
-                              )}
-                              <Link href={`/inbox?userId=${app.project?.owner.id}`} className="btn-secondary py-1 px-3 text-[10px] flex items-center gap-1">
-                                Message Owner
-                              </Link>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-dashed border-[var(--border-subtle)] bg-[var(--surface-raised)] p-5">
-                      <p className="text-sm text-[var(--muted-app)]">No project applications submitted yet.</p>
-                      <Link href="/projects" className="subtle-link mt-3 text-xs uppercase tracking-wider">Browse projects</Link>
-                    </div>
-                  )}
-                </div>
               </div>
             ) : (
               <div className="rounded-lg border border-dashed border-[var(--border-app)] bg-[var(--surface-raised)] p-8 text-center space-y-4">
@@ -614,7 +477,7 @@ export default function DashboardPage() {
                 </div>
               </div>
             </Section>
-          ) : me && (me.email?.includes("owner") || me.username.includes("owner")) ? (
+          ) : me?.userIntent === "SPONSOR" ? (
             <Section title="Project Sponsor Account">
               <div className="text-center py-8 border border-dashed border-[var(--border-app)] p-6 space-y-3">
                 <p className="text-xs text-stone-500 font-mono">You have project owner intent but haven&apos;t submitted a capstone challenge yet.</p>

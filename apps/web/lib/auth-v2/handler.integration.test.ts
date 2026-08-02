@@ -231,6 +231,8 @@ async function storedSessionTokens(): Promise<string[]> {
   }
 }
 
+const testOIDCSubject = process.env.OIDC_TEST_SUBJECT ?? "deterministic-google-subject";
+
 type TestOIDCIdentity = Readonly<{ userId: string; accountCount: number }>;
 
 async function testOIDCIdentity(): Promise<TestOIDCIdentity> {
@@ -242,7 +244,7 @@ async function testOIDCIdentity(): Promise<TestOIDCIdentity> {
   try {
     const result = await pool.query<{ userId: string; accountCount: string }>(
       'SELECT a."userId", count(*)::text AS "accountCount" FROM "account" a WHERE a."providerId" = $1 AND a."accountId" = $2 GROUP BY a."userId"',
-      ["quorum-test-oidc", "deterministic-google-subject"],
+      ["quorum-test-oidc", testOIDCSubject],
     );
     if (result.rowCount !== 1) throw new Error("Expected one deterministic OAuth identity.");
     return { userId: result.rows[0].userId, accountCount: Number(result.rows[0].accountCount) };
@@ -259,7 +261,7 @@ async function testOIDCAccountState(): Promise<{ email: string; providers: strin
   try {
     const result = await pool.query<{ email: string; providers: string[] }>(
       'SELECT u."email", array_agg(a."providerId" ORDER BY a."providerId") AS providers FROM "user" u JOIN "account" a ON a."userId" = u."id" WHERE EXISTS (SELECT 1 FROM "account" oidc WHERE oidc."userId" = u."id" AND oidc."providerId" = $1 AND oidc."accountId" = $2) GROUP BY u."id", u."email"',
-      ["quorum-test-oidc", "deterministic-google-subject"],
+      ["quorum-test-oidc", testOIDCSubject],
     );
     if (result.rowCount !== 1) throw new Error("Expected one deterministic OAuth account state.");
     return result.rows[0];

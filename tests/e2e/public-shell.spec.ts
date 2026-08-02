@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("public shell uses only the registered home operation", async ({ page }) => {
+test("public shell uses only viewer and the registered home operation", async ({ page }) => {
   const requestPaths: string[] = [];
   const legacyBodies: string[] = [];
   page.on("request", (request) => {
@@ -12,11 +12,9 @@ test("public shell uses only the registered home operation", async ({ page }) =>
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Find the right team, project, and next step." })).toBeVisible();
   await expect(page.getByRole("link", { name: "Browse projects" })).toHaveAttribute("href", "/projects");
+  await expect.poll(() => requestPaths).toContain("/api/v1/viewer");
   await expect.poll(() => requestPaths).toContain("/api/v1/operations/PublicHomeV1");
-  expect(legacyBodies).toHaveLength(1);
-  expect(legacyBodies[0]).toContain("query ShellAuth");
-  expect(legacyBodies[0]).not.toContain("query Home");
-  expect(legacyBodies[0]).not.toContain("projects");
+  expect(legacyBodies).toHaveLength(0);
 
   const negatives = await page.evaluate(async () => {
     const request = (operationId: string, variables: object) => fetch(`/api/v1/operations/${operationId}`, {

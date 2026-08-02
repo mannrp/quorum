@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readSameOriginJSON } from "@/lib/auth-v2/browser-request";
-import { getAnonymousAssertionHeaders } from "@/lib/internal-api/principal-runtime";
+import { AuthenticationRequiredError } from "@/lib/internal-api/principal-client";
+import { getAnonymousAssertionHeaders, getInternalAssertionHeaders } from "@/lib/internal-api/principal-runtime";
 import { resolveOperation } from "@/lib/operations/registry";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,9 @@ export async function POST(
     const { operationId } = await context.params;
     const variables = await readSameOriginJSON(request, process.env.BETTER_AUTH_URL ?? "");
     const operation = resolveOperation(operationId, variables);
-    const assertionHeaders = operation.auth === "anonymous" ? await getAnonymousAssertionHeaders() : {};
+    const assertionHeaders = operation.auth === "anonymous"
+      ? await getAnonymousAssertionHeaders()
+      : await getInternalAssertionHeaders(request.headers);
     const response = await fetch(graphqlURL(), {
       method: "POST",
       headers: { "Content-Type": "application/json", ...assertionHeaders },
@@ -39,6 +42,9 @@ export async function POST(
       },
     });
   } catch (error) {
+    if (error instanceof AuthenticationRequiredError) {
+      return NextResponse.json({ error: "authentication_required" }, { status: 401 });
+    }
     const message = error instanceof Error && error.message === "Operation is not registered."
       ? "operation_not_found"
       : "invalid_operation_request";

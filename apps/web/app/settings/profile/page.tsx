@@ -2,10 +2,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Status, Combobox, LoadingSkeleton } from "@/components/ui";
-import { graphqlRequest, uploadToSignedPost, userFacingError } from "@/lib/graphql";
+import { userFacingError } from "@/lib/graphql";
+import { operationRequest } from "@/lib/operations/client";
 import { DISCIPLINE_OPTIONS, RESUME_VISIBILITY_OPTIONS, SKILL_OPTIONS } from "@/lib/policy";
-import { ME_QUERY } from "@/lib/queries";
-import type { UploadSignature, User } from "@/types/domain";
+import type { User } from "@/types/domain";
 
 export default function ProfileSettingsPage() {
   const router = useRouter();
@@ -19,14 +19,13 @@ export default function ProfileSettingsPage() {
   const [portfolioUrl, setPortfolioUrl] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
   const [resumeVisibility, setResumeVisibility] = useState("PUBLIC");
-  const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        const res = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, { auth: true });
+        const res = await operationRequest<{ me: User | null }>("ViewerProfileV1", {});
         if (res.me) {
           setUser(res.me);
           setFullName(res.me.fullName || "");
@@ -56,42 +55,23 @@ export default function ProfileSettingsPage() {
     setSaving(true);
 
     try {
-      let resumeUrl = user?.resumeUrl || "";
-
-      if (resumeFile) {
-        const result = await graphqlRequest<{ signUpload: UploadSignature }>(
-          `mutation Sign($input: SignUploadInput!) { signUpload(input: $input) { url key publicUrl expiresAt fields { name value } } }`,
-          { input: { kind: "RESUME", filename: resumeFile.name, contentType: resumeFile.type, size: resumeFile.size } },
-          { auth: true }
-        );
-        await uploadToSignedPost(resumeFile, result.signUpload);
-        resumeUrl = result.signUpload.publicUrl || result.signUpload.key;
-      }
-
-      await graphqlRequest(
-        `mutation UpsertProfile($input: UpsertMyProfileInput!) { upsertMyProfile(input: $input) { id } }`,
-        {
-          input: {
-            username: user?.username || "",
-            email: user?.email || undefined,
-            fullName,
-            bio,
-            discipline,
-            university,
-            linkedinUrl,
-            githubUrl,
-            portfolioUrl,
-            resumeUrl: resumeUrl || undefined,
-            resumeVisibility,
-            skills,
-            tags: skills,
-          },
+      await operationRequest("UpdateMyProfileV1", {
+        input: {
+          username: user?.username || "",
+          fullName,
+          bio,
+          discipline,
+          university,
+          linkedinUrl,
+          githubUrl,
+          portfolioUrl,
+          resumeVisibility,
+          skills,
+          tags: skills,
         },
-        { auth: true }
-      );
+      });
 
       setNotice("Profile successfully updated.");
-      setResumeFile(null);
     } catch (err) {
       setNotice(userFacingError(err));
     } finally {
@@ -172,28 +152,12 @@ export default function ProfileSettingsPage() {
         </Section>
 
         <Section title="Resume Document Visibility">
-          <div className="space-y-4">
+          <div className="space-y-3">
+            <p className="text-xs text-stone-500">
+              Private resume upload and download will be enabled with authorization-checked file access in P4.
+            </p>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">Current Attached File</label>
-              {user?.resumeUrl ? (
-                <a href={user.resumeUrl} target="_blank" rel="noreferrer" className="text-xs text-[var(--accent-app)] hover:underline font-bold">
-                  View Uploaded Resume File
-                </a>
-              ) : (
-                <span className="text-xs text-stone-500 italic font-mono">No resume attached yet.</span>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Upload New Resume (PDF / DOCX)</label>
-              <p className="text-[11px] text-stone-500">
-                Resume access defaults to public visibility. Choose a narrower access level before saving if this document should be limited.
-              </p>
-              <input type="file" accept=".pdf,.docx" onChange={(e) => setResumeFile(e.target.files?.[0] || null)} className="block text-xs text-stone-500 border border-[var(--border-app)] p-2 rounded-none bg-[var(--bg-app)] w-full font-mono" />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Document Access Level</label>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Future document access level</label>
               <select value={resumeVisibility} onChange={(e) => setResumeVisibility(e.target.value)} className="input-field py-2 text-xs bg-[var(--surface-app)]">
                 {RESUME_VISIBILITY_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
