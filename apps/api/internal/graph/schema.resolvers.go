@@ -1674,8 +1674,10 @@ func (r *queryResolver) Team(ctx context.Context, id string) (*model.Team, error
 	if err != nil {
 		return nil, err
 	}
-	if _, authenticated := auth.UserFromContext(ctx); !authenticated && (team.ArchivedAt.Valid || team.Visibility != string(model.TeamVisibilityVisible)) {
-		return nil, nil
+	if team.ArchivedAt.Valid || team.Visibility != string(model.TeamVisibilityVisible) {
+		if err := r.requireTeamMember(ctx, teamID); err != nil {
+			return nil, nil
+		}
 	}
 	return r.team(ctx, team)
 }

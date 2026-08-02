@@ -3,9 +3,9 @@ import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Section, Status, Badge, Modal, LoadingSkeleton } from "@/components/ui";
-import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
-import { TEAM_QUERY } from "@/lib/queries";
-import type { Team, TeamMembership, TeamRole } from "@/types/domain";
+import { userFacingError } from "@/lib/graphql";
+import { operationRequest, useOperation } from "@/lib/operations/client";
+import type { Team } from "@/types/domain";
 
 type JoinRequest = {
   id: string;
@@ -23,7 +23,7 @@ type JoinRequest = {
 export default function TeamManagePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { data, error, loading, reload } = useGraphQL<{ team: Team | null }>(TEAM_QUERY, { id }, { auth: true });
+  const { data, error, loading, reload } = useOperation<{ team: Team | null; teamJoinRequests: JoinRequest[] }>("TeamManageV1", { teamId: id });
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -49,52 +49,23 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
 
   const team = data?.team;
 
-  // Load team form fields
   useEffect(() => {
-    if (team) {
-      setName(team.name || "");
-      setDescription(team.description || "");
-      setDiscordUrl(team.discordLink || "");
-      setDiscipline(team.discipline || "SOEN");
-      setIsComplete(team.isComplete);
-      
-      const loadRequests = async () => {
-        try {
-          const res = await graphqlRequest<{ teamJoinRequests: JoinRequest[] }>(
-            `query GetTeamJoinRequests($teamId: ID!) {
-              teamJoinRequests(teamId: $teamId, status: PENDING) {
-                id
-                message
-                status
-                createdAt
-                user {
-                  id
-                  fullName
-                  username
-                  discipline
-                }
-              }
-            }`,
-            { teamId: id },
-            { auth: true }
-          );
-          setRequests(res.teamJoinRequests || []);
-        } catch (err) {
-          console.error("Error loading join requests", err);
-        }
-      };
-      void loadRequests();
-    }
-  }, [team, id]);
+    if (!team) return;
+    setName(team.name || "");
+    setDescription(team.description || "");
+    setDiscordUrl(team.discordLink || "");
+    setDiscipline(team.discipline || "SOEN");
+    setIsComplete(team.isComplete);
+    setRequests(data?.teamJoinRequests || []);
+  }, [data, team]);
 
   // Search users for invite
   const handleInviteSearch = async () => {
     if (!inviteSearch.trim()) return;
     try {
-      const res = await graphqlRequest<{ users: { id: string; fullName: string; username: string }[] }>(
-        `query searchUsers($q: String) { users(search: $q) { id fullName username } }`,
-        { q: inviteSearch },
-        { auth: true }
+      const res = await operationRequest<{ users: { id: string; fullName: string; username: string }[] }>(
+        "SearchTeamInviteesV1",
+        { search: inviteSearch.trim() },
       );
       setInviteResults(res.users);
     } catch (err) {
@@ -107,12 +78,9 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
   const sendInvite = async (userId: string) => {
     setInviteNotice(null);
     try {
-      await graphqlRequest(
-        `mutation InviteTeamMember($teamId: ID!, $userId: ID!, $message: String) {
-          inviteTeamMember(teamId: $teamId, userId: $userId, message: $message) { id status expiresAt }
-        }`,
+      await operationRequest(
+        "InviteTeamMemberV1",
         { teamId: id, userId, message: inviteMessage },
-        { auth: true }
       );
       setInviteNotice("Invitation sent.");
     } catch (err) {
@@ -125,25 +93,17 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
     setNotice(null);
     setSaving(true);
     try {
-      await graphqlRequest(
-        `mutation UpdateTeamDetails($id: ID!, $input: UpdateTeamInput!) { updateTeam(id: $id, input: $input) { id } }`,
+      await operationRequest(
+        "UpdateTeamV1",
         {
-          id,
+          teamId: id,
           input: {
-            name,
-            description,
-            isComplete,
-            discipline,
-            maxSize: team?.maxSize || 4,
-            recruitingState: isComplete ? "PAUSED" : "RECRUITING",
-            visibility: team?.visibility || "VISIBLE",
-            discordLink: discordUrl || null,
-            existingSkills: team?.existingSkills || [],
-            neededSkills: team?.neededSkills || [],
-            projectInterests: team?.projectInterests || []
-          }
+            name, description, isComplete, discipline, maxSize: team?.maxSize || 12,
+            recruitingState: isComplete ? "PAUSED" : "RECRUITING", visibility: team?.visibility || "VISIBLE",
+            discordLink: discordUrl || null, existingSkills: team?.existingSkills || [],
+            neededSkills: team?.neededSkills || [], projectInterests: team?.projectInterests || [],
+          },
         },
-        { auth: true }
       );
       setNotice("Team specifications successfully updated.");
       await reload();
@@ -163,12 +123,9 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
   const executeRequestAction = async () => {
     if (!actionReqId || !actionType) return;
     try {
-      await graphqlRequest(
-        `mutation RespondRequest($requestId: ID!, $accept: Boolean!) {
-          respondToJoinRequest(requestId: $requestId, accept: $accept) { id status }
-        }`,
+      await operationRequest(
+        "RespondTeamJoinV1",
         { requestId: actionReqId, accept: actionType === "ACCEPT" },
-        { auth: true }
       );
       setRequests((prev) => prev.filter((r) => r.id !== actionReqId));
       setNotice(`Request ${actionType === "ACCEPT" ? "approved" : "declined"}.`);
@@ -186,10 +143,9 @@ export default function TeamManagePage({ params }: { params: Promise<{ id: strin
   const executeRemoveMember = async () => {
     if (!memberToRemove) return;
     try {
-      await graphqlRequest(
-        `mutation RemoveMem($teamId: ID!, $userId: ID!) { removeMember(teamId: $teamId, userId: $userId) }`,
+      await operationRequest(
+        "RemoveTeamMemberV1",
         { teamId: id, userId: memberToRemove.id },
-        { auth: true }
       );
       setNotice("Member removed.");
       await reload();

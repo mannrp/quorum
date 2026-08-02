@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, Section, Status, LoadingSkeleton } from "@/components/ui";
 import { DeadlineDisplay } from "@/components/deadline-display";
-import { graphqlRequest, userFacingError } from "@/lib/graphql";
+import { userFacingError } from "@/lib/graphql";
 import { viewerClient } from "@/lib/auth-v2/viewer-client";
 import { operationRequest } from "@/lib/operations/client";
 import type { User } from "@/types/domain";
@@ -169,16 +169,7 @@ export default function DashboardPage() {
         setNotice(null);
         setError(null);
         try {
-          await graphqlRequest(
-            `mutation RespondInvitation($invitationId: ID!, $accept: Boolean!) {
-              respondToTeamInvitation(invitationId: $invitationId, accept: $accept) {
-                id
-                status
-              }
-            }`,
-            { invitationId, accept },
-            { auth: true }
-          );
+          await operationRequest("RespondTeamInvitationV1", { invitationId, accept });
           setNotice(`Invitation successfully ${accept ? "accepted" : "declined"}.`);
           await fetchDashboardData();
         } catch (err) {
@@ -202,16 +193,7 @@ export default function DashboardPage() {
         setNotice(null);
         setError(null);
         try {
-          await graphqlRequest(
-            `mutation ConfirmJoinRequest($requestId: ID!) {
-              confirmJoinRequest(requestId: $requestId) {
-                id
-                status
-              }
-            }`,
-            { requestId },
-            { auth: true }
-          );
+          await operationRequest("ConfirmTeamJoinV1", { requestId });
           setNotice("You have successfully confirmed your membership on the team!");
           await fetchDashboardData();
         } catch (err) {

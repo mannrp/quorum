@@ -44,6 +44,16 @@ describe("registered browser operations", () => {
     expect(operation.document).not.toMatch(/authUserId|resumeUrl|fileUrl|publicUrl/);
   });
   it.each([
+    ["TeamManageV1", { teamId: "11111111-1111-4111-8111-111111111111" }, "query TeamManageV1"],
+    ["CreateTeamV1", { input: { name: "Aegis", description: "Team", discipline: "SOEN", maxSize: 12, visibility: "VISIBLE", existingSkills: [], neededSkills: [] } }, "mutation CreateTeamV1"],
+    ["RequestTeamJoinV1", { teamId: "11111111-1111-4111-8111-111111111111", message: "Please let me join." }, "mutation RequestTeamJoinV1"],
+    ["RespondTeamInvitationV1", { invitationId: "11111111-1111-4111-8111-111111111111", accept: true }, "mutation RespondTeamInvitationV1"],
+  ])("resolves bounded authenticated Team operation %s", (id, variables, documentName) => {
+    const operation = resolveOperation(id, variables);
+    expect(operation.auth).toBe("authenticated");
+    expect(operation.document).toContain(documentName);
+    expect(operation.document).not.toMatch(/authUserId|email|resumeUrl|fileUrl|publicUrl/);
+  });  it.each([
     ["PublicTeamsV1", {}, "query PublicTeamsV1"],
     ["PublicTeamsV1", { search: "robotics" }, "query PublicTeamsV1"],
     ["PublicProjectsV1", {}, "query PublicProjectsV1"],
@@ -73,6 +83,10 @@ describe("registered browser operations", () => {
     ["DeactivateAccountV1", { reason: "x".repeat(501) }],
     ["UpdateMyProfileV1", { input: { username: "current-user", fullName: "Name", email: "forged@example.test" } }],
     ["UpdateMyProfileV1", { input: { username: "current-user", fullName: "Name", resumeUrl: "https://public.example/file" } }],
+    ["TeamManageV1", { teamId: "not-a-uuid" }],
+    ["CreateTeamV1", { input: { name: "Aegis", description: "Team", discipline: "SOEN", maxSize: 4, isComplete: false, visibility: "VISIBLE", existingSkills: [], neededSkills: [] } }],
+    ["RequestTeamJoinV1", { teamId: "11111111-1111-4111-8111-111111111111", message: "x".repeat(1001) }],
+    ["RespondTeamInvitationV1", { invitationId: "11111111-1111-4111-8111-111111111111", accept: "yes" }],
   ])("rejects unregistered or expanded input for %s", (id, variables) => {
     expect(() => resolveOperation(id, variables)).toThrow();
   });

@@ -24,7 +24,11 @@ function spawnChild(command, args, options = {}) {
 
 async function cleanup() {
   for (const child of children.reverse()) {
-    if (child.exitCode === null) child.kill();
+    if (child.exitCode === null && process.platform === "win32") {
+      spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true });
+    } else if (child.exitCode === null) {
+      child.kill();
+    }
   }
   await Promise.all(children.map((child) => new Promise((resolveExit) => {
     if (child.exitCode !== null) resolveExit();
@@ -94,13 +98,17 @@ await waitFor(`${oidcBaseURL}/healthz`, oidcProvider, "deterministic OIDC provid
 const { privateKey, publicKey } = generateKeyPairSync("ed25519");
 const encodedPrivateKey = privateKey.export({ type: "pkcs8", format: "der" }).toString("base64url");
 const encodedPublicKey = publicKey.export({ type: "spki", format: "der" }).subarray(-32).toString("base64url");
-apiExecutable = join(tmpdir(), process.platform === "win32" ? "quorum-e2e-api.exe" : "quorum-e2e-api");
-const build = spawnSync("go", ["build", "-o", apiExecutable, "./cmd/server"], {
-  cwd: join(process.cwd(), "apps/api"),
-  encoding: "utf8",
-  windowsHide: true,
-});
-if (build.status !== 0) throw new Error(`failed to build e2e API:\n${build.stdout}\n${build.stderr}`);
+const apiArgs = process.platform === "win32" ? ["run", "./cmd/server"] : [];
+const apiCommand = process.platform === "win32" ? "go" : (() => {
+  apiExecutable = join(tmpdir(), `quorum-e2e-api-${randomUUID()}`);
+  const build = spawnSync("go", ["build", "-o", apiExecutable, "./cmd/server"], {
+    cwd: join(process.cwd(), "apps/api"),
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (build.status !== 0) throw new Error(`failed to build e2e API:\n${build.stdout}\n${build.stderr}`);
+  return apiExecutable;
+})();
 
 const apiEnv = {
   ...childEnv,
@@ -110,7 +118,7 @@ const apiEnv = {
   INTERNAL_ASSERTION_AUDIENCE: "quorum-go",
   INTERNAL_ASSERTION_PUBLIC_KEYS: `e2e:${encodedPublicKey}`,
 };
-const api = spawnChild(apiExecutable, [], { cwd: join(process.cwd(), "apps/api"), env: apiEnv });
+const api = spawnChild(apiCommand, apiArgs, { cwd: join(process.cwd(), "apps/api"), env: apiEnv });
 await waitFor("http://127.0.0.1:18080/healthz", api, "e2e API");
 
 Object.assign(childEnv, {

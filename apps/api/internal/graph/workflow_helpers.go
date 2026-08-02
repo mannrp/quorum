@@ -142,6 +142,14 @@ func (r *Resolver) requireLeadOnly(ctx context.Context, teamID pgtype.UUID) erro
 	return nil
 }
 
+func (r *Resolver) requireTeamMember(ctx context.Context, teamID pgtype.UUID) error {
+	current, err := requireActiveUser(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = r.Queries.GetTeamMembership(ctx, db.GetTeamMembershipParams{TeamID: teamID, UserID: current.ID})
+	return err
+}
 func (r *Resolver) requireTeamLead(ctx context.Context, teamID pgtype.UUID) error {
 	current, err := requireActiveUser(ctx)
 	if err != nil {

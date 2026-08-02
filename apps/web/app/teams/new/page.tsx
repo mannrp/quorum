@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Combobox } from "@/components/ui";
-import { graphqlRequest } from "@/lib/graphql";
+import { operationRequest } from "@/lib/operations/client";
 import { DISCIPLINE_OPTIONS, SKILL_OPTIONS, TEAM_FINAL_SIZE } from "@/lib/policy";
 
 export default function CreateTeamPage() {
@@ -22,10 +22,8 @@ export default function CreateTeamPage() {
     setSaving(true);
 
     try {
-      const result = await graphqlRequest<{ createTeam: { id: string } }>(
-        `mutation CreateTeam($input: CreateTeamInput!) {
-          createTeam(input: $input) { id }
-        }`,
+      const result = await operationRequest<{ createTeam: { id: string } }>(
+        "CreateTeamV1",
         {
           input: {
             name,
@@ -38,8 +36,7 @@ export default function CreateTeamPage() {
             neededSkills,
             recruitingState: "RECRUITING"
           }
-        },
-        { auth: true }
+        }
       );
       router.push(`/teams/${result.createTeam.id}`);
     } catch (err) {

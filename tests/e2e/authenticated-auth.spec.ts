@@ -18,6 +18,21 @@ async function suspendProductAccount(email: string): Promise<void> {
     await pool.end();
   }
 }
+async function completeProductProfile(email: string): Promise<void> {
+  const databaseURL = process.env.DATABASE_URL;
+  if (!databaseURL) throw new Error("DATABASE_URL is required.");
+  const { Pool } = await import("pg");
+  const pool = new Pool({ connectionString: databaseURL });
+  try {
+    const result = await pool.query(
+      `UPDATE users SET profile_complete = true WHERE email = $1`,
+      [email],
+    );
+    expect(result.rowCount).toBe(1);
+  } finally {
+    await pool.end();
+  }
+}
 async function verificationURL(email: string, subject = "Verify your Quorum email"): Promise<string> {
   if (!mailpitURL) throw new Error("MAILPIT_API_URL is required.");
   const deadline = Date.now() + 10_000;
@@ -93,6 +108,18 @@ test("verified user enrolls, refreshes the viewer, and logs out", async ({ page 
   }
 
   expect(legacyBodies.join("\n")).not.toMatch(/query (ShellAuth|ShellCounts|DashboardPage|DashboardContext|DashboardAuth|AuthState|Me)\b/);
+  await completeProductProfile(email);
+  const createResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === "/api/v1/operations/CreateTeamV1",
+  );
+  await page.goto("/teams/new");
+  await page.locator('input[placeholder="Aegis Container Security"]').fill(`Browser Team ${Date.now()}`);
+  await page.locator('textarea[placeholder^="Briefly state"]').fill("A registered operation creates this team.");
+  await page.getByRole("button", { name: "Initialize Capstone Group" }).click();
+  expect((await createResponse).status()).toBe(200);
+  await expect(page).toHaveURL(/\/teams\/[0-9a-f-]+$/);
+  expect(legacyBodies.join("\n")).not.toMatch(/mutation CreateTeam\b/);
+
 
   await suspendProductAccount(email);
   const inactiveViewer = await page.evaluate(() => fetch("/api/v1/viewer", { cache: "no-store" }).then((response) => response.status));
