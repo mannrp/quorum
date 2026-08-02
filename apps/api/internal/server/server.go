@@ -18,12 +18,11 @@ import (
 	"github.com/local/quorum/apps/api/internal/identity"
 	"github.com/local/quorum/apps/api/internal/internalapi"
 	"github.com/local/quorum/apps/api/internal/principal"
-	"github.com/local/quorum/apps/api/internal/storage"
 )
 
 func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handler {
 	queries := db.New(pool)
-	resolver := &graph.Resolver{Pool: pool, Queries: queries, Storage: storage.NewR2Signer(cfg)}
+	resolver := &graph.Resolver{Pool: pool, Queries: queries}
 	gql := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: resolver}))
 	principalService := principal.NewService(principal.NewSQLViewerStore(queries), identity.NewService(pool))
 	var assertionVerifier *internalapi.Verifier

@@ -36,8 +36,8 @@ Disabled features do not need speculative implementation, but their old routes a
 | C0 Cleanup | done | Retired spike/planning framework removed; lean sources of truth established |
 | P1 Authentication cutover and viewer | done | Better Auth replaces Neon and a verified user reaches `ViewerBootstrapV1` |
 | P2 Google and account lifecycle | done | Both sign-in methods, recovery, linking, and session management work |
-| P3 Product operation migration | in progress | Every enabled UI workflow uses registered operations and Go authorization |
-| P4 Files and release | pending | Private files, protected deployment, legacy deletion, and release evidence |
+| P3 Product operation migration | done | Every enabled UI workflow uses registered operations and Go authorization |
+| P4 Files and release | in progress | Protected deployment, final audit, and release evidence |
 
 ## P1 - Authentication cutover and viewer
 
@@ -229,13 +229,9 @@ P3 closes only when repository and browser-network scans show no browser GraphQL
 
 ### P4.1 Files
 
-1. Migrate legacy URL columns additively to private object keys and metadata.
-2. Implement typed upload intent, completion, download, replacement, and deletion operations only for file features present in enabled UI.
-3. Go checks current owner/member/role/resource state for every operation.
-4. Use short expiries, exact bucket/prefix/content type/size, randomized keys, and private bucket policy.
-5. Remove `publicUrl` from API types, UI, database writes, and configuration.
+No enabled UI currently uploads or serves files. Remove the dormant signer, public URL API, and R2 production requirement rather than leaving an untested feature reachable. Keep legacy columns as inert historical data; do not add a second migration history solely to delete them.
 
-Tests cover wrong owner/team/project, guessed key, expired/replayed grant, MIME/size mismatch, replacement cleanup, private bucket policy, and real R2 smoke before release.
+If a product request later enables files, add the smallest typed upload/download flow then: Go authorizes every operation against current state, object storage stays private, grants are short-lived and scoped, and the new feature ships with its own ownership/replay/MIME/size tests and a real R2 smoke.
 
 ### P4.2 One deployment topology
 

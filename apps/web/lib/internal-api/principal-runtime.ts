@@ -4,6 +4,7 @@ import { importPKCS8 } from "jose";
 import { getCurrentAuthSession } from "@/lib/auth-v2/server";
 import { createInternalAssertionSigner } from "./assertion";
 import { AuthenticationRequiredError, createPrincipalClient } from "./principal-client";
+import { internalAPIBaseURL, internalAPIRequest } from "./request";
 
 let runtimePromise: ReturnType<typeof buildRuntime> | undefined;
 
@@ -80,7 +81,8 @@ async function buildRuntime() {
 
   return {
     client: createPrincipalClient({
-      baseURL: required("INTERNAL_API_BASE_URL"),
+      baseURL: internalAPIBaseURL(),
+      fetch: internalAPIRequest,
       signer,
       correlationId: randomUUID,
       assertionId: randomUUID,

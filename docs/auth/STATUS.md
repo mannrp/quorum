@@ -1,7 +1,7 @@
 # Auth V2 status
 
-**State:** P1, P2, and P3 complete; P4 files and release remain
-**Active work:** P4 private files and release
+**State:** P1, P2, and P3 complete; P4 release evidence remains
+**Active work:** P4 deployment and release evidence
 **Branch:** `codex/auth-v2-rewrite`
 **Pull request:** `mannrp/quorum#10` (draft)
 **Updated:** 2026-08-02
@@ -30,7 +30,7 @@ Quorum now has one browser authentication path: Better Auth `1.6.25` mounted by 
 | P1 Authentication cutover and viewer | done | Local and pinned Ubuntu acceptance green |
 | P2 Google and account lifecycle | done | Google, recovery/email changes, explicit linking, and session management |
 | P3 Product operation migration | done | Registered typed operations replace arbitrary browser GraphQL |
-| P4 Files and release | pending | Private files, protected deployment, final deletion, and release evidence |
+| P4 Files and release | in progress | Protected deployment, final deletion, and release evidence |
 
 ## Latest verified evidence
 
@@ -55,5 +55,5 @@ Repository scans found no active Neon Auth dependency/configuration, demo identi
 
 P2 is complete. Account Security now provides password change, two-mailbox email change, explicit Google linking, projected session listing, revoke-one/revoke-others/logout-all, and credential-free cross-tab invalidation. Service-backed tests prove enumeration-safe reset, one-use email links and replay denial, password cookie rotation, 24-hour idle and 7-day absolute expiry, refresh preservation of authentication context, current-state inactive-account denial, and no reusable credential projection. The exact local acceptance above passed with pinned PostgreSQL `17.10-alpine3.24` and Mailpit `1.30.0`.
 
-P3 is complete. Public discovery, viewer shell/account, Teams, Projects, inbox, and notifications are registered typed operations; browser-supplied GraphQL is deleted. P4 remains: private file lifecycle and production transport/release evidence. Admin stays unavailable until MFA/recovery.
+P3 is complete. Public discovery, viewer shell/account, Teams, Projects, inbox, and notifications are registered typed operations; browser-supplied GraphQL is deleted. P4 remains: production image/socket deployment and release evidence. No file feature is enabled; the dormant R2 signer and public URL configuration are removed rather than shipped. Admin stays unavailable until MFA/recovery.
 `npm audit --omit=dev` most recently reported three high transitive findings in the current Next dependency tree (PostCSS/sharp) with no non-breaking patched Next release offered by npm. There is no longer a nested legacy Better Auth dependency. Recheck before release; do not weaken tests or force a downgrade.

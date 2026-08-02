@@ -14,11 +14,8 @@ import (
 type Config struct {
 	AppEnv                    string
 	DatabaseURL               string
-	R2AccountID               string
-	R2AccessKeyID             string
-	R2SecretAccessKey         string
-	R2BucketName              string
 	Port                      string
+	InternalSocketPath        string
 	InternalAssertionIssuer   string
 	InternalAssertionAudience string
 	InternalAssertionKeys     map[string]ed25519.PublicKey
@@ -40,11 +37,8 @@ func Load() (Config, error) {
 	cfg := Config{
 		AppEnv:                    env("APP_ENV", "development"),
 		DatabaseURL:               os.Getenv("DATABASE_URL"),
-		R2AccountID:               os.Getenv("R2_ACCOUNT_ID"),
-		R2AccessKeyID:             os.Getenv("R2_ACCESS_KEY_ID"),
-		R2SecretAccessKey:         os.Getenv("R2_SECRET_ACCESS_KEY"),
-		R2BucketName:              os.Getenv("R2_BUCKET_NAME"),
 		Port:                      env("PORT", "8080"),
+		InternalSocketPath:        strings.TrimSpace(os.Getenv("INTERNAL_API_SOCKET_PATH")),
 		InternalAssertionIssuer:   env("INTERNAL_ASSERTION_ISSUER", "quorum-next"),
 		InternalAssertionAudience: env("INTERNAL_ASSERTION_AUDIENCE", "quorum-go"),
 		InternalAssertionKeys:     assertionKeys,
@@ -60,30 +54,20 @@ func (c Config) Validate() error {
 	if c.DatabaseURL == "" {
 		missing = append(missing, "DATABASE_URL")
 	}
-	if c.AppEnv != "development" {
-		if len(c.InternalAssertionKeys) == 0 {
-			missing = append(missing, "INTERNAL_ASSERTION_PUBLIC_KEYS")
-		}
-		for key, value := range map[string]string{
-			"R2_ACCOUNT_ID":        c.R2AccountID,
-			"R2_ACCESS_KEY_ID":     c.R2AccessKeyID,
-			"R2_SECRET_ACCESS_KEY": c.R2SecretAccessKey,
-			"R2_BUCKET_NAME":       c.R2BucketName,
-		} {
-			if strings.TrimSpace(value) == "" {
-				missing = append(missing, key)
-			}
-		}
+	if c.AppEnv != "development" && len(c.InternalAssertionKeys) == 0 {
+		missing = append(missing, "INTERNAL_ASSERTION_PUBLIC_KEYS")
+	}
+	if c.AppEnv == "production" && c.InternalSocketPath == "" {
+		missing = append(missing, "INTERNAL_API_SOCKET_PATH")
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required config: %s", strings.Join(missing, ", "))
 	}
-	if strings.TrimSpace(c.Port) == "" {
-		return errors.New("PORT is required")
+	if strings.TrimSpace(c.Port) == "" && c.InternalSocketPath == "" {
+		return errors.New("PORT or INTERNAL_API_SOCKET_PATH is required")
 	}
 	return nil
 }
-
 func env(key, fallback string) string {
 	value := strings.TrimSpace(os.Getenv(key))
 	if value == "" {

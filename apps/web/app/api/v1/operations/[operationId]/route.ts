@@ -2,19 +2,10 @@ import { NextResponse } from "next/server";
 import { readSameOriginJSON } from "@/lib/auth-v2/browser-request";
 import { AuthenticationRequiredError } from "@/lib/internal-api/principal-client";
 import { getAnonymousAssertionHeaders, getInternalAssertionHeaders } from "@/lib/internal-api/principal-runtime";
+import { internalAPIRequest } from "@/lib/internal-api/request";
 import { resolveOperation } from "@/lib/operations/registry";
 
 export const dynamic = "force-dynamic";
-
-function graphqlURL(): string {
-  const raw = process.env.INTERNAL_API_BASE_URL?.trim();
-  if (!raw) throw new Error("INTERNAL_API_BASE_URL is required.");
-  const url = new URL(raw);
-  if (url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
-    throw new Error("INTERNAL_API_BASE_URL must contain only scheme, host, and optional port.");
-  }
-  return url.origin + "/graphql";
-}
 
 export async function POST(
   request: Request,
@@ -27,7 +18,7 @@ export async function POST(
     const assertionHeaders = operation.auth === "anonymous"
       ? await getAnonymousAssertionHeaders()
       : await getInternalAssertionHeaders(request.headers);
-    const response = await fetch(graphqlURL(), {
+    const response = await internalAPIRequest("/graphql", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...assertionHeaders },
       body: JSON.stringify({ query: operation.document, variables: operation.variables }),

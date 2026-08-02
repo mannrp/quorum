@@ -31,12 +31,17 @@ func main() {
 	}
 	defer pool.Close()
 
+	listener, err := server.Listen(cfg)
+	if err != nil {
+		logger.Error("api listener failed", "error", err)
+		os.Exit(1)
+	}
 	httpServer := server.NewHTTPServer(cfg, server.NewHandler(cfg, pool, logger))
 
 	errs := make(chan error, 1)
 	go func() {
-		logger.Info("api listening", "addr", "http://localhost:"+cfg.Port)
-		errs <- httpServer.ListenAndServe()
+		logger.Info("api listening", "network", listener.Addr().Network(), "addr", listener.Addr().String())
+		errs <- httpServer.Serve(listener)
 	}()
 
 	stop := make(chan os.Signal, 1)
