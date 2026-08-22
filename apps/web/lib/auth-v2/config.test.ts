@@ -19,7 +19,8 @@ describe("Auth V2 server configuration", () => {
       secret: validEnvironment.BETTER_AUTH_SECRET,
       trustedOrigins: ["https://quorum.example"],
       cookie: { secure: true, httpOnly: true, sameSite: "lax" },
-      password: { minLength: 29, maxLength: 128 },
+      password: { minLength: 8, maxLength: 128 },
+      requireEmailVerification: true,
       session: { idleSeconds: 86_400, absoluteSeconds: 604_800, recentAuthSeconds: 600 },
       databaseSchema: "better_auth",
       allowImplicitSameEmailLinking: false,
@@ -71,6 +72,17 @@ describe("Auth V2 server configuration", () => {
       clientId: "test-client",
       clientSecret: "test-secret",
     });
+  });
+
+  it("allows the email-verification bypass only outside production", () => {
+    expect(parseAuthEnvironment({
+      ...validEnvironment,
+      NODE_ENV: "development",
+      BETTER_AUTH_URL: "http://127.0.0.1:3000",
+      AUTH_REQUIRE_EMAIL_VERIFICATION: "false",
+    }).requireEmailVerification).toBe(false);
+    expect(() => parseAuthEnvironment({ ...validEnvironment, AUTH_REQUIRE_EMAIL_VERIFICATION: "false" })).toThrow(/production/);
+    expect(() => parseAuthEnvironment({ ...validEnvironment, AUTH_REQUIRE_EMAIL_VERIFICATION: "sometimes" })).toThrow(/AUTH_REQUIRE_EMAIL_VERIFICATION/);
   });
 
   it("permits an explicit HTTP loopback origin only outside production", () => {

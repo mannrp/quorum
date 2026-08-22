@@ -28,9 +28,12 @@ export async function signInWithGoogle(): Promise<void> {
   if (result.error) throw new Error(authErrorMessage(result.error));
 }
 
-export async function signUpWithEmail(email: string, password: string, name: string): Promise<void> {
+export async function signUpWithEmail(email: string, password: string, name: string): Promise<"authenticated" | "verification-required"> {
   const result = await authClient.signUp.email({ email, password, name, callbackURL: "/auth/complete" });
   if (result.error) throw new Error(authErrorMessage(result.error));
+  const session = await authClient.getSession();
+  if (session.error) throw new Error(authErrorMessage(session.error));
+  return session.data ? "authenticated" : "verification-required";
 }
 
 export async function getCurrentUser() {

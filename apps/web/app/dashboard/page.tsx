@@ -8,6 +8,7 @@ import { userFacingError } from "@/lib/operations/client";
 import { viewerClient } from "@/lib/auth-v2/viewer-client";
 import type { SelfServiceRole } from "@/lib/auth-v2/viewer-contract";
 import { operationRequest } from "@/lib/operations/client";
+import { useAuthContext } from "@/lib/auth-context";
 import type { User } from "@/types/domain";
 
 type DashboardInvitation = {
@@ -85,6 +86,7 @@ function dashboardView(result: DashboardPageData) {
 }
 export default function DashboardPage() {
   const router = useRouter();
+  const { sessionState, refreshAuth } = useAuthContext();
   const [me, setMe] = useState<User | null>(null);
   const [team, setTeam] = useState<DashboardTeam | null>(null);
   const [project, setProject] = useState<DashboardProject | null>(null);
@@ -213,8 +215,15 @@ export default function DashboardPage() {
         <Section title="Dashboard Unavailable">
           <p className="text-xs text-rose-500 font-mono font-bold uppercase tracking-wider">{error}</p>
           <div className="pt-4 flex gap-2">
-            <Link href="/auth/login" className="btn-primary py-2 px-4 text-xs">Sign In Again</Link>
-            <button onClick={() => window.location.reload()} className="btn-secondary py-2 px-4 text-xs">Retry</button>
+            {sessionState === "anonymous" ? (
+              <Link href="/auth/login" className="btn-primary py-2 px-4 text-xs">Sign In Again</Link>
+            ) : (
+              <>
+                <button onClick={() => void fetchDashboardData()} className="btn-primary py-2 px-4 text-xs">Retry</button>
+                <Link href="/teams" className="btn-secondary py-2 px-4 text-xs">Browse Teams</Link>
+                <Link href="/projects" className="btn-secondary py-2 px-4 text-xs">Browse Projects</Link>
+              </>
+            )}
           </div>
         </Section>
       </div>

@@ -21,6 +21,7 @@ Next owns browser authentication, sessions, CSRF/origin checks, and response com
 - Default limits are 24 hours idle and 7 days absolute. Privileged actions require authentication within 10 minutes.
 - Authentication time, method, and assurance come from real authentication events; refresh does not manufacture recent authentication.
 - State-changing routes enforce the configured canonical origin, appropriate Fetch Metadata/CSRF checks, JSON content type, body limits, and an authenticated session.
+- Production email/password signup requires email verification. A nonproduction environment may explicitly bypass it for local/demo work; production fails closed if that bypass is requested.
 - Verification and recovery values are random, purpose-bound, short-lived, one-use, stored safely, and never logged. Related pages use `Referrer-Policy: no-referrer` and no third-party resources.
 - Password handling, OAuth state/PKCE/nonce, session tokens, and recovery cryptography come from maintained libraries, not Quorum code.
 

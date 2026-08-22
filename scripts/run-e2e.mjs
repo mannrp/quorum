@@ -122,6 +122,7 @@ const api = spawnChild(apiCommand, apiArgs, { cwd: join(process.cwd(), "apps/api
 await waitFor("http://127.0.0.1:18080/healthz", api, "e2e API");
 
 Object.assign(childEnv, {
+  AUTH_REQUIRE_EMAIL_VERIFICATION: "true",
   BETTER_AUTH_URL: "http://127.0.0.1:3000",
   INTERNAL_API_BASE_URL: "http://127.0.0.1:18080",
   INTERNAL_ASSERTION_ISSUER: "quorum-next",

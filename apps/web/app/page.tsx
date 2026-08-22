@@ -3,11 +3,29 @@
 import Link from "next/link";
 import { Section, Status, Badge, LoadingSkeleton } from "@/components/ui";
 import { useOperation } from "@/lib/operations/client";
+import { useAuthContext } from "@/lib/auth-context";
 import type { Project } from "@/types/domain";
 
 export default function HomePage() {
   const { data, error, loading } = useOperation<{ projects: Project[] }>("PublicHomeV1", {});
+  const { sessionState, productViewerState } = useAuthContext();
   const projects = data?.projects || [];
+
+  const profileCta: [string, string] = (() => {
+    if (sessionState === "authenticated") {
+      if (productViewerState === "ready") {
+        return ["/dashboard", "Dashboard"];
+      }
+      if (productViewerState === "profile-incomplete") {
+        return ["/settings/profile", "Complete Profile"];
+      }
+      if (productViewerState === "unenrolled") {
+        return ["/onboarding", "Choose Role"];
+      }
+      return ["/dashboard", "Account"];
+    }
+    return ["/auth/register", "Register"];
+  })();
 
   return (
     <div className="dashboard-stage space-y-8 py-4 max-w-6xl mx-auto px-4">
@@ -37,7 +55,7 @@ export default function HomePage() {
           <Section title="Quick Access Operations" variant="tall">
             <div className="space-y-2">
               {[
-                ["/auth/register", "Set up profile"],
+                profileCta,
                 ["/teams", "Recruit members"],
                 ["/projects", "Claim project"],
               ].map(([href, label]) => (

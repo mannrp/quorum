@@ -1,12 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Section } from "@/components/ui";
 import { signUpWithEmail } from "@/lib/auth-v2/client-actions";
 import { userFacingError } from "@/lib/operations/client";
+import { authDestination } from "@/lib/auth-routing";
+import { useAuthContext } from "@/lib/auth-context";
 
 export default function RegisterPage() {
+  const router = useRouter();
+  const { sessionState } = useAuthContext();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -14,14 +19,24 @@ export default function RegisterPage() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (sessionState === "authenticated") {
+      void authDestination().then((dest) => router.replace(dest));
+    }
+  }, [sessionState, router]);
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      await signUpWithEmail(email, password, fullName);
-      setSubmitted(true);
+      const outcome = await signUpWithEmail(email, password, fullName);
+      if (outcome === "authenticated") {
+        router.replace("/auth/complete");
+      } else {
+        setSubmitted(true);
+      }
     } catch (cause) {
       setError(userFacingError(cause));
     } finally {
@@ -49,8 +64,8 @@ export default function RegisterPage() {
             </div>
             <div className="space-y-1">
               <label htmlFor="register-password" className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Password</label>
-              <input id="register-password" required type="password" minLength={29} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} className="input-field" autoComplete="new-password" />
-              <p className="text-[10px] text-stone-500">Use at least 29 characters.</p>
+              <input id="register-password" required type="password" minLength={8} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} className="input-field" autoComplete="new-password" />
+              <p className="text-[10px] text-stone-500">Use at least 8 characters.</p>
             </div>
             {error && <p className="text-xs font-bold text-rose-500">{error}</p>}
             <button className="btn-primary w-full py-3" type="submit" disabled={loading}>

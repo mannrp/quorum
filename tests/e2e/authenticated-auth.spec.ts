@@ -156,10 +156,20 @@ test("Google-style OAuth user reaches the same Sponsor enrollment and logout flo
   expect(sessionProbe).toEqual({ status: 200, hasUser: true, emailVerified: true });
 
   await expect(page).toHaveURL(/\/onboarding$/, { timeout: 15_000 });
+  await expect(page.getByText("Sign Out")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Log In" })).not.toBeVisible();
+  await expect(page.getByRole("link", { name: "Join Now" })).not.toBeVisible();
+
+  await page.goto("/auth/login");
+  await expect(page).toHaveURL(/\/onboarding$/);
+  await page.goto("/auth/register");
+  await expect(page).toHaveURL(/\/onboarding$/);
   await page.getByLabel("Role").selectOption("SPONSOR");
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole("heading", { name: /Good to see you/ })).toBeVisible();
+  await expect(page.getByText("Sign Out")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Complete Profile" })).toBeVisible();
 
   const viewer = await page.evaluate(async () => {
     const response = await fetch("/api/v1/viewer", { cache: "no-store" });
@@ -186,6 +196,9 @@ test("Google-style OAuth user reaches the same Sponsor enrollment and logout flo
   await page.getByRole("button", { name: "Log out everywhere" }).click();
   await expect(page).toHaveURL(/\/auth\/login$/);
   await expect(secondTab).toHaveURL(/\/auth\/login$/);
+  await expect(page.getByRole("link", { name: "Log In" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Join Now" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Dashboard" })).not.toBeVisible();
   expect(await secondTab.evaluate(() => fetch("/api/v1/viewer").then((response) => response.status))).toBe(401);
 });
 test("password reset email replaces credentials without retaining the token URL", async ({ page }) => {

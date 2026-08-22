@@ -43,6 +43,7 @@ describe("private principal client", () => {
 
     const client = createPrincipalClient({
       baseURL: "http://127.0.0.1:8080",
+      requireEmailVerification: true,
       signer,
       fetch: request,
       correlationId: () => "corr-1",
@@ -70,6 +71,7 @@ describe("private principal client", () => {
     const signer = createInternalAssertionSigner({ issuer: "quorum-next", audience: "quorum-go", keyId: "active", privateKey });
     const base = {
       baseURL: "http://127.0.0.1:8080",
+      requireEmailVerification: true,
       signer,
       correlationId: () => "corr-1",
       assertionId: () => "jti-1",
@@ -84,6 +86,29 @@ describe("private principal client", () => {
       }),
     });
     await expect(unverified.enroll(new Headers(), "STUDENT")).rejects.toThrow("verified");
+
+    const bypassed = createPrincipalClient({
+      ...base,
+      requireEmailVerification: false,
+      fetch: vi.fn(async (_url, init) => {
+        expect(JSON.parse(String(init?.body))).toEqual({ role: "STUDENT", verifiedEmail: "" });
+        return Response.json({
+          viewer: {
+            productUserId: "product-1",
+            accountState: "ACTIVE",
+            onboardingState: "NOT_STARTED",
+            username: null,
+            displayName: null,
+            selfServiceRoles: ["STUDENT"],
+          },
+        });
+      }),
+      session: async () => ({
+        user: { id: "auth-user-1", email: "user@example.test", emailVerified: false },
+        session: { authenticatedAt: new Date(), authenticationMethods: '["password"]', assurance: "aal1", deviceHandle: "device-1" },
+      }),
+    });
+    await expect(bypassed.enroll(new Headers(), "STUDENT")).resolves.toMatchObject({ productUserId: "product-1" });
 
     await expect(unverified.enroll(new Headers(), "ADMIN" as "STUDENT")).rejects.toThrow("role");
 

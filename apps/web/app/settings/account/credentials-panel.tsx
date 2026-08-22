@@ -57,11 +57,11 @@ export function CredentialsPanel({ passwordEnabled, onPasswordChanged }: Props) 
             <h2 className="text-sm font-semibold text-[var(--text-app)]">Change password</h2>
             <label className="block text-xs font-semibold text-stone-500">
               Current password
-              <input className="input mt-1 w-full" type="password" autoComplete="current-password" required minLength={29} maxLength={128} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
+              <input className="input mt-1 w-full" type="password" autoComplete="current-password" required maxLength={128} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
             </label>
             <label className="block text-xs font-semibold text-stone-500">
               New password
-              <input className="input mt-1 w-full" type="password" autoComplete="new-password" required minLength={29} maxLength={128} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+              <input className="input mt-1 w-full" type="password" autoComplete="new-password" required minLength={8} maxLength={128} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
             </label>
             <button className="btn-secondary py-2 text-xs" type="submit" disabled={busy !== null}>
               {busy === "password" ? "Changing password..." : "Change password"}

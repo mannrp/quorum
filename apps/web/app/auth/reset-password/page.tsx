@@ -39,7 +39,7 @@ export default function ResetPasswordPage() {
         <form className="space-y-4" onSubmit={submit}>
           <div className="space-y-1">
             <label htmlFor="new-password" className="text-[10px] font-bold uppercase tracking-wider text-stone-400">New password</label>
-            <input id="new-password" className="input-field py-2" type="password" minLength={29} maxLength={128} required value={password} onChange={(event) => setPassword(event.target.value)} disabled={loading || !token} />
+            <input id="new-password" className="input-field py-2" type="password" minLength={8} maxLength={128} required value={password} onChange={(event) => setPassword(event.target.value)} disabled={loading || !token} />
           </div>
           {error && <p className="text-xs font-bold text-rose-500">{error}</p>}
           <button className="btn-primary w-full py-3" type="submit" disabled={loading || !token}>{loading ? "Updating..." : "Update password"}</button>

@@ -112,15 +112,15 @@ export function buildBetterAuthOptions({
       enabled: true,
       minPasswordLength: config.password.minLength,
       maxPasswordLength: config.password.maxLength,
-      requireEmailVerification: true,
+      requireEmailVerification: config.requireEmailVerification,
       resetPasswordTokenExpiresIn: 3_600,
       revokeSessionsOnPasswordReset: true,
       sendResetPassword,
     },
     emailVerification: {
       expiresIn: 3_600,
-      sendOnSignIn: true,
-      sendOnSignUp: true,
+      sendOnSignIn: config.requireEmailVerification,
+      sendOnSignUp: config.requireEmailVerification,
       sendVerificationEmail,
     },
     rateLimit: {
@@ -143,6 +143,7 @@ export function buildBetterAuthOptions({
       },
     },
     databaseHooks: {
+
       session: {
         create: {
           before: async (session, context) => {

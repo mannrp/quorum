@@ -1,0 +1,17 @@
+# Demo data generation prompt
+
+Use the following prompt with the implementation LLM:
+
+> Work in the Quorum repository and implement a safe, repeatable local demo-data workflow. Read the repository `AGENTS.md` first. Because this touches identities and authorization, also read `docs/auth/STATUS.md`, `docs/auth/AUTH_V2_CONTRACT.md`, the active slice in `docs/auth/IMPLEMENTATION.md`, and `docs/auth/OPERATIONS.md` before changing anything.
+>
+> Start by inspecting the canonical schema in `apps/api/migrations`, the SQL queries in `apps/api/queries`, existing command conventions under `apps/api/cmd`, and the enabled product journeys in the web app. Migration `000006_remove_legacy_dummy_data.sql` says demo data is created by `cmd/demo-seed`, but that command currently does not exist; treat that as the gap to resolve. Do not add seed rows to a migration, create a second migration history, edit an applied migration, or hand-edit generated sqlc code.
+>
+> Build the smallest useful implementation, preferably `apps/api/cmd/demo-seed` plus a root npm script. It must be explicitly local/development-only, refuse unsafe or non-local database targets, run transactionally, be deterministic and idempotent, and fail with a useful error. Re-running it must converge without duplicating rows or erasing unrelated data. Use clearly reserved demo identifiers so its own rows can be replaced safely. Do not add a generalized fixture framework.
+>
+> Generate coherent, realistic data that exercises the visible product: roughly 12 students, 4 sponsors, 4 teams in different membership states, 6 sponsor projects across meaningful workflow states, disciplines/tags, team invitations and join requests, project applications/offers where supported, direct messages, and read/unread notifications. Include empty and edge states, but keep the dataset small enough to understand. Relationships and permissions must be internally valid; avoid lorem ipsum, random nonsense, impossible state combinations, admin users, and file records.
+>
+> Respect Auth V2 boundaries. Never invent password hashes, sessions, verification tokens, reusable credentials, roles, ownership, or authority in browser-facing payloads. Do not write Better Auth session/token objects manually. If login-capable demo accounts are required, use the maintained Better Auth/public Next flow or an existing reviewed bootstrap boundary, and document the local-only credentials without committing secrets. Otherwise seed product data only and state clearly how it maps to locally registered identities. Product authorization must remain derived from current PostgreSQL state.
+>
+> Add focused tests first for safety guards, idempotency, row counts, referential integrity, and representative authorization/workflow states. Use `npm run db:generate` only if SQL query files change. Add concise usage and cleanup instructions to the existing operational documentation rather than creating another planning document. Update `docs/auth/STATUS.md` only with current verified capability and commands.
+>
+> Verify the focused tests and all relevant repository acceptance commands. At minimum run the seeder twice against disposable local PostgreSQL, prove the second run creates no duplicates, run Go tests for affected packages, and run lint/typecheck/web tests if web or root scripts change. Do not weaken or skip security tests when infrastructure is unavailable. Finish with a short report listing files changed, exact commands run, demo personas/data counts, how to invoke and clean the seed, and any genuine blocker.

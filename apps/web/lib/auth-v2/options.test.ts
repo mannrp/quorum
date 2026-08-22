@@ -32,7 +32,8 @@ describe("Better Auth production options", () => {
         secret: "q".repeat(32),
         trustedOrigins: ["https://quorum.example"],
         cookie: { secure: true, httpOnly: true, sameSite: "lax" },
-        password: { minLength: 29, maxLength: 128 },
+        password: { minLength: 8, maxLength: 128 },
+        requireEmailVerification: false,
         session: { idleSeconds: 86_400, absoluteSeconds: 604_800, recentAuthSeconds: 600 },
         databaseSchema: "better_auth",
         allowImplicitSameEmailLinking: false,
@@ -65,11 +66,12 @@ describe("Better Auth production options", () => {
     expect(options.advanced?.defaultCookieAttributes).not.toHaveProperty("domain");
     expect(options.emailAndPassword).toMatchObject({
       enabled: true,
-      minPasswordLength: 29,
+      minPasswordLength: 8,
       maxPasswordLength: 128,
-      requireEmailVerification: true,
+      requireEmailVerification: false,
       revokeSessionsOnPasswordReset: true,
     });
+    expect(options.emailVerification).toMatchObject({ sendOnSignUp: false });
     expect(options.session).toMatchObject({
       cookieCache: { enabled: false },
       expiresIn: 86_400,

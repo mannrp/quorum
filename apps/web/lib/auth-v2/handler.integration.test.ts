@@ -41,11 +41,13 @@ async function waitForVerificationURL(targetEmail = email, subject = "Verify you
   while (Date.now() < deadline) {
     const list = await fetch(`${mailpitURL}/api/v1/messages`, { cache: "no-store" });
     if (!list.ok) throw new Error(`Mailpit list failed: ${list.status}`);
-    const value = await list.json() as { messages?: Array<{ ID: string; Subject: string; To: Array<{ Address: string }> }> };
-    const summary = value.messages?.find((message) =>
-      message.Subject === subject &&
-      message.To.some((recipient) => recipient.Address === targetEmail),
-    );
+    const value = await list.json() as { messages?: Array<{ ID: string; Created: string; Subject: string; To: Array<{ Address: string }> }> };
+    const summary = value.messages
+      ?.filter((message) =>
+        message.Subject === subject &&
+        message.To.some((recipient) => recipient.Address === targetEmail),
+      )
+      .sort((left, right) => Date.parse(right.Created) - Date.parse(left.Created))[0];
     if (summary) {
       const detail = await fetch(`${mailpitURL}/api/v1/message/${encodeURIComponent(summary.ID)}`);
       if (!detail.ok) throw new Error(`Mailpit message failed: ${detail.status}`);
@@ -290,6 +292,17 @@ describe("real Better Auth handler", () => {
   beforeAll(async () => {
     if (process.env.QUORUM_REQUIRE_INTEGRATION !== "true") {
       throw new Error("QUORUM_REQUIRE_INTEGRATION=true is required.");
+    }
+    if (!process.env.AUTH_DATABASE_URL) throw new Error("AUTH_DATABASE_URL is required.");
+    const { Pool } = await import("pg");
+    const pool = new Pool({
+      connectionString: process.env.AUTH_DATABASE_URL,
+      options: "-c search_path=better_auth,pg_catalog,pg_temp",
+    });
+    try {
+      await pool.query('DELETE FROM "user" WHERE email = $1', [linkEmail]);
+    } finally {
+      await pool.end();
     }
     handler = (await import("./server")).handleAuthRequest;
   });

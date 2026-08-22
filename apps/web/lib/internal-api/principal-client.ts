@@ -25,6 +25,7 @@ type SessionContext = Readonly<{
 
 type Inputs = Readonly<{
   baseURL: string;
+  requireEmailVerification: boolean;
   signer: ReturnType<typeof createInternalAssertionSigner>;
   session(headers: Headers): Promise<SessionContext | null>;
   fetch?: typeof globalThis.fetch;
@@ -51,7 +52,7 @@ export function createPrincipalClient(inputs: Inputs) {
   async function call(headers: Headers, path: "/internal/v1/enrollment" | "/internal/v1/viewer", role?: SelfServiceRole) {
     if (role !== undefined && role !== "STUDENT" && role !== "SPONSOR") throw new Error("Invalid enrollment role.");
     const session = await inputs.session(headers);
-    if (!session?.user.emailVerified) throw new AuthenticationRequiredError();
+    if (!session || (inputs.requireEmailVerification && !session.user.emailVerified)) throw new AuthenticationRequiredError();
 
     let methods: unknown;
     try {
@@ -79,7 +80,7 @@ export function createPrincipalClient(inputs: Inputs) {
         "X-Correlation-ID": correlationId,
         "X-Quorum-Assertion": assertion,
       },
-      body: role === undefined ? undefined : JSON.stringify({ role, verifiedEmail: session.user.email }),
+      body: role === undefined ? undefined : JSON.stringify({ role, verifiedEmail: session.user.emailVerified ? session.user.email : "" }),
       cache: "no-store",
       signal: AbortSignal.timeout(5_000),
     });

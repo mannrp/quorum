@@ -1,23 +1,27 @@
 "use client";
+
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useState, useEffect, useCallback } from "react";
-import { clearOperationCache } from "@/lib/operations/client";
-import { getCurrentUser, signOut } from "@/lib/auth-v2/client-actions";
-import { subscribeToSessionInvalidation } from "@/lib/auth-v2/session-events";
-import { viewerClient } from "@/lib/auth-v2/viewer-client";
-import { operationRequest } from "@/lib/operations/client";
-import type { User } from "@/types/domain";
+import { clearOperationCache, operationRequest } from "@/lib/operations/client";
+import { signOut } from "@/lib/auth-v2/client-actions";
+import { AuthProvider, useAuthContext } from "@/lib/auth-context";
+import { requiresAuthenticatedSession } from "@/lib/auth-routing";
 
-export function AppShell({ children }: { children: ReactNode }) {
+function ShellInner({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isDark, setIsDark] = useState(false);
-  const [me, setMe] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
   const [unreadMsg, setUnreadMsg] = useState(0);
   const [unreadNotif, setUnreadNotif] = useState(0);
-  const [sessionError, setSessionError] = useState<string | null>(null);
+
+  const {
+    sessionState,
+    productViewerState,
+    user,
+    sessionError,
+    refreshAuth,
+  } = useAuthContext();
 
   // Initialize theme from document class
   useEffect(() => {
@@ -35,96 +39,87 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   };
 
-  const fetchSession = useCallback(async () => {
-    try {
-      setSessionError(null);
-      const result = await viewerClient.viewer();
-      if (result.state !== "ready" || !result.viewer.username || !result.viewer.displayName) {
-        setMe(null);
-        setUnreadNotif(0);
-        setUnreadMsg(0);
-        return;
-      }
-
-      setMe({
-        id: result.viewer.productUserId,
-        username: result.viewer.username,
-        fullName: result.viewer.displayName,
-      });
-      if (result.viewer.onboardingState === "COMPLETE") {
+  const fetchShellCounts = useCallback(async () => {
+    if (productViewerState === "ready") {
+      try {
         const counts = await operationRequest<{
           dashboardContext: { unreadMessages: number; unreadNotifications: number };
         }>("ShellCountsV1", {});
         setUnreadNotif(counts.dashboardContext.unreadNotifications);
         setUnreadMsg(counts.dashboardContext.unreadMessages);
-      } else {
+      } catch {
         setUnreadNotif(0);
         setUnreadMsg(0);
       }
-    } catch (error) {
-      setSessionError(error instanceof Error ? error.message : "Unable to load account state.");
-      setMe(null);
+    } else {
       setUnreadNotif(0);
       setUnreadMsg(0);
-    } finally {
-      setLoading(false);
     }
-  }, []);
+  }, [productViewerState]);
 
-  // Load shell state once; mutations that change auth/persona explicitly refresh it.
   useEffect(() => {
-    void fetchSession();
-  }, [fetchSession]);
+    void fetchShellCounts();
+  }, [fetchShellCounts]);
 
-  useEffect(() => subscribeToSessionInvalidation(() => {
-    clearOperationCache();
-    void getCurrentUser()
-      .then((user) => {
-        if (user) return fetchSession();
-        setMe(null);
-        setUnreadNotif(0);
-        setUnreadMsg(0);
-        router.push("/auth/login");
-      })
-      .catch(() => {
-        setMe(null);
-        setUnreadNotif(0);
-        setUnreadMsg(0);
-        router.push("/auth/login");
-      });
-  }), [fetchSession, router]);
+  useEffect(() => {
+    if (sessionState === "anonymous" && requiresAuthenticatedSession(pathname)) {
+      router.replace("/auth/login");
+    }
+  }, [pathname, router, sessionState]);
+
   const handleLogout = async () => {
     await signOut().catch(() => undefined);
     clearOperationCache();
-    setMe(null);
+    await refreshAuth();
     router.push("/");
   };
 
-
-  const navLinks = me
-    ? [
+  const navLinks = (() => {
+    if (sessionState === "authenticated" && productViewerState === "ready" && user) {
+      return [
         { name: "Dashboard", href: "/dashboard" },
         { name: "Teams", href: "/teams" },
         { name: "Projects", href: "/projects" },
         { name: "Inbox", href: "/inbox", badge: unreadMsg },
         { name: "Notifications", href: "/notifications", badge: unreadNotif },
-      ]
-    : [
+      ];
+    }
+    if (sessionState === "authenticated" && productViewerState === "profile-incomplete") {
+      return [
         { name: "Home", href: "/" },
         { name: "Teams", href: "/teams" },
         { name: "Projects", href: "/projects" },
+        { name: "Complete Profile", href: "/settings/profile" },
       ];
+    }
+    if (sessionState === "authenticated" && productViewerState === "unenrolled") {
+      return [
+        { name: "Home", href: "/" },
+        { name: "Teams", href: "/teams" },
+        { name: "Projects", href: "/projects" },
+        { name: "Choose Role", href: "/onboarding" },
+      ];
+    }
+    // Anonymous or loading or unavailable
+    return [
+      { name: "Home", href: "/" },
+      { name: "Teams", href: "/teams" },
+      { name: "Projects", href: "/projects" },
+    ];
+  })();
+
+  const isHomeBrandLink = sessionState === "authenticated" && productViewerState === "ready" ? "/dashboard" : "/";
 
   return (
     <div className="min-h-screen pb-12 transition-colors duration-150">
       <header className="w-full max-w-6xl mx-auto px-4 pt-4">
         <nav className="glass-nav flex items-center justify-between gap-4 border border-[var(--border-subtle)] px-6 py-4 bg-[var(--surface-app)]">
           <div className="flex items-center gap-6">
-            <Link className="group flex items-center gap-2 border-0 text-xl font-bold tracking-tight text-[var(--text-app)]" href={me ? "/dashboard" : "/"}>
+            <Link className="group flex items-center gap-2 border-0 text-xl font-bold tracking-tight text-[var(--text-app)]" href={isHomeBrandLink}>
               <span className="h-2.5 w-2.5 rounded-full bg-[var(--action-app)] transition-transform duration-200 group-hover:scale-125" />
               <span className="transition-colors group-hover:text-[var(--accent-app)]">Quorum</span>
             </Link>
-            
+
             <div className="hidden md:flex items-center gap-1.5">
               {navLinks.map((link) => {
                 const isActive = pathname === link.href || (link.href !== "/" && pathname?.startsWith(link.href));
@@ -159,19 +154,23 @@ export function AppShell({ children }: { children: ReactNode }) {
               {isDark ? "Light" : "Dark"}
             </button>
 
-            {loading ? (
+            {sessionState === "loading" ? (
               <span className="skeleton-block h-7 w-24" role="status" aria-label="Loading account" />
-            ) : me ? (
+            ) : sessionState === "authenticated" ? (
               <div className="flex items-center gap-2.5">
-                <Link href={`/profile/${me.username}`} className="flex items-center gap-2 px-2 py-1 border border-transparent hover:border-[var(--border-subtle)] bg-transparent transition">
-                  <div className="h-6 w-6 rounded-none bg-[var(--accent-app)] text-white flex items-center justify-center font-mono font-bold text-xs uppercase">
-                    {me.fullName.charAt(0)}
-                  </div>
-                  <span className="text-xs font-semibold text-[var(--text-app)] hidden sm:inline">{me.fullName}</span>
-                </Link>
-                <div className="h-4 w-[1px] bg-[var(--border-subtle)]"></div>
+                {productViewerState === "ready" && user ? (
+                  <>
+                    <Link href={`/profile/${user.username}`} className="flex items-center gap-2 px-2 py-1 border border-transparent hover:border-[var(--border-subtle)] bg-transparent transition">
+                      <div className="h-6 w-6 rounded-none bg-[var(--accent-app)] text-white flex items-center justify-center font-mono font-bold text-xs uppercase">
+                        {user.fullName.charAt(0)}
+                      </div>
+                      <span className="text-xs font-semibold text-[var(--text-app)] hidden sm:inline">{user.fullName}</span>
+                    </Link>
+                    <div className="h-4 w-[1px] bg-[var(--border-subtle)]"></div>
+                  </>
+                ) : null}
                 <button onClick={handleLogout} className="text-[9px] font-mono font-bold uppercase tracking-wider text-rose-650 hover:underline">
-                  Logout
+                  Sign Out
                 </button>
               </div>
             ) : (
@@ -187,6 +186,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </nav>
       </header>
+
       {sessionError && (
         <div className="mx-auto max-w-6xl px-4 pt-3">
           <div className="rounded-none border border-[var(--color-danger)] bg-[var(--color-danger-bg)] px-4 py-2 text-xs font-mono font-bold uppercase tracking-wider text-[var(--color-danger)]">
@@ -194,8 +194,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       )}
+
       {/* Mobile nav bar visible on smaller screens */}
-      {me && (
+      {sessionState === "authenticated" && (
         <div className="md:hidden fixed bottom-4 left-4 right-4 z-50 border border-[var(--border-app)] py-2 px-4 flex justify-around bg-[var(--surface-app)]">
           {navLinks.slice(0, 5).map((link) => {
             const isActive = pathname === link.href || (link.href !== "/" && pathname?.startsWith(link.href));
@@ -219,5 +220,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <main className="mx-auto max-w-6xl p-4 pt-8">{children}</main>
     </div>
+  );
+}
+
+export function AppShell({ children }: { children: ReactNode }) {
+  return (
+    <AuthProvider>
+      <ShellInner>{children}</ShellInner>
+    </AuthProvider>
   );
 }

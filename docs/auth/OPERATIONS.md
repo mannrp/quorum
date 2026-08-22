@@ -26,6 +26,8 @@ npm run infra:down
 
 Local-only example values are in `auth-v2.env.example`. Do not copy those credentials to any shared or hosted environment.
 
+Email verification defaults on. For local/demo signup only, set `AUTH_REQUIRE_EMAIL_VERIFICATION=false` in the web environment; production rejects that setting.
+
 ## Database lifecycle
 
 Canonical migrations live in `apps/api/migrations`.

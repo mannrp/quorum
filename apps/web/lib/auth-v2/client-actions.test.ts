@@ -74,10 +74,11 @@ describe("Auth V2 client actions", () => {
   });
 
   it("registers without fabricating a post-registration session", async () => {
-    emailSignUp.mockResolvedValue({ data: { user: { id: "auth-user" } }, error: null });
+    emailSignUp.mockResolvedValue({ data: { user: { id: "auth-user", emailVerified: false } }, error: null });
+    getSession.mockResolvedValue({ data: { user: { id: "auth-user" } }, error: null });
     const { signUpWithEmail } = await import("./client-actions");
 
-    await signUpWithEmail("user@example.test", "a".repeat(29), "Test User");
+    await expect(signUpWithEmail("user@example.test", "a".repeat(29), "Test User")).resolves.toBe("authenticated");
     expect(emailSignUp).toHaveBeenCalledWith({
       email: "user@example.test",
       password: "a".repeat(29),
@@ -85,6 +86,7 @@ describe("Auth V2 client actions", () => {
       callbackURL: "/auth/complete",
     });
     expect(emailSignIn).not.toHaveBeenCalled();
+    expect(getSession).toHaveBeenCalledTimes(1);
   });
 
   it("projects linked accounts to reviewed sign-in methods", async () => {

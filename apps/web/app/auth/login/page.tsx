@@ -6,13 +6,21 @@ import { Section } from "@/components/ui";
 import { authDestination } from "@/lib/auth-routing";
 import { userFacingError } from "@/lib/operations/client";
 import { signInWithEmail, signInWithGoogle } from "@/lib/auth-v2/client-actions";
+import { useAuthContext } from "@/lib/auth-context";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { sessionState } = useAuthContext();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (sessionState === "authenticated") {
+      void authDestination().then((dest) => router.replace(dest));
+    }
+  }, [sessionState, router]);
 
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
@@ -49,7 +57,6 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
-
 
   return (
     <div className="max-w-md mx-auto py-8">

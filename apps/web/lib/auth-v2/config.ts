@@ -10,7 +10,8 @@ export type AuthRuntimeConfig = Readonly<{
     httpOnly: true;
     sameSite: "lax";
   }>;
-  password: Readonly<{ minLength: 29; maxLength: 128 }>;
+  password: Readonly<{ minLength: 8; maxLength: 128 }>;
+  requireEmailVerification: boolean;
   session: Readonly<{
     idleSeconds: 86_400;
     absoluteSeconds: 604_800;
@@ -38,6 +39,13 @@ function required(environment: Environment, name: string): string {
   return value;
 }
 
+function optionalBoolean(environment: Environment, name: string, fallback: boolean): boolean {
+  const value = environment[name]?.trim();
+  if (!value) return fallback;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`${name} must be true or false.`);
+}
 function parseOrigin(raw: string, production: boolean): URL {
   let url: URL;
   try {
@@ -110,6 +118,10 @@ export function parseAuthEnvironment(environment: Environment): AuthRuntimeConfi
   const baseURL = origin.origin;
   const google = parseGoogle(environment, baseURL);
   const testOIDC = parseTestOIDC(environment, environment.NODE_ENV === "production");
+  const requireEmailVerification = optionalBoolean(environment, "AUTH_REQUIRE_EMAIL_VERIFICATION", true);
+  if (environment.NODE_ENV === "production" && !requireEmailVerification) {
+    throw new Error("Email verification cannot be disabled in production.");
+  }
 
   return {
     baseURL,
@@ -121,7 +133,8 @@ export function parseAuthEnvironment(environment: Environment): AuthRuntimeConfi
       httpOnly: true,
       sameSite: "lax",
     },
-    password: { minLength: 29, maxLength: 128 },
+    password: { minLength: 8, maxLength: 128 },
+    requireEmailVerification,
     session: {
       idleSeconds: 86_400,
       absoluteSeconds: 604_800,

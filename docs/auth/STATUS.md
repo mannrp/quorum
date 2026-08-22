@@ -4,15 +4,15 @@
 **Active work:** release-host and real-provider evidence only
 **Branch:** `codex/auth-v2-rewrite`
 **Pull request:** `mannrp/quorum#10` (draft)
-**Updated:** 2026-08-02
+**Updated:** 2026-08-22
 
 ## Working product
 
 Quorum has one browser authentication path: Better Auth `1.6.25` mounted by public Next at `/api/auth/[...path]`.
 
-- Email/password registration, verification, sign-in, reset, change, and explicit Google linking use opaque host-only HttpOnly sessions. Verification and reset links are one-use.
+- Email/password registration, verification, sign-in, reset, change, and explicit Google linking use opaque host-only HttpOnly sessions. Verification is required by default; nonproduction may explicitly bypass it with `AUTH_REQUIRE_EMAIL_VERIFICATION=false`. Verification and reset links are one-use.
 - Google uses one exact callback. Implicit same-email linking is disabled. The deterministic OIDC provider is development/test-only and production rejects it.
-- Verified users self-enroll only as Student or Sponsor. Go receives a 15-second Next assertion, resolves current PostgreSQL identity/account/role state, and fails closed for inactive or unknown principals.
+- Authenticated users self-enroll only as Student or Sponsor; production email/password enrollment requires verified email. Go receives a 15-second Next assertion, resolves current PostgreSQL identity/account/role state, and fails closed for inactive or unknown principals.
 - Canonical Student/Sponsor grants gate product entry points. Team membership, project ownership, workflow state, and private nested fields are authorized from current database state.
 - Public discovery and every enabled authenticated workflow use typed registered operations. Browser-supplied GraphQL, backend URLs, authority fields, file URLs, and reusable credentials are not accepted or projected.
 - Teams, projects, applications/offers, dashboard, direct messaging, notifications, profile completion, account methods, session management, and deactivation are wired through the Auth V2 path.
@@ -32,18 +32,23 @@ Quorum has one browser authentication path: Better Auth `1.6.25` mounted by publ
 
 ## Latest verified evidence
 
-Verified locally on 2026-08-02:
+Verified locally on 2026-08-22:
 
 ```text
 npm run lint                                                     PASS
-npm run typecheck --workspace=@quorum/web                        PASS
+npm run typecheck                                                PASS
 npm run build                                                    PASS
-npm run test:web                                                 PASS (16 files, 114 tests)
+npm run test:web                                                 PASS (18 files, 133 tests)
 npm run test:docker-context                                      PASS
+npm run test:e2e                                                 PASS (handler 10 + Chromium 5; no skips)
+```
+
+Previously verified on 2026-08-02:
+
+```text
 cd apps/api && go test ./internal/auth ./internal/server ./internal/graph
                                                                  PASS
 service-backed cd apps/api && go test -count=1 ./...             PASS (PostgreSQL required; no skips)
-npm run test:e2e                                                PASS (handler 10 + Chromium 5; no skips)
 production API and web Docker builds                            PASS
 production Next HTTP and read-only Unix-socket runtime probes    PASS
 pinned Ubuntu Verify workflow                                  PASS (2m37s)

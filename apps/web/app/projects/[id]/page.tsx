@@ -4,10 +4,12 @@ import Link from "next/link";
 import { Section, Status, Badge, Modal, LoadingSkeleton } from "@/components/ui";
 import { userFacingError } from "@/lib/operations/client";
 import { operationRequest, useOperation } from "@/lib/operations/client";
+import { useAuthContext } from "@/lib/auth-context";
 import type { Project, Team, User } from "@/types/domain";
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { sessionState, productViewerState } = useAuthContext();
   const { data, error, loading, reload } = useOperation<{ project: Project | null }>("PublicProjectV1", { id });
   
   const [me, setMe] = useState<User | null>(null);
@@ -264,10 +266,26 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
       {/* Application Form Modal */}
       <Modal isOpen={isApplyOpen} onClose={() => setIsApplyOpen(false)} title={`Claim Project: ${project.title}`}>
-        {!me ? (
+        {sessionState === "anonymous" ? (
           <div className="text-center py-4 space-y-2">
             <p className="text-xs text-stone-500">You must log in to submit a project application.</p>
             <Link href="/auth/login" className="btn-primary py-1.5 px-3 text-xs inline-block">Log In</Link>
+          </div>
+        ) : productViewerState === "unenrolled" ? (
+          <div className="text-center py-4 space-y-2">
+            <p className="text-xs text-stone-500">Choose a role before applying for projects.</p>
+            <Link href="/onboarding" className="btn-primary py-1.5 px-3 text-xs inline-block">Choose Role</Link>
+          </div>
+        ) : productViewerState === "profile-incomplete" ? (
+          <div className="text-center py-4 space-y-2">
+            <p className="text-xs text-stone-500">Complete your profile before applying for projects.</p>
+            <Link href="/settings/profile" className="btn-primary py-1.5 px-3 text-xs inline-block">Complete Profile</Link>
+          </div>
+        ) : sessionState === "authenticated" && productViewerState === "unavailable" ? (
+          <p className="py-4 text-center text-xs text-stone-500">Unable to verify your account state. Try again shortly.</p>
+        ) : !me ? (
+          <div className="text-center py-4 space-y-2">
+            <p className="text-xs text-stone-500">Loading profile and team details...</p>
           </div>
         ) : !myTeam ? (
           <div className="text-center py-6 space-y-3">

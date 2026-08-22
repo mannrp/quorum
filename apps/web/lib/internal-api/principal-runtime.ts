@@ -1,6 +1,7 @@
 import "server-only";
 import { createHmac, randomUUID } from "node:crypto";
 import { importPKCS8 } from "jose";
+import { parseAuthEnvironment } from "@/lib/auth-v2/config";
 import { getCurrentAuthSession } from "@/lib/auth-v2/server";
 import { createInternalAssertionSigner } from "./assertion";
 import { AuthenticationRequiredError, createPrincipalClient } from "./principal-client";
@@ -21,7 +22,8 @@ function privateKeyPEM(encoded: string): string {
 }
 
 async function buildRuntime() {
-  const secret = required("BETTER_AUTH_SECRET");
+  const authConfig = parseAuthEnvironment(process.env);
+  const secret = authConfig.secret;
   const privateKey = await importPKCS8(privateKeyPEM(required("INTERNAL_ASSERTION_PRIVATE_KEY")), "EdDSA");
   const signer = createInternalAssertionSigner({
     issuer: required("INTERNAL_ASSERTION_ISSUER"),
@@ -60,7 +62,7 @@ async function buildRuntime() {
   };
   const assertionHeaders = async (headers: Headers) => {
     const current = await session(headers);
-    if (!current?.user.emailVerified) throw new AuthenticationRequiredError();
+    if (!current || (authConfig.requireEmailVerification && !current.user.emailVerified)) throw new AuthenticationRequiredError();
     const methods = JSON.parse(current.session.authenticationMethods) as unknown;
     if (!Array.isArray(methods) || methods.length === 0 || !methods.every((item) => typeof item === "string")) {
       throw new Error("Invalid authentication method context.");
@@ -82,6 +84,7 @@ async function buildRuntime() {
   return {
     client: createPrincipalClient({
       baseURL: internalAPIBaseURL(),
+      requireEmailVerification: authConfig.requireEmailVerification,
       fetch: internalAPIRequest,
       signer,
       correlationId: randomUUID,
