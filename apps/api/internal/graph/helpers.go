@@ -78,6 +78,211 @@ func (r *Resolver) cachedTeamMembership(ctx context.Context, teamID pgtype.UUID,
 	return r.Queries.GetTeamMembership(ctx, db.GetTeamMembershipParams{TeamID: teamID, UserID: userID})
 }
 
+// cachedTeamMembers returns a team's members (with joined user columns) from the
+// per-request cache. A miss fetches the single team through the same array query
+// primeTeamMembers uses in bulk, so both paths share one row type and cache slot.
+func (r *Resolver) cachedTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]db.ListTeamMembersByTeamIDsRow, error) {
+	if cache := cacheFromContext(ctx); cache != nil {
+		key := uuidString(teamID)
+		cache.mu.Lock()
+		if cached, ok := cache.teamMembers[key]; ok {
+			cache.mu.Unlock()
+			return cached.value, cached.err
+		}
+		cache.mu.Unlock()
+
+		value, err := r.Queries.ListTeamMembersByTeamIDs(ctx, []pgtype.UUID{teamID})
+		cache.mu.Lock()
+		cache.teamMembers[key] = cachedTeamMembers{value: value, err: err}
+		cache.mu.Unlock()
+		return value, err
+	}
+	return r.Queries.ListTeamMembersByTeamIDs(ctx, []pgtype.UUID{teamID})
+}
+
+// primeTeamHydration batches the per-team member and membership lookups for a set
+// of teams about to be hydrated, so the hydration loop that follows issues none of
+// them itself. It is a no-op without a request cache or when the relevant fields
+// were not requested.
+func (r *Resolver) primeTeamHydration(ctx context.Context, teams []db.Team, options teamHydrationOptions) error {
+	if cacheFromContext(ctx) == nil || len(teams) == 0 {
+		return nil
+	}
+	teamIDs := make([]pgtype.UUID, len(teams))
+	for i, team := range teams {
+		teamIDs[i] = team.ID
+	}
+	if options.includeMembers {
+		if err := r.primeTeamMembers(ctx, teamIDs); err != nil {
+			return err
+		}
+	}
+	if options.includePermissions {
+		if current, ok := auth.UserFromContext(ctx); ok {
+			if err := r.primeTeamMemberships(ctx, current.ID, teamIDs); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// primeTeamMembers fills the members cache for many teams in one query. Teams with
+// no members are cached as empty so a later cachedTeamMembers call is a hit, not a
+// fallback re-query.
+func (r *Resolver) primeTeamMembers(ctx context.Context, teamIDs []pgtype.UUID) error {
+	cache := cacheFromContext(ctx)
+	if cache == nil {
+		return nil
+	}
+	rows, err := r.Queries.ListTeamMembersByTeamIDs(ctx, teamIDs)
+	if err != nil {
+		return err
+	}
+	grouped := make(map[string][]db.ListTeamMembersByTeamIDsRow, len(teamIDs))
+	for _, row := range rows {
+		key := uuidString(row.TeamID)
+		grouped[key] = append(grouped[key], row)
+	}
+	cache.mu.Lock()
+	for _, teamID := range teamIDs {
+		key := uuidString(teamID)
+		if _, ok := cache.teamMembers[key]; !ok {
+			cache.teamMembers[key] = cachedTeamMembers{value: grouped[key]}
+		}
+	}
+	cache.mu.Unlock()
+	return nil
+}
+
+// primeTeamMemberships fills the membership cache for one user across many teams in
+// one query. Teams the user does not belong to are cached as pgx.ErrNoRows to match
+// the single-row GetTeamMembership behavior cachedTeamMembership falls back to.
+func (r *Resolver) primeTeamMemberships(ctx context.Context, userID pgtype.UUID, teamIDs []pgtype.UUID) error {
+	cache := cacheFromContext(ctx)
+	if cache == nil {
+		return nil
+	}
+	rows, err := r.Queries.ListTeamMembershipsForUser(ctx, db.ListTeamMembershipsForUserParams{UserID: userID, TeamIds: teamIDs})
+	if err != nil {
+		return err
+	}
+	found := make(map[string]db.TeamMembership, len(rows))
+	for _, row := range rows {
+		found[uuidString(row.TeamID)] = row
+	}
+	cache.mu.Lock()
+	for _, teamID := range teamIDs {
+		key := membershipCacheKey(teamID, userID)
+		if _, ok := cache.teamMemberships[key]; ok {
+			continue
+		}
+		if membership, ok := found[uuidString(teamID)]; ok {
+			cache.teamMemberships[key] = cachedMembership{value: membership}
+		} else {
+			cache.teamMemberships[key] = cachedMembership{err: pgx.ErrNoRows}
+		}
+	}
+	cache.mu.Unlock()
+	return nil
+}
+
+// cachedProject returns a project by id from the per-request cache. requireProjectOwner
+// reads through it, so priming projects a hydration loop already holds turns its
+// per-project ownership check into a cache hit.
+func (r *Resolver) cachedProject(ctx context.Context, id pgtype.UUID) (db.Project, error) {
+	if cache := cacheFromContext(ctx); cache != nil {
+		key := uuidString(id)
+		cache.mu.Lock()
+		if cached, ok := cache.projects[key]; ok {
+			cache.mu.Unlock()
+			return cached.value, cached.err
+		}
+		cache.mu.Unlock()
+
+		value, err := r.Queries.GetProject(ctx, id)
+		cache.mu.Lock()
+		cache.projects[key] = cachedProject{value: value, err: err}
+		cache.mu.Unlock()
+		return value, err
+	}
+	return r.Queries.GetProject(ctx, id)
+}
+
+// cachedProjectApplications returns a project's applications from the per-request
+// cache. A miss fetches the single project through the same array query
+// primeProjectApplications uses in bulk, so both paths share one cache slot.
+func (r *Resolver) cachedProjectApplications(ctx context.Context, projectID pgtype.UUID) ([]db.ProjectApplication, error) {
+	if cache := cacheFromContext(ctx); cache != nil {
+		key := uuidString(projectID)
+		cache.mu.Lock()
+		if cached, ok := cache.projectApplications[key]; ok {
+			cache.mu.Unlock()
+			return cached.value, cached.err
+		}
+		cache.mu.Unlock()
+
+		value, err := r.listProjectApplicationsByProjectIDs(ctx, []pgtype.UUID{projectID})
+		cache.mu.Lock()
+		cache.projectApplications[key] = cachedProjectApplications{value: value[uuidString(projectID)], err: err}
+		cache.mu.Unlock()
+		return value[uuidString(projectID)], err
+	}
+	grouped, err := r.listProjectApplicationsByProjectIDs(ctx, []pgtype.UUID{projectID})
+	return grouped[uuidString(projectID)], err
+}
+
+// listProjectApplicationsByProjectIDs runs the array query and groups the rows by
+// project id, converting the generated row to the shared ProjectApplication model
+// (identical field layout) so callers stay on one type.
+func (r *Resolver) listProjectApplicationsByProjectIDs(ctx context.Context, projectIDs []pgtype.UUID) (map[string][]db.ProjectApplication, error) {
+	rows, err := r.Queries.ListProjectApplicationsByProjectIDs(ctx, projectIDs)
+	if err != nil {
+		return nil, err
+	}
+	grouped := make(map[string][]db.ProjectApplication, len(projectIDs))
+	for _, row := range rows {
+		key := uuidString(row.ProjectID)
+		grouped[key] = append(grouped[key], db.ProjectApplication(row))
+	}
+	return grouped, nil
+}
+
+// primeProjectHydration batches the per-project ownership check and application
+// lookups for a set of projects about to be hydrated, so the loop that follows
+// issues neither per project. Priming the projects themselves is free: the caller
+// already holds the rows.
+func (r *Resolver) primeProjectHydration(ctx context.Context, projects []db.Project, options projectHydrationOptions) error {
+	cache := cacheFromContext(ctx)
+	if cache == nil || len(projects) == 0 || !options.includeApplications {
+		return nil
+	}
+	projectIDs := make([]pgtype.UUID, len(projects))
+	cache.mu.Lock()
+	for i, project := range projects {
+		projectIDs[i] = project.ID
+		key := uuidString(project.ID)
+		if _, ok := cache.projects[key]; !ok {
+			cache.projects[key] = cachedProject{value: project}
+		}
+	}
+	cache.mu.Unlock()
+
+	grouped, err := r.listProjectApplicationsByProjectIDs(ctx, projectIDs)
+	if err != nil {
+		return err
+	}
+	cache.mu.Lock()
+	for _, project := range projects {
+		key := uuidString(project.ID)
+		if _, ok := cache.projectApplications[key]; !ok {
+			cache.projectApplications[key] = cachedProjectApplications{value: grouped[key]}
+		}
+	}
+	cache.mu.Unlock()
+	return nil
+}
+
 func (r *Resolver) user(ctx context.Context, user db.User) (*model.User, error) {
 	tags, err := r.cachedUserTags(ctx, user.ID)
 	if err != nil {
@@ -147,7 +352,7 @@ func (r *Resolver) teamWithOptions(ctx context.Context, team db.Team, options te
 
 	members := make([]*model.TeamMembership, 0)
 	if options.includeMembers {
-		memberRows, err := r.Queries.ListTeamMembers(ctx, team.ID)
+		memberRows, err := r.cachedTeamMembers(ctx, team.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -247,7 +452,7 @@ func (r *Resolver) projectWithOptions(ctx context.Context, project db.Project, o
 
 	apps := make([]*model.ProjectApplication, 0)
 	if options.includeApplications {
-		appRows, err := r.Queries.ListProjectApplications(ctx, project.ID)
+		appRows, err := r.cachedProjectApplications(ctx, project.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -671,7 +876,7 @@ func (r *Resolver) userModel(ctx context.Context, user db.User, tags []*model.Ta
 	return mapped
 }
 
-func (r *Resolver) teamMemberUserModel(ctx context.Context, row db.ListTeamMembersRow) *model.User {
+func (r *Resolver) teamMemberUserModel(ctx context.Context, row db.ListTeamMembersByTeamIDsRow) *model.User {
 	user := db.User{
 		ID:               row.UserID,
 		Username:         row.Username,

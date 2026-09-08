@@ -29,6 +29,19 @@ JOIN users u ON u.id = tm.user_id
 WHERE tm.team_id = $1
 ORDER BY tm.joined_at;
 
+-- name: ListTeamMembersByTeamIDs :many
+SELECT tm.*, u.username, u.full_name, u.discipline, u.university
+FROM team_memberships tm
+JOIN users u ON u.id = tm.user_id
+WHERE tm.team_id = ANY(@team_ids::uuid[])
+ORDER BY tm.joined_at;
+
+-- name: ListTeamMembershipsForUser :many
+SELECT id, team_id, user_id, role, joined_at
+FROM team_memberships
+WHERE user_id = @user_id
+  AND team_id = ANY(@team_ids::uuid[]);
+
 -- name: CountTeamMembers :one
 SELECT count(*)::int
 FROM team_memberships

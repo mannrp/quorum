@@ -187,7 +187,7 @@ func (r *Resolver) requireProjectOwner(ctx context.Context, projectID pgtype.UUI
 	if err != nil {
 		return err
 	}
-	project, err := r.Queries.GetProject(ctx, projectID)
+	project, err := r.cachedProject(ctx, projectID)
 	if err != nil {
 		return err
 	}

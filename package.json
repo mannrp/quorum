@@ -21,6 +21,7 @@
     "infra:up": "docker compose -f compose.dev.yml up -d --wait",
     "infra:down": "docker compose -f compose.dev.yml down",
     "infra:status": "docker compose -f compose.dev.yml ps",
+    "dev:up": "node scripts/dev-up.mjs",
     "db:migrate": "cd apps/api && go run ./cmd/migrate",
     "db:init:local": "cd apps/api && go run ./cmd/localdb init",
     "db:reset:local": "cd apps/api && go run ./cmd/localdb reset",

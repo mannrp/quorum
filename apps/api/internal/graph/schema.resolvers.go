@@ -1537,16 +1537,20 @@ func (r *queryResolver) DashboardContext(ctx context.Context) (*model.DashboardC
 		if err != nil {
 			return nil, err
 		}
+		options := teamHydrationOptions{
+			includeCreatedBy:   true,
+			includeMembers:     true,
+			includeProject:     true,
+			includePermissions: true,
+			includeMemberTeam:  true,
+			creatorTags:        false,
+		}
+		if err := r.primeTeamHydration(ctx, teamRows, options); err != nil {
+			return nil, err
+		}
 		teams = make([]*model.Team, 0, len(teamRows))
 		for _, team := range teamRows {
-			mapped, err := r.teamWithOptions(ctx, team, teamHydrationOptions{
-				includeCreatedBy:   true,
-				includeMembers:     true,
-				includeProject:     true,
-				includePermissions: true,
-				includeMemberTeam:  true,
-				creatorTags:        false,
-			})
+			mapped, err := r.teamWithOptions(ctx, team, options)
 			if err != nil {
 				return nil, err
 			}
@@ -1559,11 +1563,13 @@ func (r *queryResolver) DashboardContext(ctx context.Context) (*model.DashboardC
 		if err != nil {
 			return nil, err
 		}
+		options := projectHydrationOptions{includeApplications: true}
+		if err := r.primeProjectHydration(ctx, projectRows, options); err != nil {
+			return nil, err
+		}
 		projects = make([]*model.Project, 0, len(projectRows))
 		for _, project := range projectRows {
-			mapped, err := r.projectWithOptions(ctx, project, projectHydrationOptions{
-				includeApplications: true,
-			})
+			mapped, err := r.projectWithOptions(ctx, project, options)
 			if err != nil {
 				return nil, err
 			}
@@ -1676,13 +1682,17 @@ func (r *queryResolver) Teams(ctx context.Context, discipline *string, hasProjec
 	if len(teams) > defaultListLimit {
 		teams = teams[:defaultListLimit]
 	}
+	options := teamHydrationOptionsFromContext(ctx)
+	if err := r.primeTeamHydration(ctx, teams, options); err != nil {
+		return nil, err
+	}
 	out := make([]*model.Team, len(teams))
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.SetLimit(8)
 	for index := range teams {
 		index := index
 		group.Go(func() error {
-			mapped, err := r.team(groupCtx, teams[index])
+			mapped, err := r.teamWithOptions(groupCtx, teams[index], options)
 			if err != nil {
 				return err
 			}
@@ -1746,8 +1756,11 @@ func (r *queryResolver) Projects(ctx context.Context, discipline *string, status
 	if len(projects) > defaultListLimit {
 		projects = projects[:defaultListLimit]
 	}
-	out := make([]*model.Project, len(projects))
 	options := projectHydrationOptionsFromContext(ctx)
+	if err := r.primeProjectHydration(ctx, projects, options); err != nil {
+		return nil, err
+	}
+	out := make([]*model.Project, len(projects))
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.SetLimit(8)
 	for index := range projects {

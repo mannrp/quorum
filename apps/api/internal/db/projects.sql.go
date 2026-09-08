@@ -495,6 +495,74 @@ func (q *Queries) ListProjectApplications(ctx context.Context, projectID pgtype.
 	return items, nil
 }
 
+const listProjectApplicationsByProjectIDs = `-- name: ListProjectApplicationsByProjectIDs :many
+WITH ranked AS (
+  SELECT pa.id, pa.project_id, pa.team_id, pa.message, pa.status, pa.created_at, pa.applicant_id,
+         pa.answers, pa.review_message, pa.offer_message, pa.team_confirmed_at, pa.owner_confirmed_at,
+         pa.expires_at, pa.withdrawn_at,
+         ROW_NUMBER() OVER (PARTITION BY pa.project_id ORDER BY pa.created_at DESC) AS rn
+  FROM project_applications pa
+  WHERE pa.project_id = ANY($1::uuid[])
+)
+SELECT id, project_id, team_id, message, status, created_at, applicant_id, answers,
+       review_message, offer_message, team_confirmed_at, owner_confirmed_at, expires_at, withdrawn_at
+FROM ranked
+WHERE rn <= 50
+ORDER BY project_id, created_at DESC
+`
+
+type ListProjectApplicationsByProjectIDsRow struct {
+	ID               pgtype.UUID        `json:"id"`
+	ProjectID        pgtype.UUID        `json:"project_id"`
+	TeamID           pgtype.UUID        `json:"team_id"`
+	Message          pgtype.Text        `json:"message"`
+	Status           string             `json:"status"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	ApplicantID      pgtype.UUID        `json:"applicant_id"`
+	Answers          []byte             `json:"answers"`
+	ReviewMessage    pgtype.Text        `json:"review_message"`
+	OfferMessage     pgtype.Text        `json:"offer_message"`
+	TeamConfirmedAt  pgtype.Timestamptz `json:"team_confirmed_at"`
+	OwnerConfirmedAt pgtype.Timestamptz `json:"owner_confirmed_at"`
+	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
+	WithdrawnAt      pgtype.Timestamptz `json:"withdrawn_at"`
+}
+
+func (q *Queries) ListProjectApplicationsByProjectIDs(ctx context.Context, projectIds []pgtype.UUID) ([]ListProjectApplicationsByProjectIDsRow, error) {
+	rows, err := q.db.Query(ctx, listProjectApplicationsByProjectIDs, projectIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListProjectApplicationsByProjectIDsRow
+	for rows.Next() {
+		var i ListProjectApplicationsByProjectIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.TeamID,
+			&i.Message,
+			&i.Status,
+			&i.CreatedAt,
+			&i.ApplicantID,
+			&i.Answers,
+			&i.ReviewMessage,
+			&i.OfferMessage,
+			&i.TeamConfirmedAt,
+			&i.OwnerConfirmedAt,
+			&i.ExpiresAt,
+			&i.WithdrawnAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listProjects = `-- name: ListProjects :many
 SELECT id, title, description, constraints, disciplines, team_size_min, team_size_max, status, owner_id, team_id, file_url, video_url, created_at, updated_at, summary, lifecycle_state, approval_state, required_skills, nice_to_have_skills, deliverables, timeline, evaluation_criteria, external_resources, owner_contact_preference, application_questions, archived_at
 FROM projects

@@ -258,6 +258,94 @@ func (q *Queries) ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]Li
 	return items, nil
 }
 
+const listTeamMembersByTeamIDs = `-- name: ListTeamMembersByTeamIDs :many
+SELECT tm.id, tm.team_id, tm.user_id, tm.role, tm.joined_at, u.username, u.full_name, u.discipline, u.university
+FROM team_memberships tm
+JOIN users u ON u.id = tm.user_id
+WHERE tm.team_id = ANY($1::uuid[])
+ORDER BY tm.joined_at
+`
+
+type ListTeamMembersByTeamIDsRow struct {
+	ID         pgtype.UUID        `json:"id"`
+	TeamID     pgtype.UUID        `json:"team_id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	Role       string             `json:"role"`
+	JoinedAt   pgtype.Timestamptz `json:"joined_at"`
+	Username   string             `json:"username"`
+	FullName   string             `json:"full_name"`
+	Discipline pgtype.Text        `json:"discipline"`
+	University pgtype.Text        `json:"university"`
+}
+
+func (q *Queries) ListTeamMembersByTeamIDs(ctx context.Context, teamIds []pgtype.UUID) ([]ListTeamMembersByTeamIDsRow, error) {
+	rows, err := q.db.Query(ctx, listTeamMembersByTeamIDs, teamIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTeamMembersByTeamIDsRow
+	for rows.Next() {
+		var i ListTeamMembersByTeamIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.UserID,
+			&i.Role,
+			&i.JoinedAt,
+			&i.Username,
+			&i.FullName,
+			&i.Discipline,
+			&i.University,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTeamMembershipsForUser = `-- name: ListTeamMembershipsForUser :many
+SELECT id, team_id, user_id, role, joined_at
+FROM team_memberships
+WHERE user_id = $1
+  AND team_id = ANY($2::uuid[])
+`
+
+type ListTeamMembershipsForUserParams struct {
+	UserID  pgtype.UUID   `json:"user_id"`
+	TeamIds []pgtype.UUID `json:"team_ids"`
+}
+
+func (q *Queries) ListTeamMembershipsForUser(ctx context.Context, arg ListTeamMembershipsForUserParams) ([]TeamMembership, error) {
+	rows, err := q.db.Query(ctx, listTeamMembershipsForUser, arg.UserID, arg.TeamIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TeamMembership
+	for rows.Next() {
+		var i TeamMembership
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.UserID,
+			&i.Role,
+			&i.JoinedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTeams = `-- name: ListTeams :many
 SELECT id, name, description, is_complete, max_size, discipline, created_by, project_id, created_at, updated_at, recruiting_state, capstone_state, visibility, discord_link, existing_skills, needed_skills, project_interests, archived_at
 FROM teams

@@ -26,6 +26,21 @@ WHERE project_id = $1
 ORDER BY created_at DESC
 LIMIT 50;
 
+-- name: ListProjectApplicationsByProjectIDs :many
+WITH ranked AS (
+  SELECT pa.id, pa.project_id, pa.team_id, pa.message, pa.status, pa.created_at, pa.applicant_id,
+         pa.answers, pa.review_message, pa.offer_message, pa.team_confirmed_at, pa.owner_confirmed_at,
+         pa.expires_at, pa.withdrawn_at,
+         ROW_NUMBER() OVER (PARTITION BY pa.project_id ORDER BY pa.created_at DESC) AS rn
+  FROM project_applications pa
+  WHERE pa.project_id = ANY(@project_ids::uuid[])
+)
+SELECT id, project_id, team_id, message, status, created_at, applicant_id, answers,
+       review_message, offer_message, team_confirmed_at, owner_confirmed_at, expires_at, withdrawn_at
+FROM ranked
+WHERE rn <= 50
+ORDER BY project_id, created_at DESC;
+
 -- name: GetProjectApplication :one
 SELECT *
 FROM project_applications
