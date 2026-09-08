@@ -54,7 +54,6 @@ type CreateProjectInput struct {
 	Disciplines            []string               `json:"disciplines"`
 	TeamSizeMin            *int                   `json:"teamSizeMin,omitempty"`
 	TeamSizeMax            *int                   `json:"teamSizeMax,omitempty"`
-	FileURL                *string                `json:"fileUrl,omitempty"`
 	VideoURL               *string                `json:"videoUrl,omitempty"`
 	LifecycleState         *ProjectLifecycleState `json:"lifecycleState,omitempty"`
 	ApprovalState          *ProjectApprovalState  `json:"approvalState,omitempty"`
@@ -142,7 +141,6 @@ type Project struct {
 	Permissions            *ProjectPermissions   `json:"permissions"`
 	Owner                  *User                 `json:"owner"`
 	Team                   *Team                 `json:"team,omitempty"`
-	FileURL                *string               `json:"fileUrl,omitempty"`
 	VideoURL               *string               `json:"videoUrl,omitempty"`
 	Applications           []*ProjectApplication `json:"applications"`
 	CreatedAt              string                `json:"createdAt"`
@@ -174,13 +172,6 @@ type ProjectPermissions struct {
 }
 
 type Query struct {
-}
-
-type SignUploadInput struct {
-	Kind        UploadAssetKind `json:"kind"`
-	Filename    string          `json:"filename"`
-	ContentType string          `json:"contentType"`
-	Size        int             `json:"size"`
 }
 
 type Tag struct {
@@ -259,7 +250,6 @@ type UpdateProfileInput struct {
 	LinkedinURL           *string           `json:"linkedinUrl,omitempty"`
 	GithubURL             *string           `json:"githubUrl,omitempty"`
 	PortfolioURL          *string           `json:"portfolioUrl,omitempty"`
-	ResumeURL             *string           `json:"resumeUrl,omitempty"`
 	AvatarURL             *string           `json:"avatarUrl,omitempty"`
 	UserIntent            *string           `json:"userIntent,omitempty"`
 	ResumeVisibility      *ResumeVisibility `json:"resumeVisibility,omitempty"`
@@ -282,7 +272,6 @@ type UpdateProjectInput struct {
 	Status                 *ProjectStatus         `json:"status,omitempty"`
 	LifecycleState         *ProjectLifecycleState `json:"lifecycleState,omitempty"`
 	ApprovalState          *ProjectApprovalState  `json:"approvalState,omitempty"`
-	FileURL                *string                `json:"fileUrl,omitempty"`
 	VideoURL               *string                `json:"videoUrl,omitempty"`
 	RequiredSkills         []string               `json:"requiredSkills,omitempty"`
 	NiceToHaveSkills       []string               `json:"niceToHaveSkills,omitempty"`
@@ -308,19 +297,6 @@ type UpdateTeamInput struct {
 	ProjectInterests []string             `json:"projectInterests,omitempty"`
 }
 
-type UploadField struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-}
-
-type UploadSignature struct {
-	URL       string         `json:"url"`
-	Key       string         `json:"key"`
-	PublicURL *string        `json:"publicUrl,omitempty"`
-	ExpiresAt string         `json:"expiresAt"`
-	Fields    []*UploadField `json:"fields"`
-}
-
 type UpsertMyProfileInput struct {
 	Username              string            `json:"username"`
 	Email                 *string           `json:"email,omitempty"`
@@ -331,7 +307,6 @@ type UpsertMyProfileInput struct {
 	LinkedinURL           *string           `json:"linkedinUrl,omitempty"`
 	GithubURL             *string           `json:"githubUrl,omitempty"`
 	PortfolioURL          *string           `json:"portfolioUrl,omitempty"`
-	ResumeURL             *string           `json:"resumeUrl,omitempty"`
 	AvatarURL             *string           `json:"avatarUrl,omitempty"`
 	UserIntent            *string           `json:"userIntent,omitempty"`
 	ResumeVisibility      *ResumeVisibility `json:"resumeVisibility,omitempty"`
@@ -354,7 +329,6 @@ type User struct {
 	LinkedinURL           *string          `json:"linkedinUrl,omitempty"`
 	GithubURL             *string          `json:"githubUrl,omitempty"`
 	PortfolioURL          *string          `json:"portfolioUrl,omitempty"`
-	ResumeURL             *string          `json:"resumeUrl,omitempty"`
 	AvatarURL             *string          `json:"avatarUrl,omitempty"`
 	UserIntent            string           `json:"userIntent"`
 	ResumeVisibility      ResumeVisibility `json:"resumeVisibility"`
@@ -1042,65 +1016,6 @@ func (e *TeamVisibility) UnmarshalJSON(b []byte) error {
 }
 
 func (e TeamVisibility) MarshalJSON() ([]byte, error) {
-	var buf bytes.Buffer
-	e.MarshalGQL(&buf)
-	return buf.Bytes(), nil
-}
-
-type UploadAssetKind string
-
-const (
-	UploadAssetKindResume      UploadAssetKind = "RESUME"
-	UploadAssetKindProjectFile UploadAssetKind = "PROJECT_FILE"
-	UploadAssetKindAvatar      UploadAssetKind = "AVATAR"
-	UploadAssetKindVideo       UploadAssetKind = "VIDEO"
-)
-
-var AllUploadAssetKind = []UploadAssetKind{
-	UploadAssetKindResume,
-	UploadAssetKindProjectFile,
-	UploadAssetKindAvatar,
-	UploadAssetKindVideo,
-}
-
-func (e UploadAssetKind) IsValid() bool {
-	switch e {
-	case UploadAssetKindResume, UploadAssetKindProjectFile, UploadAssetKindAvatar, UploadAssetKindVideo:
-		return true
-	}
-	return false
-}
-
-func (e UploadAssetKind) String() string {
-	return string(e)
-}
-
-func (e *UploadAssetKind) UnmarshalGQL(v any) error {
-	str, ok := v.(string)
-	if !ok {
-		return fmt.Errorf("enums must be strings")
-	}
-
-	*e = UploadAssetKind(str)
-	if !e.IsValid() {
-		return fmt.Errorf("%s is not a valid UploadAssetKind", str)
-	}
-	return nil
-}
-
-func (e UploadAssetKind) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
-}
-
-func (e *UploadAssetKind) UnmarshalJSON(b []byte) error {
-	s, err := strconv.Unquote(string(b))
-	if err != nil {
-		return err
-	}
-	return e.UnmarshalGQL(s)
-}
-
-func (e UploadAssetKind) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

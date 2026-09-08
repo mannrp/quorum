@@ -19,13 +19,11 @@ export type ApplicationStatus =
   | "MATCHED"
   | "WITHDRAWN"
   | "EXPIRED";
-export type UploadAssetKind = "RESUME" | "PROJECT_FILE" | "AVATAR" | "VIDEO";
 
 export type Tag = { id: string; name: string; isPredefined: boolean };
 
 export type User = {
   id: string;
-  authUserId?: string;
   username: string;
   email?: string | null;
   fullName: string;
@@ -35,25 +33,7 @@ export type User = {
   linkedinUrl?: string | null;
   githubUrl?: string | null;
   portfolioUrl?: string | null;
-  resumeUrl?: string | null;
-  avatarUrl?: string | null;
-  userIntent?: string;
-  resumeVisibility?: string;
-  discord?: string | null;
-  availabilityNote?: string | null;
-  preferredProjectAreas?: string[];
-  profileComplete?: boolean;
-  deactivatedAt?: string | null;
-  archivedAt?: string | null;
   tags?: Tag[];
-  createdAt?: string;
-};
-
-export type AuthState = {
-  authenticated: boolean;
-  hasProfile: boolean;
-  profileComplete: boolean;
-  profile?: User | null;
 };
 
 export type TeamMembership = {
@@ -78,7 +58,6 @@ export type Team = {
   existingSkills?: string[];
   neededSkills?: string[];
   projectInterests?: string[];
-  archivedAt?: string | null;
   permissions?: {
     canEdit: boolean;
     canManageMembers: boolean;
@@ -89,7 +68,6 @@ export type Team = {
   createdBy: User;
   members: TeamMembership[];
   project?: Project | null;
-  createdAt?: string;
 };
 
 export type ProjectApplication = {
@@ -129,7 +107,6 @@ export type Project = {
   externalResources?: string[];
   ownerContactPreference?: string | null;
   applicationQuestions?: string;
-  archivedAt?: string | null;
   permissions?: {
     canEdit: boolean;
     canReviewApplications: boolean;
@@ -139,10 +116,8 @@ export type Project = {
   };
   owner: User;
   team?: Team | null;
-  fileUrl?: string | null;
   videoUrl?: string | null;
   applications: ProjectApplication[];
-  createdAt?: string;
 };
 
 export type Message = {
@@ -162,10 +137,3 @@ export type Notification = {
   createdAt: string;
 };
 
-export type UploadSignature = {
-  url: string;
-  key: string;
-  publicUrl?: string | null;
-  expiresAt: string;
-  fields: { name: string; value: string }[];
-};

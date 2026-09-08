@@ -2,15 +2,16 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { ActionButton, Section, Status, Badge, Modal, LoadingSkeleton } from "@/components/ui";
-import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
-import { TEAM_QUERY } from "@/lib/queries";
-import type { Team, TeamRole, User } from "@/types/domain";
+import { userFacingError } from "@/lib/operations/client";
+import { operationRequest, useOperation } from "@/lib/operations/client";
+import { viewerClient } from "@/lib/auth-v2/viewer-client";
+import type { Team, TeamRole } from "@/types/domain";
 
 export default function TeamDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, error, loading, reload } = useGraphQL<{ team: Team | null }>(TEAM_QUERY, { id }, { auth: "optional" });
+  const { data, error, loading, reload } = useOperation<{ team: Team | null }>("PublicTeamV1", { id });
   
-  const [me, setMe] = useState<User | null>(null);
+  const [viewerID, setViewerID] = useState<string | null>(null);
   const [isJoinOpen, setIsJoinOpen] = useState(false);
   const [joinMessage, setJoinMessage] = useState("I would like to join this capstone team. I bring relevant skills in software engineering.");
   const [notice, setNotice] = useState<string | null>(null);
@@ -20,19 +21,9 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   const team = data?.team;
 
   useEffect(() => {
-    const fetchMe = async () => {
-      try {
-        const res = await graphqlRequest<{ me: User | null }>(
-          `query meInTeam { me { id username fullName } }`,
-          {},
-          { auth: true }
-        );
-        if (res.me) setMe(res.me);
-      } catch (err) {
-        setNotice(userFacingError(err));
-      }
-    };
-    void fetchMe();
+    void viewerClient.viewer().then((result) => {
+      if (result.state === "ready") setViewerID(result.viewer.productUserId);
+    }).catch(() => setViewerID(null));
   }, []);
 
   const requestJoinSubmit = async (event: React.FormEvent) => {
@@ -40,10 +31,9 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
     setNotice(null);
     setSubmitting(true);
     try {
-      await graphqlRequest<{ requestJoin: { id: string } }>(
-        `mutation RequestJoin($teamId: ID!, $message: String) { requestJoin(teamId: $teamId, message: $message) { id } }`,
+      await operationRequest<{ requestJoin: { id: string } }>(
+        "RequestTeamJoinV1",
         { teamId: id, message: joinMessage },
-        { auth: true }
       );
       setNotice("Join request successfully submitted!");
       setIsJoinOpen(false);
@@ -57,12 +47,9 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   const promoteMember = async (userId: string, currentRole: TeamRole) => {
     const role: TeamRole = currentRole === "MEMBER" ? "CO_LEAD" : "MEMBER";
     try {
-      await graphqlRequest(
-        `mutation Promote($teamId: ID!, $userId: ID!, $role: TeamRole!) {
-          promoteMember(teamId: $teamId, userId: $userId, role: $role) { id role }
-        }`,
+      await operationRequest(
+        "PromoteTeamMemberV1",
         { teamId: id, userId, role },
-        { auth: true }
       );
       setConfirmNotice(`Member successfully ${role === "CO_LEAD" ? "promoted to Co-Lead" : "demoted to Member"}.`);
       await reload();
@@ -93,7 +80,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   // Determine user relationship with this team
-  const userMembership = team.members.find((m) => m.user.id === me?.id);
+  const userMembership = team.members.find((m) => m.user.id === viewerID);
   const isLead = userMembership?.role === "LEAD";
   const isCoLead = userMembership?.role === "CO_LEAD";
   const isMember = !!userMembership;
@@ -128,8 +115,8 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
               Request to Join
             </button>
           )}
-          {me && me.id !== team.createdBy.id && (
-            <Link href={`/inbox?userId=${team.createdBy.id}`} className="btn-secondary w-full sm:w-auto text-center text-xs flex items-center justify-center gap-1">
+          {viewerID && viewerID !== team.createdBy.id && (
+            <Link href={`/inbox?username=${encodeURIComponent(team.createdBy.username)}`} className="btn-secondary w-full sm:w-auto text-center text-xs flex items-center justify-center gap-1">
               ✉ Message Lead
             </Link>
           )}

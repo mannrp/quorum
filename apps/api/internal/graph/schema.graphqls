@@ -10,7 +10,6 @@ type User {
   linkedinUrl: String
   githubUrl: String
   portfolioUrl: String
-  resumeUrl: String
   avatarUrl: String
   userIntent: String!
   resumeVisibility: ResumeVisibility!
@@ -123,7 +122,6 @@ type Project {
   permissions: ProjectPermissions!
   owner: User!
   team: Team
-  fileUrl: String
   videoUrl: String
   applications: [ProjectApplication!]!
   createdAt: String!
@@ -201,19 +199,6 @@ type DashboardContext {
   isAdmin: Boolean!
 }
 
-type UploadSignature {
-  url: String!
-  key: String!
-  publicUrl: String
-  expiresAt: String!
-  fields: [UploadField!]!
-}
-
-type UploadField {
-  name: String!
-  value: String!
-}
-
 enum TeamRole { LEAD CO_LEAD MEMBER }
 enum TeamRecruitingState { RECRUITING PAUSED FULL HIDDEN }
 enum TeamCapstoneState { FORMING APPLYING OFFER_RECEIVED MATCHED CLOSED }
@@ -225,7 +210,6 @@ enum ApplicationStatus { PENDING ACCEPTED REJECTED DRAFT SUBMITTED UNDER_REVIEW 
 enum JoinRequestStatus { PENDING ACCEPTED ACCEPTED_PENDING_CONFIRMATION CONFIRMED REJECTED WITHDRAWN EXPIRED }
 enum TeamInvitationStatus { PENDING ACCEPTED DECLINED WITHDRAWN EXPIRED }
 enum ResumeVisibility { PRIVATE TEAM_LEADS PROJECT_OWNERS PROJECT_OWNERS_AND_PROFESSORS PUBLIC }
-enum UploadAssetKind { RESUME PROJECT_FILE AVATAR VIDEO }
 
 input UpdateProfileInput {
   fullName: String!
@@ -235,7 +219,6 @@ input UpdateProfileInput {
   linkedinUrl: String
   githubUrl: String
   portfolioUrl: String
-  resumeUrl: String
   avatarUrl: String
   userIntent: String
   resumeVisibility: ResumeVisibility
@@ -257,7 +240,6 @@ input UpsertMyProfileInput {
   linkedinUrl: String
   githubUrl: String
   portfolioUrl: String
-  resumeUrl: String
   avatarUrl: String
   userIntent: String
   resumeVisibility: ResumeVisibility
@@ -313,7 +295,6 @@ input CreateProjectInput {
   disciplines: [String!]!
   teamSizeMin: Int = 10
   teamSizeMax: Int = 12
-  fileUrl: String
   videoUrl: String
   lifecycleState: ProjectLifecycleState = DRAFT
   approvalState: ProjectApprovalState = UNVERIFIED
@@ -338,7 +319,6 @@ input UpdateProjectInput {
   status: ProjectStatus
   lifecycleState: ProjectLifecycleState
   approvalState: ProjectApprovalState
-  fileUrl: String
   videoUrl: String
   requiredSkills: [String!]
   niceToHaveSkills: [String!]
@@ -355,13 +335,6 @@ input ApplyToProjectInput {
   teamId: ID!
   message: String
   answers: String
-}
-
-input SignUploadInput {
-  kind: UploadAssetKind!
-  filename: String!
-  contentType: String!
-  size: Int!
 }
 
 type Query {
@@ -420,7 +393,6 @@ type Mutation {
   markRead(messageId: ID!): Boolean!
   markNotificationRead(notificationId: ID!): Boolean!
   setUniversalDeadline(deadlineAt: String!, reason: String): Deadline!
-  signUpload(input: SignUploadInput!): UploadSignature!
   removeUser(userId: ID!, reason: String): Boolean!
   removeTeam(teamId: ID!, reason: String): Boolean!
   removeProject(projectId: ID!, reason: String): Boolean!

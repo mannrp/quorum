@@ -8,9 +8,19 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/local/quorum/apps/api/internal/auth"
 	"github.com/local/quorum/apps/api/internal/db"
 	"github.com/local/quorum/apps/api/internal/graph/model"
 )
+
+const (
+	defaultListLimit         = 50
+	defaultConversationLimit = 100
+)
+
+func publicProjectState(state string) bool {
+	return state != string(model.ProjectLifecycleStateDraft) && state != string(model.ProjectLifecycleStateArchived)
+}
 
 var terminalApplicationStatuses = map[string]bool{
 	string(model.ApplicationStatusMatched):   true,
@@ -65,6 +75,13 @@ func requireCompleteUser(ctx context.Context) (db.User, error) {
 		return db.User{}, errors.New("complete your profile before continuing")
 	}
 	return user, nil
+}
+
+func requireRole(ctx context.Context, role string) error {
+	if !auth.HasRole(ctx, role) {
+		return errors.New(role + " role required")
+	}
+	return nil
 }
 
 func (r *Resolver) requireDeadlineOpen(ctx context.Context) error {
@@ -142,6 +159,14 @@ func (r *Resolver) requireLeadOnly(ctx context.Context, teamID pgtype.UUID) erro
 	return nil
 }
 
+func (r *Resolver) requireTeamMember(ctx context.Context, teamID pgtype.UUID) error {
+	current, err := requireActiveUser(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = r.Queries.GetTeamMembership(ctx, db.GetTeamMembershipParams{TeamID: teamID, UserID: current.ID})
+	return err
+}
 func (r *Resolver) requireTeamLead(ctx context.Context, teamID pgtype.UUID) error {
 	current, err := requireActiveUser(ctx)
 	if err != nil {
@@ -162,7 +187,7 @@ func (r *Resolver) requireProjectOwner(ctx context.Context, projectID pgtype.UUI
 	if err != nil {
 		return err
 	}
-	project, err := r.Queries.GetProject(ctx, projectID)
+	project, err := r.cachedProject(ctx, projectID)
 	if err != nil {
 		return err
 	}

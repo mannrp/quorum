@@ -1,11 +1,13 @@
 module github.com/local/quorum/apps/api
 
-go 1.25.0
+go 1.25.12
 
 require (
 	github.com/99designs/gqlgen v0.17.90
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/vektah/gqlparser/v2 v2.5.33
+	golang.org/x/sync v0.20.0
 )
 
 require (
@@ -22,7 +24,6 @@ require (
 	github.com/urfave/cli/v3 v3.8.0 // indirect
 	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/net v0.54.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
 )

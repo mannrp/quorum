@@ -1,11 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Section, Status, Combobox, LoadingSkeleton } from "@/components/ui";
-import { graphqlRequest, uploadToSignedPost, userFacingError } from "@/lib/graphql";
-import { DISCIPLINE_OPTIONS, RESUME_VISIBILITY_OPTIONS, SKILL_OPTIONS } from "@/lib/policy";
-import { ME_QUERY } from "@/lib/queries";
-import type { UploadSignature, User } from "@/types/domain";
+import { Section, Combobox, LoadingSkeleton } from "@/components/ui";
+import { userFacingError } from "@/lib/operations/client";
+import { operationRequest } from "@/lib/operations/client";
+import { DISCIPLINE_OPTIONS, SKILL_OPTIONS } from "@/lib/policy";
+import type { User } from "@/types/domain";
 
 export default function ProfileSettingsPage() {
   const router = useRouter();
@@ -18,15 +18,14 @@ export default function ProfileSettingsPage() {
   const [githubUrl, setGithubUrl] = useState("");
   const [portfolioUrl, setPortfolioUrl] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
-  const [resumeVisibility, setResumeVisibility] = useState("PUBLIC");
-  const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        const res = await graphqlRequest<{ me: User | null }>(ME_QUERY, {}, { auth: true });
+        const res = await operationRequest<{ me: User | null }>("ViewerProfileV1", {});
         if (res.me) {
           setUser(res.me);
           setFullName(res.me.fullName || "");
@@ -37,12 +36,11 @@ export default function ProfileSettingsPage() {
           setGithubUrl(res.me.githubUrl || "");
           setPortfolioUrl(res.me.portfolioUrl || "");
           setSkills((res.me.tags || []).map((t) => t.name));
-          setResumeVisibility(res.me.resumeVisibility || "PUBLIC");
         } else {
           router.push("/onboarding");
         }
-      } catch (err) {
-        setNotice(userFacingError(err));
+      } catch (cause) {
+        setError(userFacingError(cause));
       } finally {
         setLoading(false);
       }
@@ -53,27 +51,20 @@ export default function ProfileSettingsPage() {
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
     setNotice(null);
+    setError(null);
+
+    if (!bio.trim() || skills.length < 3) {
+      setError("Add a biography and at least three skills to complete your profile.");
+      return;
+    }
+
     setSaving(true);
-
     try {
-      let resumeUrl = user?.resumeUrl || "";
-
-      if (resumeFile) {
-        const result = await graphqlRequest<{ signUpload: UploadSignature }>(
-          `mutation Sign($input: SignUploadInput!) { signUpload(input: $input) { url key publicUrl expiresAt fields { name value } } }`,
-          { input: { kind: "RESUME", filename: resumeFile.name, contentType: resumeFile.type, size: resumeFile.size } },
-          { auth: true }
-        );
-        await uploadToSignedPost(resumeFile, result.signUpload);
-        resumeUrl = result.signUpload.publicUrl || result.signUpload.key;
-      }
-
-      await graphqlRequest(
-        `mutation UpsertProfile($input: UpsertMyProfileInput!) { upsertMyProfile(input: $input) { id } }`,
+      const result = await operationRequest<{ upsertMyProfile: { profileComplete: boolean } }>(
+        "UpdateMyProfileV1",
         {
           input: {
             username: user?.username || "",
-            email: user?.email || undefined,
             fullName,
             bio,
             discipline,
@@ -81,24 +72,19 @@ export default function ProfileSettingsPage() {
             linkedinUrl,
             githubUrl,
             portfolioUrl,
-            resumeUrl: resumeUrl || undefined,
-            resumeVisibility,
             skills,
-            tags: skills,
           },
         },
-        { auth: true }
       );
-
-      setNotice("Profile successfully updated.");
-      setResumeFile(null);
-    } catch (err) {
-      setNotice(userFacingError(err));
+      setNotice(result.upsertMyProfile.profileComplete
+        ? "Profile successfully updated."
+        : "Profile saved, but required completion fields are still missing.");
+    } catch (cause) {
+      setError(userFacingError(cause));
     } finally {
       setSaving(false);
     }
   };
-
   if (loading) {
     return <Section title="Profile settings"><LoadingSkeleton rows={5} /></Section>;
   }
@@ -107,12 +93,17 @@ export default function ProfileSettingsPage() {
     <div className="max-w-3xl mx-auto py-4 space-y-6">
       <div className="border-b border-[var(--border-subtle)] pb-4">
         <h1 className="text-3xl font-bold font-serif text-[var(--text-app)] uppercase tracking-tight">Profile Settings</h1>
-        <p className="text-sm text-stone-500 font-sans">Manage your academic credentials, portfolio links, and file attachments.</p>
+        <p className="text-sm text-stone-500 font-sans">Manage your academic profile, skills, and portfolio links.</p>
       </div>
 
       {notice && (
         <div className="p-3 bg-[var(--color-success-bg)] border border-[var(--color-success)] rounded-none text-xs font-mono font-semibold text-[var(--color-success)]">
           {notice}
+        </div>
+      )}
+      {error && (
+        <div className="p-3 bg-[var(--color-danger-bg)] border border-[var(--color-danger)] rounded-none text-xs font-mono font-semibold text-[var(--color-danger)]">
+          {error}
         </div>
       )}
 
@@ -143,7 +134,7 @@ export default function ProfileSettingsPage() {
 
           <div className="space-y-1">
             <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Biography</label>
-            <textarea value={bio} onChange={(e) => setBio(e.target.value)} className="input-field min-h-24 text-sm" />
+            <textarea required value={bio} onChange={(e) => setBio(e.target.value)} className="input-field min-h-24 text-sm" />
           </div>
         </Section>
 
@@ -171,40 +162,8 @@ export default function ProfileSettingsPage() {
           </div>
         </Section>
 
-        <Section title="Resume Document Visibility">
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">Current Attached File</label>
-              {user?.resumeUrl ? (
-                <a href={user.resumeUrl} target="_blank" rel="noreferrer" className="text-xs text-[var(--accent-app)] hover:underline font-bold">
-                  View Uploaded Resume File
-                </a>
-              ) : (
-                <span className="text-xs text-stone-500 italic font-mono">No resume attached yet.</span>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Upload New Resume (PDF / DOCX)</label>
-              <p className="text-[11px] text-stone-500">
-                Resume access defaults to public visibility. Choose a narrower access level before saving if this document should be limited.
-              </p>
-              <input type="file" accept=".pdf,.docx" onChange={(e) => setResumeFile(e.target.files?.[0] || null)} className="block text-xs text-stone-500 border border-[var(--border-app)] p-2 rounded-none bg-[var(--bg-app)] w-full font-mono" />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Document Access Level</label>
-              <select value={resumeVisibility} onChange={(e) => setResumeVisibility(e.target.value)} className="input-field py-2 text-xs bg-[var(--surface-app)]">
-                {RESUME_VISIBILITY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </Section>
-
         <button type="submit" disabled={saving} className="btn-primary w-full py-3 text-xs">
-          {saving ? "Saving Changes..." : "Commit Settings Changes"}
+          {saving ? "Saving..." : "Save profile"}
         </button>
       </form>
     </div>

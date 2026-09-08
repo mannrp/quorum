@@ -11,25 +11,59 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   NEXT_TELEMETRY_DISABLED: "1"
-  NEXT_PUBLIC_API_URL: http://localhost:8080/graphql
-  NEON_AUTH_BASE_URL: https://ci.invalid
-  NEON_AUTH_COOKIE_SECRET: ci-only-cookie-secret-at-least-32-characters
+
+# Production deployment remains intentionally absent until P4 verifies the protected topology.
 
 jobs:
   ci:
     name: Verify
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:17.10-alpine3.24@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_DB: quorum_test
+          POSTGRES_USER: quorum_operator
+          POSTGRES_PASSWORD: quorum-ci-operator-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U quorum_operator -d quorum_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+      mailpit:
+        image: axllent/mailpit:v1.30.0@sha256:0059ef81e492a7192af3816281eed6859eb078bd7bdc58b76757c13e10e53a7d
+        ports:
+          - 1025:1025
+          - 8025:8025
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan repository history for secrets
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --location \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
+            --output /tmp/gitleaks.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks.tar.gz" | sha256sum --check --strict
+          tar --extract --gzip --file /tmp/gitleaks.tar.gz --directory /tmp gitleaks
+          /tmp/gitleaks git --redact --no-banner --max-archive-depth=1
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.23.1
           cache: npm
           cache-dependency-path: package-lock.json
 
@@ -41,6 +75,9 @@ jobs:
 
       - name: Install Node dependencies
         run: npm ci
+
+      - name: Verify Docker build context exclusions
+        run: npm run test:docker-context
 
       - name: Lint web
         run: npm run lint
@@ -54,127 +91,77 @@ jobs:
       - name: Test API
         working-directory: apps/api
         run: go test ./...
+      - name: Verify generated SQLc artifacts
+        run: |
+          npm run db:generate
+          git diff --exit-code -- apps/api/internal/db
 
-  smoke:
-    name: Smoke
-    runs-on: ubuntu-latest
-    needs: ci
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
-    env:
-      QUORUM_TEST_DATABASE_URL: ${{ secrets.QUORUM_TEST_DATABASE_URL }}
-      NEON_AUTH_ISSUER: ${{ secrets.NEON_AUTH_ISSUER }}
-      NEON_AUTH_JWKS_URL: ${{ secrets.NEON_AUTH_JWKS_URL }}
-      NEON_AUTH_AUDIENCE: ${{ secrets.NEON_AUTH_AUDIENCE }}
-      APP_ORIGIN: ${{ vars.APP_ORIGIN || 'http://localhost:3000' }}
-      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
-      R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
-
-    steps:
-      - name: Skip smoke when secrets are missing
-        if: env.QUORUM_TEST_DATABASE_URL == '' || env.NEON_AUTH_ISSUER == '' || env.NEON_AUTH_JWKS_URL == ''
-        run: echo "::notice::Smoke checks skipped because dedicated test database or Neon Auth secrets are not configured."
-
-      - name: Checkout
-        if: env.QUORUM_TEST_DATABASE_URL != '' && env.NEON_AUTH_ISSUER != '' && env.NEON_AUTH_JWKS_URL != ''
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        if: env.QUORUM_TEST_DATABASE_URL != '' && env.NEON_AUTH_ISSUER != '' && env.NEON_AUTH_JWKS_URL != ''
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: apps/api/go.mod
-          cache-dependency-path: apps/api/go.sum
-
-      - name: Run API migrations against test database
-        if: env.QUORUM_TEST_DATABASE_URL != '' && env.NEON_AUTH_ISSUER != '' && env.NEON_AUTH_JWKS_URL != ''
+      - name: Prove idempotent role bootstrap
         working-directory: apps/api
         env:
-          DATABASE_URL: ${{ env.QUORUM_TEST_DATABASE_URL }}
+          OPERATOR_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
+          QUORUM_MIGRATOR_PASSWORD: ci-migrator-password-not-for-production
+          QUORUM_AUTH_RUNTIME_PASSWORD: ci-auth-password-not-for-production
+          QUORUM_APP_RUNTIME_PASSWORD: ci-app-password-not-for-production
+        run: |
+          go run ./cmd/bootstrap-roles
+          go run ./cmd/bootstrap-roles
+
+      - name: Apply canonical migrations
+        working-directory: apps/api
+        env:
+          MIGRATOR_DATABASE_URL: postgres://quorum_migrator:ci-migrator-password-not-for-production@127.0.0.1:5432/quorum_test?sslmode=disable
         run: go run ./cmd/migrate
 
-      - name: Run API smoke flow
-        if: env.QUORUM_TEST_DATABASE_URL != '' && env.NEON_AUTH_ISSUER != '' && env.NEON_AUTH_JWKS_URL != ''
+      - name: Initialize guarded local database identity
         working-directory: apps/api
         env:
-          DATABASE_URL: ${{ env.QUORUM_TEST_DATABASE_URL }}
-        run: go run ./cmd/e2e -run-id ci-${{ github.run_id }}-${{ github.run_attempt }}
+          LOCAL_TEST_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
+        run: go run ./cmd/localdb init
 
-  deploy-web:
-    name: Deploy Web
-    runs-on: ubuntu-latest
-    needs:
-      - ci
-      - smoke
-    if: github.ref == 'refs/heads/main'
-    env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Prove guarded local reset and canonical replay
+        working-directory: apps/api
+        env:
+          LOCAL_TEST_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
+          MIGRATOR_DATABASE_URL: postgres://quorum_migrator:ci-migrator-password-not-for-production@127.0.0.1:5432/quorum_test?sslmode=disable
+          QUORUM_ALLOW_LOCAL_RESET: "true"
+        run: go run ./cmd/localdb reset
 
-    steps:
-      - name: Skip Vercel deploy when secrets are missing
-        if: env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID == ''
-        run: echo "::notice::Vercel deploy skipped because Vercel secrets are not configured."
+      - name: Test API with required database integration
+        working-directory: apps/api
+        env:
+          QUORUM_REQUIRE_INTEGRATION: "true"
+          QUORUM_TEST_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
+          QUORUM_MIGRATION_TEST_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
+          QUORUM_ROLE_TEST_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
+          QUORUM_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: go test ./...
 
-      - name: Checkout
-        if: env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != ''
-        uses: actions/checkout@v4
+      - name: Restore runtime role credentials after rotation tests
+        working-directory: apps/api
+        env:
+          OPERATOR_DATABASE_URL: postgres://quorum_operator:quorum-ci-operator-only@127.0.0.1:5432/quorum_test?sslmode=disable
+          QUORUM_MIGRATOR_PASSWORD: ci-migrator-password-not-for-production
+          QUORUM_AUTH_RUNTIME_PASSWORD: ci-auth-password-not-for-production
+          QUORUM_APP_RUNTIME_PASSWORD: ci-app-password-not-for-production
+        run: go run ./cmd/bootstrap-roles
 
-      - name: Setup Node
-        if: env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != ''
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
+      - name: Test web units and components
+        run: npm run test:web
 
-      - name: Install Node dependencies
-        if: env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != ''
-        run: npm ci
+      - name: Install Chromium for browser tests
+        run: npx playwright install --with-deps chromium
 
-      - name: Pull Vercel project settings
-        if: env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != ''
-        run: npx --yes vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Test service-backed auth handler and Chromium journeys
+        env:
+          QUORUM_REQUIRE_INTEGRATION: "true"
+          DATABASE_URL: postgres://quorum_app_runtime:ci-app-password-not-for-production@127.0.0.1:5432/quorum_test?sslmode=disable
+          AUTH_DATABASE_URL: postgres://quorum_auth_runtime:ci-auth-password-not-for-production@127.0.0.1:5432/quorum_test?sslmode=disable
+          BETTER_AUTH_SECRET: ci-better-auth-secret-at-least-32-characters
+          SMTP_HOST: 127.0.0.1
+          SMTP_PORT: "1025"
+          MAILPIT_API_URL: http://127.0.0.1:8025
+        run: npm run test:e2e
 
-      - name: Build Vercel project
-        if: env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != ''
-        run: npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
-
-      - name: Deploy Vercel project
-        if: env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != ''
-        run: npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
-
-  deploy-api:
-    name: Deploy API
-    runs-on: ubuntu-latest
-    needs:
-      - ci
-      - smoke
-    if: github.ref == 'refs/heads/main'
-    env:
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-    steps:
-      - name: Skip Fly deploy when token is missing
-        if: env.FLY_API_TOKEN == ''
-        run: echo "::notice::Fly deploy skipped because FLY_API_TOKEN is not configured."
-
-      - name: Checkout
-        if: env.FLY_API_TOKEN != ''
-        uses: actions/checkout@v4
-
-      - name: Setup flyctl
-        if: env.FLY_API_TOKEN != ''
-        uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: Deploy API to Fly
-        if: env.FLY_API_TOKEN != ''
-        run: |
-          if [ -f apps/api/fly.toml ]; then
-            flyctl deploy --config apps/api/fly.toml --remote-only
-          else
-            echo "::notice::apps/api/fly.toml not found; skipping Fly deploy."
-          fi
+      - name: Verify Mailpit readiness
+        run: curl --fail --silent --show-error http://127.0.0.1:8025/readyz

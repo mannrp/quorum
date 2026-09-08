@@ -2,15 +2,18 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { Section, Status, Badge, Modal, LoadingSkeleton } from "@/components/ui";
-import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
-import { PROJECT_QUERY } from "@/lib/queries";
+import { userFacingError } from "@/lib/operations/client";
+import { operationRequest, useOperation } from "@/lib/operations/client";
+import { useAuthContext } from "@/lib/auth-context";
 import type { Project, Team, User } from "@/types/domain";
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, error, loading, reload } = useGraphQL<{ project: Project | null }>(PROJECT_QUERY, { id }, { auth: "optional" });
+  const { sessionState, productViewerState } = useAuthContext();
+  const { data, error, loading, reload } = useOperation<{ project: Project | null }>("PublicProjectV1", { id });
   
   const [me, setMe] = useState<User | null>(null);
+  const [ownerProject, setOwnerProject] = useState<Project | null>(null);
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [isApplyOpen, setIsApplyOpen] = useState(false);
   const [interest, setInterest] = useState("");
@@ -25,32 +28,34 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [isSubmitApprovalOpen, setIsSubmitApprovalOpen] = useState(false);
   const [submittingApproval, setSubmittingApproval] = useState(false);
 
-  const project = data?.project;
+  const publicProject = data?.project;
+  const project = ownerProject ?? publicProject;
 
   useEffect(() => {
     const fetchSessionData = async () => {
       try {
-        const sessionRes = await graphqlRequest<{ me: User | null; teams: Team[] }>(
-          `query projectDetailSession {
-            me { id username fullName }
-            teams { id name maxSize createdBy { id } members { user { id } role } }
-          }`,
-          {},
-          { auth: true }
-        );
+        const sessionRes = await operationRequest<{ me: User | null; dashboardContext: { myTeams: Team[] } }>("ProjectSessionV1", {});
+        const teams = sessionRes.dashboardContext.myTeams;
         if (sessionRes.me) {
           setMe(sessionRes.me);
-          const userTeam = sessionRes.teams.find((t) =>
+          const userTeam = teams.find((t) =>
             t.members.some((m) => m.user.id === sessionRes.me?.id)
           );
           if (userTeam) setMyTeam(userTeam);
         }
-      } catch (err) {
-        setNotice(userFacingError(err));
+      } catch {
+        // Public project browsing does not require an authenticated session.
       }
     };
     void fetchSessionData();
   }, []);
+
+  useEffect(() => {
+    if (!me || !publicProject || me.id !== publicProject.owner.id) return;
+    void operationRequest<{ project: Project | null }>("ProjectOwnerV1", { projectId: id })
+      .then((result) => setOwnerProject(result.project))
+      .catch((error) => setNotice(userFacingError(error)));
+  }, [id, me, publicProject]);
 
   const handleApplySubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -70,12 +75,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     });
 
     try {
-      await graphqlRequest(
-        `mutation Apply($input: ApplyToProjectInput!) {
-          applyToProjectInput(input: $input) { id status }
-        }`,
+      await operationRequest(
+        "ApplyToProjectV1",
         { input: { projectId: id, teamId: myTeam.id, message, answers: answerPayload } },
-        { auth: true }
       );
       setNotice("Application submitted successfully.");
       setIsApplyOpen(false);
@@ -99,19 +101,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     setSubmittingApproval(true);
     setNotice(null);
     try {
-      await graphqlRequest(
-        `mutation SubmitApproval($projectId: ID!) {
-          submitProjectForApproval(projectId: $projectId) {
-            id
-            approvalState
-          }
-        }`,
+      const result = await operationRequest<{ submitProjectForApproval: Project }>(
+        "SubmitProjectApprovalV1",
         { projectId: id },
-        { auth: true }
       );
+      setOwnerProject(result.submitProjectForApproval);
       setNotice("Project successfully submitted for professor approval!");
       setIsSubmitApprovalOpen(false);
-      await reload();
     } catch (err) {
       setNotice(userFacingError(err));
       setIsSubmitApprovalOpen(false);
@@ -212,9 +208,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
           {/* Received applications */}
           <Section title="Received Roster Claims">
-            {project.applications.length > 0 ? (
+            {(project.applications ?? []).length > 0 ? (
               <div className="stagger-in space-y-3">
-                {project.applications.map((application) => (
+                {(project.applications ?? []).map((application) => (
                   <div key={application.id} className="signal-card flex items-start justify-between gap-4">
                     <div className="space-y-1">
                       <Link href={`/teams/${application.team.id}`} className="card-title text-sm">
@@ -254,7 +250,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               </div>
               {me && me.id !== project.owner.id && (
                 <div className="pt-2">
-                  <Link href={`/inbox?userId=${project.owner.id}`} className="btn-secondary w-full py-1.5 text-[11px] block text-center">
+                  <Link href={`/inbox?username=${encodeURIComponent(project.owner.username)}`} className="btn-secondary w-full py-1.5 text-[11px] block text-center">
                     ✉ Message Owner
                   </Link>
                 </div>
@@ -263,38 +259,33 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </Section>
 
           <Section title="Challenge Documents">
-            <div className="space-y-3">
-              {project.fileUrl || project.videoUrl ? (
-                <div className="space-y-2">
-                  {project.fileUrl && (
-                    <a href={project.fileUrl} target="_blank" rel="noreferrer" className="action-row">
-                      <span>Specifications sheet</span>
-                      <span>-&gt;</span>
-                      📄 Specifications Sheet.pdf
-                    </a>
-                  )}
-                  {project.videoUrl && (
-                    <a href={project.videoUrl} target="_blank" rel="noreferrer" className="action-row">
-                      <span>Video brief</span>
-                      <span>-&gt;</span>
-                      🎬 Video Brief / Requirements
-                    </a>
-                  )}
-                </div>
-              ) : (
-                <p className="text-xs text-[var(--muted-app)]">No attachments attached.</p>
-              )}
-            </div>
+            <p className="text-xs text-[var(--muted-app)]">Private document access is not available yet.</p>
           </Section>
         </div>
       </div>
 
       {/* Application Form Modal */}
       <Modal isOpen={isApplyOpen} onClose={() => setIsApplyOpen(false)} title={`Claim Project: ${project.title}`}>
-        {!me ? (
+        {sessionState === "anonymous" ? (
           <div className="text-center py-4 space-y-2">
             <p className="text-xs text-stone-500">You must log in to submit a project application.</p>
             <Link href="/auth/login" className="btn-primary py-1.5 px-3 text-xs inline-block">Log In</Link>
+          </div>
+        ) : productViewerState === "unenrolled" ? (
+          <div className="text-center py-4 space-y-2">
+            <p className="text-xs text-stone-500">Choose a role before applying for projects.</p>
+            <Link href="/onboarding" className="btn-primary py-1.5 px-3 text-xs inline-block">Choose Role</Link>
+          </div>
+        ) : productViewerState === "profile-incomplete" ? (
+          <div className="text-center py-4 space-y-2">
+            <p className="text-xs text-stone-500">Complete your profile before applying for projects.</p>
+            <Link href="/settings/profile" className="btn-primary py-1.5 px-3 text-xs inline-block">Complete Profile</Link>
+          </div>
+        ) : sessionState === "authenticated" && productViewerState === "unavailable" ? (
+          <p className="py-4 text-center text-xs text-stone-500">Unable to verify your account state. Try again shortly.</p>
+        ) : !me ? (
+          <div className="text-center py-4 space-y-2">
+            <p className="text-xs text-stone-500">Loading profile and team details...</p>
           </div>
         ) : !myTeam ? (
           <div className="text-center py-6 space-y-3">

@@ -1,18 +1,47 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Section } from "@/components/ui";
 import { authDestination } from "@/lib/auth-routing";
-import { userFacingError } from "@/lib/graphql";
-import { signInWithNeonEmail, signInWithNeonOAuth } from "@/lib/neon-auth";
+import { userFacingError } from "@/lib/operations/client";
+import { signInWithEmail, signInWithGoogle } from "@/lib/auth-v2/client-actions";
+import { useAuthContext } from "@/lib/auth-context";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { sessionState } = useAuthContext();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (sessionState === "authenticated") {
+      void authDestination().then((dest) => router.replace(dest));
+    }
+  }, [sessionState, router]);
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("oauth") === "error") {
+      setError("Google sign-in was cancelled or could not be completed.");
+    }
+    if (query.get("reset") === "complete") {
+      setError("Password updated. Sign in with your new password.");
+    }
+  }, []);
+
+  const handleGoogleLogin = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      setError(userFacingError(err));
+      setLoading(false);
+    }
+  };
 
   const handleCredentialsLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -20,7 +49,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await signInWithNeonEmail(email, password);
+      await signInWithEmail(email, password);
       router.push(await authDestination());
     } catch (err) {
       setError(userFacingError(err));
@@ -29,46 +58,24 @@ export default function LoginPage() {
     }
   };
 
-  const triggerSSO = async (provider: string) => {
-    setError(null);
-    setLoading(true);
-    try {
-      if (provider !== "google") {
-        throw new Error("Unsupported OAuth provider.");
-      }
-      await signInWithNeonOAuth(provider, "/auth/complete");
-    } catch (err) {
-      setError(userFacingError(err));
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="max-w-md mx-auto py-8">
       <Section title="Sign In to Quorum" className="shadow-none">
         <div className="space-y-4 pt-2">
-          {/* SSO Integrations */}
-          <div className="space-y-2">
-            <button
-              onClick={() => void triggerSSO("google")}
-              disabled={loading}
-              className="w-full inline-flex items-center justify-center gap-2.5 rounded-none border border-[var(--border-app)] bg-[var(--surface-app)] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-[var(--text-app)] hover:bg-[var(--bg-app)] transition cursor-pointer"
-            >
-              <span>Continue with Google</span>
-            </button>
+          <button type="button" className="btn-secondary w-full py-3" onClick={handleGoogleLogin} disabled={loading}>
+            Continue with Google
+          </button>
+          <div className="flex items-center gap-3 text-[10px] uppercase tracking-wider text-stone-400" aria-hidden="true">
+            <span className="h-px flex-1 bg-[var(--border-subtle)]" />
+            or use email
+            <span className="h-px flex-1 bg-[var(--border-subtle)]" />
           </div>
-
-          <div className="flex items-center justify-between py-2">
-            <div className="h-[1px] w-full bg-[var(--border-subtle)]"></div>
-            <span className="px-3 text-[10px] text-stone-400 font-bold uppercase tracking-wider font-mono">or</span>
-            <div className="h-[1px] w-full bg-[var(--border-subtle)]"></div>
-          </div>
-
           {/* Email / Password Form */}
           <form className="space-y-3" onSubmit={handleCredentialsLogin}>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Email Address</label>
+              <label htmlFor="login-email" className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Email Address</label>
               <input
+                id="login-email"
                 required
                 type="email"
                 value={email}
@@ -80,10 +87,11 @@ export default function LoginPage() {
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Password</label>
-                <a href="#reset" className="text-[9px] text-[var(--accent-app)] hover:underline">Forgot password?</a>
+                <label htmlFor="login-password" className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Password</label>
+                <Link href="/auth/forgot-password" className="text-[9px] text-[var(--accent-app)] hover:underline">Forgot password?</Link>
               </div>
               <input
+                id="login-password"
                 required
                 type="password"
                 value={password}

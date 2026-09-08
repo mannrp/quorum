@@ -2,16 +2,15 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Section, Status, Badge, LoadingSkeleton } from "@/components/ui";
-import { useGraphQL } from "@/lib/graphql";
-import { TEAMS_QUERY } from "@/lib/queries";
+import { useOperation } from "@/lib/operations/client";
 import type { Team } from "@/types/domain";
 
 export default function TeamsPage() {
   const [q, setQ] = useState("");
-  const { data, error, loading } = useGraphQL<{ teams: Team[] }>(
-    TEAMS_QUERY,
+  const { data, error, loading } = useOperation<{ teams: Team[] }>(
+    "PublicTeamsV1",
     q.trim() ? { search: q.trim() } : {},
-    { debounceMs: q.trim() ? 250 : 0 }
+    q.trim() ? 250 : 0,
   );
   const teams = data?.teams || [];
 
@@ -41,7 +40,7 @@ export default function TeamsPage() {
       </section>
 
       {loading && <Section title="Teams"><LoadingSkeleton rows={5} /></Section>}
-      {error && <Section title="GraphQL Error"><p className="text-xs font-semibold text-rose-500">{error}</p></Section>}
+      {error && <Section title="Unable to load teams"><p className="text-xs font-semibold text-rose-500">{error}</p></Section>}
 
       <div className="stagger-in grid gap-5 md:grid-cols-2">
         {!loading && !error && teams.map((team) => {

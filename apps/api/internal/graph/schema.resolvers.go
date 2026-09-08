@@ -8,7 +8,6 @@ package graph
 import (
 	"context"
 	"errors"
-	"sort"
 	"strings"
 	"time"
 
@@ -19,13 +18,7 @@ import (
 	"github.com/local/quorum/apps/api/internal/db"
 	"github.com/local/quorum/apps/api/internal/graph/generated"
 	"github.com/local/quorum/apps/api/internal/graph/model"
-	"github.com/local/quorum/apps/api/internal/storage"
 	"golang.org/x/sync/errgroup"
-)
-
-const (
-	defaultListLimit         = 50
-	defaultConversationLimit = 100
 )
 
 // BootstrapProfile is the resolver for the bootstrapProfile field.
@@ -45,7 +38,7 @@ func (r *mutationResolver) BootstrapProfile(ctx context.Context, input model.Boo
 func (r *mutationResolver) UpsertMyProfile(ctx context.Context, input model.UpsertMyProfileInput) (*model.User, error) {
 	subject, ok := auth.SubjectFromContext(ctx)
 	if !ok || subject == "" {
-		return nil, errors.New("verified Neon Auth token required")
+		return nil, errors.New("verified Quorum session required")
 	}
 
 	username := strings.TrimSpace(input.Username)
@@ -100,7 +93,6 @@ func (r *mutationResolver) UpsertMyProfile(ctx context.Context, input model.Upse
 				LinkedinUrl:           textOrCurrent(input.LinkedinURL, current.LinkedinUrl),
 				GithubUrl:             textOrCurrent(input.GithubURL, current.GithubUrl),
 				PortfolioUrl:          textOrCurrent(input.PortfolioURL, current.PortfolioUrl),
-				ResumeUrl:             textOrCurrent(input.ResumeURL, current.ResumeUrl),
 				AvatarUrl:             textOrCurrent(input.AvatarURL, current.AvatarUrl),
 				UserIntent:            derefString(input.UserIntent, current.UserIntent),
 				ResumeVisibility:      derefResumeVisibility(input.ResumeVisibility, current.ResumeVisibility),
@@ -180,7 +172,6 @@ func (r *mutationResolver) UpdateProfile(ctx context.Context, input model.Update
 			LinkedinUrl:           textOrCurrent(input.LinkedinURL, current.LinkedinUrl),
 			GithubUrl:             textOrCurrent(input.GithubURL, current.GithubUrl),
 			PortfolioUrl:          textOrCurrent(input.PortfolioURL, current.PortfolioUrl),
-			ResumeUrl:             textOrCurrent(input.ResumeURL, current.ResumeUrl),
 			AvatarUrl:             textOrCurrent(input.AvatarURL, current.AvatarUrl),
 			UserIntent:            derefString(input.UserIntent, current.UserIntent),
 			ResumeVisibility:      derefResumeVisibility(input.ResumeVisibility, current.ResumeVisibility),
@@ -224,6 +215,13 @@ func (r *mutationResolver) DeactivateAccount(ctx context.Context, reason *string
 		if err := q.DeactivateUser(ctx, current.ID); err != nil {
 			return err
 		}
+		updated, err := q.DeactivateAccountState(ctx, current.ID)
+		if err != nil {
+			return err
+		}
+		if updated != 1 {
+			return errors.New("account state is unavailable")
+		}
 		return r.auditChange(ctx, q, current.ID, "USER_DEACTIVATED", "USER", current.ID, map[string]any{"deactivated": false}, map[string]any{"deactivated": true}, reason)
 	}); err != nil {
 		return false, err
@@ -235,6 +233,9 @@ func (r *mutationResolver) DeactivateAccount(ctx context.Context, reason *string
 func (r *mutationResolver) CreateTeam(ctx context.Context, input model.CreateTeamInput) (*model.Team, error) {
 	current, err := requireCompleteUser(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err := requireRole(ctx, auth.RoleStudent); err != nil {
 		return nil, err
 	}
 	count, err := r.Queries.CountUserTeams(ctx, current.ID)
@@ -435,6 +436,9 @@ func (r *mutationResolver) RequestJoin(ctx context.Context, teamID string, messa
 	if err != nil {
 		return nil, err
 	}
+	if err := requireRole(ctx, auth.RoleStudent); err != nil {
+		return nil, err
+	}
 	if err := r.requireDeadlineOpen(ctx); err != nil {
 		return nil, err
 	}
@@ -554,6 +558,9 @@ func (r *mutationResolver) RespondToJoinRequest(ctx context.Context, requestID s
 func (r *mutationResolver) ConfirmJoinRequest(ctx context.Context, requestID string) (*model.TeamJoinRequest, error) {
 	current, err := requireCompleteUser(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err := requireRole(ctx, auth.RoleStudent); err != nil {
 		return nil, err
 	}
 	id, err := uuid(requestID)
@@ -715,6 +722,11 @@ func (r *mutationResolver) RespondToTeamInvitation(ctx context.Context, invitati
 	if err != nil {
 		return nil, err
 	}
+	if accept {
+		if err := requireRole(ctx, auth.RoleStudent); err != nil {
+			return nil, err
+		}
+	}
 	id, err := uuid(invitationID)
 	if err != nil {
 		return nil, err
@@ -815,6 +827,9 @@ func (r *mutationResolver) CreateProject(ctx context.Context, input model.Create
 	if err != nil {
 		return nil, err
 	}
+	if err := requireRole(ctx, auth.RoleSponsor); err != nil {
+		return nil, err
+	}
 	minSize := 10
 	if input.TeamSizeMin != nil {
 		minSize = *input.TeamSizeMin
@@ -839,7 +854,7 @@ func (r *mutationResolver) CreateProject(ctx context.Context, input model.Create
 		project, err = q.CreateProject(ctx, db.CreateProjectParams{
 			Title: input.Title, Summary: derefString(input.Summary, ""), Description: input.Description,
 			Constraints: text(input.Constraints), Disciplines: input.Disciplines, TeamSizeMin: int32(minSize), TeamSizeMax: int32(maxSize),
-			OwnerID: current.ID, FileUrl: text(input.FileURL), VideoUrl: text(input.VideoURL), LifecycleState: lifecycle, ApprovalState: approval,
+			OwnerID: current.ID, VideoUrl: text(input.VideoURL), LifecycleState: lifecycle, ApprovalState: approval,
 			RequiredSkills: input.RequiredSkills, NiceToHaveSkills: input.NiceToHaveSkills, Deliverables: text(input.Deliverables),
 			Timeline: text(input.Timeline), EvaluationCriteria: text(input.EvaluationCriteria), ExternalResources: input.ExternalResources,
 			OwnerContactPreference: text(input.OwnerContactPreference), ApplicationQuestions: questions,
@@ -874,7 +889,7 @@ func (r *mutationResolver) UpdateProject(ctx context.Context, id string, input m
 			ID: projectID, Title: input.Title, Summary: derefString(input.Summary, before.Summary), Description: input.Description, Constraints: textOrCurrent(input.Constraints, before.Constraints),
 			Disciplines: input.Disciplines, TeamSizeMin: int32(input.TeamSizeMin), TeamSizeMax: int32(input.TeamSizeMax),
 			LifecycleState: lifecycleForProjectUpdate(input.LifecycleState, input.Status, before.LifecycleState),
-			FileUrl:        textOrCurrent(input.FileURL, before.FileUrl), VideoUrl: textOrCurrent(input.VideoURL, before.VideoUrl),
+			VideoUrl:       textOrCurrent(input.VideoURL, before.VideoUrl),
 			ApprovalState:  derefProjectApproval(input.ApprovalState, before.ApprovalState),
 			RequiredSkills: stringsOrCurrent(input.RequiredSkills, before.RequiredSkills), NiceToHaveSkills: stringsOrCurrent(input.NiceToHaveSkills, before.NiceToHaveSkills), Deliverables: textOrCurrent(input.Deliverables, before.Deliverables),
 			Timeline: textOrCurrent(input.Timeline, before.Timeline), EvaluationCriteria: textOrCurrent(input.EvaluationCriteria, before.EvaluationCriteria), ExternalResources: stringsOrCurrent(input.ExternalResources, before.ExternalResources),
@@ -1385,41 +1400,6 @@ func (r *mutationResolver) SetUniversalDeadline(ctx context.Context, deadlineAt 
 	return r.deadline(ctx, deadline)
 }
 
-// SignUpload is the resolver for the signUpload field.
-func (r *mutationResolver) SignUpload(ctx context.Context, input model.SignUploadInput) (*model.UploadSignature, error) {
-	current, err := requireActiveUser(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if r.Storage == nil {
-		return nil, errors.New("storage signing is not configured")
-	}
-	post, err := r.Storage.PresignPost(ctx, storage.AssetKind(input.Kind), uuidString(current.ID), input.Filename, input.ContentType, int64(input.Size))
-	if err != nil {
-		return nil, err
-	}
-	fields := make([]*model.UploadField, 0, len(post.Fields))
-	names := make([]string, 0, len(post.Fields))
-	for name := range post.Fields {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		fields = append(fields, &model.UploadField{Name: name, Value: post.Fields[name]})
-	}
-	var publicURL *string
-	if post.PublicURL != "" {
-		publicURL = &post.PublicURL
-	}
-	return &model.UploadSignature{
-		URL:       post.URL,
-		Key:       post.Key,
-		PublicURL: publicURL,
-		ExpiresAt: post.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
-		Fields:    fields,
-	}, nil
-}
-
 // RemoveUser is the resolver for the removeUser field.
 func (r *mutationResolver) RemoveUser(ctx context.Context, userID string, reason *string) (bool, error) {
 	current, err := r.requireAdmin(ctx)
@@ -1557,16 +1537,20 @@ func (r *queryResolver) DashboardContext(ctx context.Context) (*model.DashboardC
 		if err != nil {
 			return nil, err
 		}
+		options := teamHydrationOptions{
+			includeCreatedBy:   true,
+			includeMembers:     true,
+			includeProject:     true,
+			includePermissions: true,
+			includeMemberTeam:  true,
+			creatorTags:        false,
+		}
+		if err := r.primeTeamHydration(ctx, teamRows, options); err != nil {
+			return nil, err
+		}
 		teams = make([]*model.Team, 0, len(teamRows))
 		for _, team := range teamRows {
-			mapped, err := r.teamWithOptions(ctx, team, teamHydrationOptions{
-				includeCreatedBy:   true,
-				includeMembers:     true,
-				includeProject:     true,
-				includePermissions: true,
-				includeMemberTeam:  true,
-				creatorTags:        false,
-			})
+			mapped, err := r.teamWithOptions(ctx, team, options)
 			if err != nil {
 				return nil, err
 			}
@@ -1579,11 +1563,13 @@ func (r *queryResolver) DashboardContext(ctx context.Context) (*model.DashboardC
 		if err != nil {
 			return nil, err
 		}
+		options := projectHydrationOptions{includeApplications: true}
+		if err := r.primeProjectHydration(ctx, projectRows, options); err != nil {
+			return nil, err
+		}
 		projects = make([]*model.Project, 0, len(projectRows))
 		for _, project := range projectRows {
-			mapped, err := r.projectWithOptions(ctx, project, projectHydrationOptions{
-				includeApplications: true,
-			})
+			mapped, err := r.projectWithOptions(ctx, project, options)
 			if err != nil {
 				return nil, err
 			}
@@ -1635,6 +1621,9 @@ func (r *queryResolver) User(ctx context.Context, username string) (*model.User,
 	if err != nil {
 		return nil, err
 	}
+	if _, authenticated := auth.UserFromContext(ctx); !authenticated && (user.DeactivatedAt.Valid || user.ArchivedAt.Valid) {
+		return nil, nil
+	}
 	return r.user(ctx, user)
 }
 
@@ -1671,6 +1660,11 @@ func (r *queryResolver) Team(ctx context.Context, id string) (*model.Team, error
 	if err != nil {
 		return nil, err
 	}
+	if team.ArchivedAt.Valid || team.Visibility != string(model.TeamVisibilityVisible) {
+		if err := r.requireTeamMember(ctx, teamID); err != nil {
+			return nil, nil
+		}
+	}
 	return r.team(ctx, team)
 }
 
@@ -1688,13 +1682,17 @@ func (r *queryResolver) Teams(ctx context.Context, discipline *string, hasProjec
 	if len(teams) > defaultListLimit {
 		teams = teams[:defaultListLimit]
 	}
+	options := teamHydrationOptionsFromContext(ctx)
+	if err := r.primeTeamHydration(ctx, teams, options); err != nil {
+		return nil, err
+	}
 	out := make([]*model.Team, len(teams))
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.SetLimit(8)
 	for index := range teams {
 		index := index
 		group.Go(func() error {
-			mapped, err := r.team(groupCtx, teams[index])
+			mapped, err := r.teamWithOptions(groupCtx, teams[index], options)
 			if err != nil {
 				return err
 			}
@@ -1724,6 +1722,14 @@ func (r *queryResolver) Project(ctx context.Context, id string) (*model.Project,
 	if project.ArchivedAt.Valid {
 		return nil, nil
 	}
+	if !publicProjectState(project.LifecycleState) {
+		current, authenticated := auth.UserFromContext(ctx)
+		if !authenticated || !sameUUID(current.ID, project.OwnerID) {
+			if !project.TeamID.Valid || r.requireTeamMember(ctx, project.TeamID) != nil {
+				return nil, nil
+			}
+		}
+	}
 	return r.project(ctx, project)
 }
 
@@ -1738,11 +1744,23 @@ func (r *queryResolver) Projects(ctx context.Context, discipline *string, status
 	if err != nil {
 		return nil, err
 	}
+	if _, authenticated := auth.UserFromContext(ctx); !authenticated {
+		public := projects[:0]
+		for _, project := range projects {
+			if publicProjectState(project.LifecycleState) {
+				public = append(public, project)
+			}
+		}
+		projects = public
+	}
 	if len(projects) > defaultListLimit {
 		projects = projects[:defaultListLimit]
 	}
-	out := make([]*model.Project, len(projects))
 	options := projectHydrationOptionsFromContext(ctx)
+	if err := r.primeProjectHydration(ctx, projects, options); err != nil {
+		return nil, err
+	}
+	out := make([]*model.Project, len(projects))
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.SetLimit(8)
 	for index := range projects {

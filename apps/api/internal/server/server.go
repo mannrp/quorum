@@ -3,75 +3,77 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/local/quorum/apps/api/internal/auth"
 	"github.com/local/quorum/apps/api/internal/config"
 	"github.com/local/quorum/apps/api/internal/db"
-	"github.com/local/quorum/apps/api/internal/demo"
 	"github.com/local/quorum/apps/api/internal/graph"
 	"github.com/local/quorum/apps/api/internal/graph/generated"
-	"github.com/local/quorum/apps/api/internal/storage"
+	"github.com/local/quorum/apps/api/internal/identity"
+	"github.com/local/quorum/apps/api/internal/internalapi"
+	"github.com/local/quorum/apps/api/internal/principal"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
 func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handler {
 	queries := db.New(pool)
-	resolver := &graph.Resolver{Pool: pool, Queries: queries, Storage: storage.NewR2Signer(cfg)}
+	resolver := &graph.Resolver{Pool: pool, Queries: queries}
 	gql := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: resolver}))
-	authMiddleware := auth.NewMiddleware(queries, auth.NewVerifier(cfg.NeonAuthIssuer, cfg.NeonAuthJWKSURL, cfg.NeonAuthAudience), cfg.DemoModeEnabled)
+	gql.SetErrorPresenter(graphQLErrorPresenter(logger))
+	principalService := principal.NewService(principal.NewSQLViewerStore(queries), identity.NewService(pool))
+	var assertionVerifier *internalapi.Verifier
+	if len(cfg.InternalAssertionKeys) > 0 {
+		var err error
+		assertionVerifier, err = internalapi.NewVerifier(internalapi.VerifierConfig{
+			Issuer: cfg.InternalAssertionIssuer, Audience: cfg.InternalAssertionAudience,
+			Type: "quorum-internal+jwt", Keys: cfg.InternalAssertionKeys,
+		})
+		if err != nil {
+			logger.Error("internal assertion verifier disabled", "error", err)
+			assertionVerifier = nil
+		}
+	}
+	authMiddleware := auth.NewMiddleware(queries, assertionVerifier, principalService)
+	privateAPI := http.NotFoundHandler()
+	if assertionVerifier != nil {
+		privateAPI = principal.NewHTTPHandler(assertionVerifier, principalService)
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthHandler(pool))
-	mux.HandleFunc("/demo/reset", demoResetHandler(cfg, pool, queries))
+	mux.Handle("/internal/v1/", privateAPI)
 	mux.Handle("/graphql", maxBytes(1<<20, graph.WithRequestCache(authMiddleware.Wrap(gql))))
 	if cfg.AppEnv == "development" {
 		mux.Handle("/", playground.Handler("Quorum GraphQL", "/graphql"))
 	}
 
-	return logging(logger, cors(cfg.AppOrigin, mux))
+	return logging(logger, mux)
 }
 
-func demoResetHandler(cfg config.Config, pool *pgxpool.Pool, queries *db.Queries) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
+// Domain errors are deliberate user feedback; dependency details stay server-side.
+func graphQLErrorPresenter(logger *slog.Logger) graphql.ErrorPresenterFunc {
+	return func(ctx context.Context, err error) *gqlerror.Error {
+		var queryError *pgconn.PgError
+		var connectionError *pgconn.ConnectError
+		switch {
+		case errors.As(err, &queryError):
+			logger.Error("graphql database operation failed", "database_code", queryError.Code)
+		case errors.As(err, &connectionError), errors.Is(err, pgx.ErrNoRows), errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
+			logger.Error("graphql dependency operation failed")
+		default:
+			return graphql.DefaultErrorPresenter(ctx, err)
 		}
-		if !cfg.DemoModeEnabled || !cfg.DemoResetEnabled {
-			http.Error(w, "demo reset is disabled", http.StatusNotFound)
-			return
-		}
-		authID, ok := demo.AuthIDForPersona(strings.TrimSpace(r.Header.Get(demo.HeaderPersona)))
-		if !ok {
-			http.Error(w, "invalid demo persona", http.StatusUnauthorized)
-			return
-		}
-		user, err := queries.GetUserByAuthID(r.Context(), authID)
-		if err != nil {
-			http.Error(w, "demo persona is not seeded", http.StatusUnauthorized)
-			return
-		}
-		isAdmin, err := queries.IsAdmin(r.Context(), user.ID)
-		if err != nil {
-			http.Error(w, "admin lookup failed", http.StatusInternalServerError)
-			return
-		}
-		if !isAdmin {
-			http.Error(w, "admin access required", http.StatusForbidden)
-			return
-		}
-		if err := demo.Seed(r.Context(), pool, true); err != nil {
-			http.Error(w, "demo reset failed", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"status": "reset"})
+		return gqlerror.Errorf("request could not be completed")
 	}
 }
 
@@ -122,22 +124,5 @@ func logging(logger *slog.Logger, next http.Handler) http.Handler {
 		start := time.Now()
 		next.ServeHTTP(w, r)
 		logger.Info("request", "method", r.Method, "path", r.URL.Path, "duration_ms", time.Since(start).Milliseconds())
-	})
-}
-
-func cors(origin string, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if origin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Vary", "Origin")
-		}
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, "+demo.HeaderPersona)
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
 	})
 }

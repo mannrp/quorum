@@ -31,14 +31,32 @@ type cachedMembership struct {
 	err   error
 }
 
+type cachedTeamMembers struct {
+	value []db.ListTeamMembersByTeamIDsRow
+	err   error
+}
+
+type cachedProject struct {
+	value db.Project
+	err   error
+}
+
+type cachedProjectApplications struct {
+	value []db.ProjectApplication
+	err   error
+}
+
 type requestCache struct {
 	mu                  sync.Mutex
 	users               map[string]cachedUser
 	userTags            map[string]cachedTags
 	adminStatus         map[string]cachedBool
+	teamMembers         map[string]cachedTeamMembers
 	teamMemberships     map[string]cachedMembership
 	teamLeadStatus      map[string]cachedBool
 	activeProjectOwners map[string]cachedBool
+	projects            map[string]cachedProject
+	projectApplications map[string]cachedProjectApplications
 }
 
 func newRequestCache() *requestCache {
@@ -46,9 +64,12 @@ func newRequestCache() *requestCache {
 		users:               map[string]cachedUser{},
 		userTags:            map[string]cachedTags{},
 		adminStatus:         map[string]cachedBool{},
+		teamMembers:         map[string]cachedTeamMembers{},
 		teamMemberships:     map[string]cachedMembership{},
 		teamLeadStatus:      map[string]cachedBool{},
 		activeProjectOwners: map[string]cachedBool{},
+		projects:            map[string]cachedProject{},
+		projectApplications: map[string]cachedProjectApplications{},
 	}
 }
 

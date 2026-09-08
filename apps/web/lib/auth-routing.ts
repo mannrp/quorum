@@ -1,17 +1,24 @@
 "use client";
 
-import { graphqlRequest } from "./graphql";
-import { AUTH_STATE_QUERY } from "./queries";
-import type { AuthState } from "@/types/domain";
+import { viewerClient } from "./auth-v2/viewer-client";
 
-export async function authDestination() {
-  const result = await graphqlRequest<{ authState: AuthState }>(AUTH_STATE_QUERY, {}, { auth: true });
-  const state = result.authState;
-  if (!state.authenticated) {
-    return "/auth/login";
-  }
-  if (!state.hasProfile || !state.profileComplete) {
-    return "/onboarding";
+const privateRoutes = new Set(["/dashboard", "/inbox", "/notifications", "/onboarding"]);
+
+export function requiresAuthenticatedSession(pathname: string): boolean {
+  return privateRoutes.has(pathname) ||
+    pathname.startsWith("/settings/") ||
+    pathname === "/teams/new" ||
+    /^\/teams\/[^/]+\/manage$/.test(pathname) ||
+    pathname === "/projects/new" ||
+    /^\/projects\/[^/]+\/(?:applications|edit)$/.test(pathname);
+}
+
+export async function authDestination(): Promise<string> {
+  const result = await viewerClient.viewer();
+  if (result.state === "unauthenticated") return "/auth/login";
+  if (result.state === "unenrolled") return "/onboarding";
+  if (result.viewer.onboardingState !== "COMPLETE" || !result.viewer.username || !result.viewer.displayName) {
+    return "/settings/profile";
   }
   return "/dashboard";
 }

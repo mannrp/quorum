@@ -1,0 +1,53 @@
+name: quorum-dev
+
+services:
+  postgres:
+    image: postgres:17.10-alpine3.24@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+    environment:
+      POSTGRES_DB: quorum_dev
+      POSTGRES_USER: quorum_operator
+      POSTGRES_PASSWORD: quorum-local-operator-only
+      PGDATA: /var/lib/postgresql/17/docker
+    ports:
+      - "127.0.0.1:54322:5432"
+    volumes:
+      - quorum-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quorum_operator -d quorum_dev"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - quorum-private
+
+  mailpit:
+    image: axllent/mailpit:v1.30.0@sha256:0059ef81e492a7192af3816281eed6859eb078bd7bdc58b76757c13e10e53a7d
+    environment:
+      MP_MAX_MESSAGES: "500"
+      MP_DATABASE: /data/mailpit.db
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+    volumes:
+      - quorum-mailpit:/data
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 2s
+    restart: unless-stopped
+    networks:
+      - quorum-private
+
+networks:
+  quorum-private:
+    # Host-run Next and Go need the loopback-only published ports above.
+    # A Docker-internal network suppresses those bindings on Docker Desktop.
+    driver: bridge
+
+volumes:
+  quorum-postgres:
+  quorum-mailpit:

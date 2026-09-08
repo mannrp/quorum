@@ -34,6 +34,7 @@ type Querier interface {
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateTeamInvitation(ctx context.Context, arg CreateTeamInvitationParams) (TeamInvitation, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeactivateAccountState(ctx context.Context, userID pgtype.UUID) (int64, error)
 	DeactivateUser(ctx context.Context, id pgtype.UUID) error
 	ExpireDueJoinRequests(ctx context.Context, expiresAt pgtype.Timestamptz) error
 	ExpireDueProjectOffers(ctx context.Context, expiresAt pgtype.Timestamptz) error
@@ -42,6 +43,7 @@ type Querier interface {
 	ExpireOtherTeamInvitations(ctx context.Context, arg ExpireOtherTeamInvitationsParams) error
 	ExpireProjectOffer(ctx context.Context, id pgtype.UUID) (ProjectApplication, error)
 	ExpireTeamInvitation(ctx context.Context, id pgtype.UUID) (TeamInvitation, error)
+	GetIdentityRealmByKey(ctx context.Context, realmKey string) (AppIdentityRealm, error)
 	GetJoinRequest(ctx context.Context, id pgtype.UUID) (TeamJoinRequest, error)
 	GetJoinRequestForUserTeam(ctx context.Context, arg GetJoinRequestForUserTeamParams) (TeamJoinRequest, error)
 	GetMessage(ctx context.Context, id pgtype.UUID) (Message, error)
@@ -57,7 +59,10 @@ type Querier interface {
 	GetUser(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserByAuthID(ctx context.Context, authUserID string) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	GetUserIdentityByRealmSubject(ctx context.Context, arg GetUserIdentityByRealmSubjectParams) (AppUserIdentity, error)
+	GetViewerBootstrapByRealmSubject(ctx context.Context, arg GetViewerBootstrapByRealmSubjectParams) (GetViewerBootstrapByRealmSubjectRow, error)
 	IsAdmin(ctx context.Context, userID pgtype.UUID) (bool, error)
+	ListActiveRoleGrantsForUser(ctx context.Context, userID pgtype.UUID) ([]AppRoleGrant, error)
 	ListAdminUsers(ctx context.Context) ([]User, error)
 	ListAuditLogs(ctx context.Context, limit int32) ([]AuditLog, error)
 	ListInboxUsers(ctx context.Context, senderID pgtype.UUID) ([]User, error)
@@ -66,11 +71,14 @@ type Querier interface {
 	ListMessagesWithUser(ctx context.Context, arg ListMessagesWithUserParams) ([]Message, error)
 	ListNotifications(ctx context.Context, userID pgtype.UUID) ([]Notification, error)
 	ListProjectApplications(ctx context.Context, projectID pgtype.UUID) ([]ProjectApplication, error)
+	ListProjectApplicationsByProjectIDs(ctx context.Context, projectIds []pgtype.UUID) ([]ListProjectApplicationsByProjectIDsRow, error)
 	ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error)
 	ListProjectsForOwner(ctx context.Context, ownerID pgtype.UUID) ([]Project, error)
 	ListTeamInvitationsForTeam(ctx context.Context, teamID pgtype.UUID) ([]TeamInvitation, error)
 	ListTeamInvitationsForUser(ctx context.Context, invitedUserID pgtype.UUID) ([]TeamInvitation, error)
 	ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]ListTeamMembersRow, error)
+	ListTeamMembersByTeamIDs(ctx context.Context, teamIds []pgtype.UUID) ([]ListTeamMembersByTeamIDsRow, error)
+	ListTeamMembershipsForUser(ctx context.Context, arg ListTeamMembershipsForUserParams) ([]TeamMembership, error)
 	ListTeams(ctx context.Context, arg ListTeamsParams) ([]Team, error)
 	ListTeamsForUser(ctx context.Context, userID pgtype.UUID) ([]Team, error)
 	ListUserTags(ctx context.Context, userID pgtype.UUID) ([]Tag, error)

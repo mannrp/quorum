@@ -115,7 +115,6 @@ type ComplexityRoot struct {
 		SendMessage                func(childComplexity int, receiverID string, body string) int
 		SendProjectOffer           func(childComplexity int, applicationID string, message *string) int
 		SetUniversalDeadline       func(childComplexity int, deadlineAt string, reason *string) int
-		SignUpload                 func(childComplexity int, input model.SignUploadInput) int
 		SubmitProjectForApproval   func(childComplexity int, projectID string) int
 		UpdateProfile              func(childComplexity int, input model.UpdateProfileInput) int
 		UpdateProject              func(childComplexity int, id string, input model.UpdateProjectInput) int
@@ -144,7 +143,6 @@ type ComplexityRoot struct {
 		Disciplines            func(childComplexity int) int
 		EvaluationCriteria     func(childComplexity int) int
 		ExternalResources      func(childComplexity int) int
-		FileURL                func(childComplexity int) int
 		ID                     func(childComplexity int) int
 		LifecycleState         func(childComplexity int) int
 		NiceToHaveSkills       func(childComplexity int) int
@@ -275,19 +273,6 @@ type ComplexityRoot struct {
 		CanManageMembers   func(childComplexity int) int
 	}
 
-	UploadField struct {
-		Name  func(childComplexity int) int
-		Value func(childComplexity int) int
-	}
-
-	UploadSignature struct {
-		ExpiresAt func(childComplexity int) int
-		Fields    func(childComplexity int) int
-		Key       func(childComplexity int) int
-		PublicURL func(childComplexity int) int
-		URL       func(childComplexity int) int
-	}
-
 	User struct {
 		ArchivedAt            func(childComplexity int) int
 		AuthUserID            func(childComplexity int) int
@@ -306,7 +291,6 @@ type ComplexityRoot struct {
 		PortfolioURL          func(childComplexity int) int
 		PreferredProjectAreas func(childComplexity int) int
 		ProfileComplete       func(childComplexity int) int
-		ResumeURL             func(childComplexity int) int
 		ResumeVisibility      func(childComplexity int) int
 		Tags                  func(childComplexity int) int
 		University            func(childComplexity int) int
@@ -351,7 +335,6 @@ type MutationResolver interface {
 	MarkRead(ctx context.Context, messageID string) (bool, error)
 	MarkNotificationRead(ctx context.Context, notificationID string) (bool, error)
 	SetUniversalDeadline(ctx context.Context, deadlineAt string, reason *string) (*model.Deadline, error)
-	SignUpload(ctx context.Context, input model.SignUploadInput) (*model.UploadSignature, error)
 	RemoveUser(ctx context.Context, userID string, reason *string) (bool, error)
 	RemoveTeam(ctx context.Context, teamID string, reason *string) (bool, error)
 	RemoveProject(ctx context.Context, projectID string, reason *string) (bool, error)
@@ -933,17 +916,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetUniversalDeadline(childComplexity, args["deadlineAt"].(string), args["reason"].(*string)), true
-	case "Mutation.signUpload":
-		if e.ComplexityRoot.Mutation.SignUpload == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_signUpload_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Mutation.SignUpload(childComplexity, args["input"].(model.SignUploadInput)), true
 	case "Mutation.submitProjectForApproval":
 		if e.ComplexityRoot.Mutation.SubmitProjectForApproval == nil {
 			break
@@ -1108,12 +1080,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Project.ExternalResources(childComplexity), true
-	case "Project.fileUrl":
-		if e.ComplexityRoot.Project.FileURL == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Project.FileURL(childComplexity), true
 	case "Project.id":
 		if e.ComplexityRoot.Project.ID == nil {
 			break
@@ -1781,50 +1747,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.TeamPermissions.CanManageMembers(childComplexity), true
 
-	case "UploadField.name":
-		if e.ComplexityRoot.UploadField.Name == nil {
-			break
-		}
-
-		return e.ComplexityRoot.UploadField.Name(childComplexity), true
-	case "UploadField.value":
-		if e.ComplexityRoot.UploadField.Value == nil {
-			break
-		}
-
-		return e.ComplexityRoot.UploadField.Value(childComplexity), true
-
-	case "UploadSignature.expiresAt":
-		if e.ComplexityRoot.UploadSignature.ExpiresAt == nil {
-			break
-		}
-
-		return e.ComplexityRoot.UploadSignature.ExpiresAt(childComplexity), true
-	case "UploadSignature.fields":
-		if e.ComplexityRoot.UploadSignature.Fields == nil {
-			break
-		}
-
-		return e.ComplexityRoot.UploadSignature.Fields(childComplexity), true
-	case "UploadSignature.key":
-		if e.ComplexityRoot.UploadSignature.Key == nil {
-			break
-		}
-
-		return e.ComplexityRoot.UploadSignature.Key(childComplexity), true
-	case "UploadSignature.publicUrl":
-		if e.ComplexityRoot.UploadSignature.PublicURL == nil {
-			break
-		}
-
-		return e.ComplexityRoot.UploadSignature.PublicURL(childComplexity), true
-	case "UploadSignature.url":
-		if e.ComplexityRoot.UploadSignature.URL == nil {
-			break
-		}
-
-		return e.ComplexityRoot.UploadSignature.URL(childComplexity), true
-
 	case "User.archivedAt":
 		if e.ComplexityRoot.User.ArchivedAt == nil {
 			break
@@ -1927,12 +1849,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.User.ProfileComplete(childComplexity), true
-	case "User.resumeUrl":
-		if e.ComplexityRoot.User.ResumeURL == nil {
-			break
-		}
-
-		return e.ComplexityRoot.User.ResumeURL(childComplexity), true
 	case "User.resumeVisibility":
 		if e.ComplexityRoot.User.ResumeVisibility == nil {
 			break
@@ -1976,7 +1892,6 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputBootstrapProfileInput,
 		ec.unmarshalInputCreateProjectInput,
 		ec.unmarshalInputCreateTeamInput,
-		ec.unmarshalInputSignUploadInput,
 		ec.unmarshalInputUpdateProfileInput,
 		ec.unmarshalInputUpdateProjectInput,
 		ec.unmarshalInputUpdateTeamInput,
@@ -2068,7 +1983,6 @@ var sources = []*ast.Source{
   linkedinUrl: String
   githubUrl: String
   portfolioUrl: String
-  resumeUrl: String
   avatarUrl: String
   userIntent: String!
   resumeVisibility: ResumeVisibility!
@@ -2181,7 +2095,6 @@ type Project {
   permissions: ProjectPermissions!
   owner: User!
   team: Team
-  fileUrl: String
   videoUrl: String
   applications: [ProjectApplication!]!
   createdAt: String!
@@ -2259,19 +2172,6 @@ type DashboardContext {
   isAdmin: Boolean!
 }
 
-type UploadSignature {
-  url: String!
-  key: String!
-  publicUrl: String
-  expiresAt: String!
-  fields: [UploadField!]!
-}
-
-type UploadField {
-  name: String!
-  value: String!
-}
-
 enum TeamRole { LEAD CO_LEAD MEMBER }
 enum TeamRecruitingState { RECRUITING PAUSED FULL HIDDEN }
 enum TeamCapstoneState { FORMING APPLYING OFFER_RECEIVED MATCHED CLOSED }
@@ -2283,7 +2183,6 @@ enum ApplicationStatus { PENDING ACCEPTED REJECTED DRAFT SUBMITTED UNDER_REVIEW 
 enum JoinRequestStatus { PENDING ACCEPTED ACCEPTED_PENDING_CONFIRMATION CONFIRMED REJECTED WITHDRAWN EXPIRED }
 enum TeamInvitationStatus { PENDING ACCEPTED DECLINED WITHDRAWN EXPIRED }
 enum ResumeVisibility { PRIVATE TEAM_LEADS PROJECT_OWNERS PROJECT_OWNERS_AND_PROFESSORS PUBLIC }
-enum UploadAssetKind { RESUME PROJECT_FILE AVATAR VIDEO }
 
 input UpdateProfileInput {
   fullName: String!
@@ -2293,7 +2192,6 @@ input UpdateProfileInput {
   linkedinUrl: String
   githubUrl: String
   portfolioUrl: String
-  resumeUrl: String
   avatarUrl: String
   userIntent: String
   resumeVisibility: ResumeVisibility
@@ -2315,7 +2213,6 @@ input UpsertMyProfileInput {
   linkedinUrl: String
   githubUrl: String
   portfolioUrl: String
-  resumeUrl: String
   avatarUrl: String
   userIntent: String
   resumeVisibility: ResumeVisibility
@@ -2371,7 +2268,6 @@ input CreateProjectInput {
   disciplines: [String!]!
   teamSizeMin: Int = 10
   teamSizeMax: Int = 12
-  fileUrl: String
   videoUrl: String
   lifecycleState: ProjectLifecycleState = DRAFT
   approvalState: ProjectApprovalState = UNVERIFIED
@@ -2396,7 +2292,6 @@ input UpdateProjectInput {
   status: ProjectStatus
   lifecycleState: ProjectLifecycleState
   approvalState: ProjectApprovalState
-  fileUrl: String
   videoUrl: String
   requiredSkills: [String!]
   niceToHaveSkills: [String!]
@@ -2413,13 +2308,6 @@ input ApplyToProjectInput {
   teamId: ID!
   message: String
   answers: String
-}
-
-input SignUploadInput {
-  kind: UploadAssetKind!
-  filename: String!
-  contentType: String!
-  size: Int!
 }
 
 type Query {
@@ -2478,7 +2366,6 @@ type Mutation {
   markRead(messageId: ID!): Boolean!
   markNotificationRead(notificationId: ID!): Boolean!
   setUniversalDeadline(deadlineAt: String!, reason: String): Deadline!
-  signUpload(input: SignUploadInput!): UploadSignature!
   removeUser(userId: ID!, reason: String): Boolean!
   removeTeam(teamId: ID!, reason: String): Boolean!
   removeProject(projectId: ID!, reason: String): Boolean!
@@ -2647,8 +2534,6 @@ func (ec *executionContext) childFields_Project(ctx context.Context, field graph
 		return ec.fieldContext_Project_owner(ctx, field)
 	case "team":
 		return ec.fieldContext_Project_team(ctx, field)
-	case "fileUrl":
-		return ec.fieldContext_Project_fileUrl(ctx, field)
 	case "videoUrl":
 		return ec.fieldContext_Project_videoUrl(ctx, field)
 	case "applications":
@@ -2845,32 +2730,6 @@ func (ec *executionContext) childFields_TeamPermissions(ctx context.Context, fie
 	return nil, fmt.Errorf("no field named %q was found under type TeamPermissions", field.Name)
 }
 
-func (ec *executionContext) childFields_UploadField(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-	switch field.Name {
-	case "name":
-		return ec.fieldContext_UploadField_name(ctx, field)
-	case "value":
-		return ec.fieldContext_UploadField_value(ctx, field)
-	}
-	return nil, fmt.Errorf("no field named %q was found under type UploadField", field.Name)
-}
-
-func (ec *executionContext) childFields_UploadSignature(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-	switch field.Name {
-	case "url":
-		return ec.fieldContext_UploadSignature_url(ctx, field)
-	case "key":
-		return ec.fieldContext_UploadSignature_key(ctx, field)
-	case "publicUrl":
-		return ec.fieldContext_UploadSignature_publicUrl(ctx, field)
-	case "expiresAt":
-		return ec.fieldContext_UploadSignature_expiresAt(ctx, field)
-	case "fields":
-		return ec.fieldContext_UploadSignature_fields(ctx, field)
-	}
-	return nil, fmt.Errorf("no field named %q was found under type UploadSignature", field.Name)
-}
-
 func (ec *executionContext) childFields_User(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -2895,8 +2754,6 @@ func (ec *executionContext) childFields_User(ctx context.Context, field graphql.
 		return ec.fieldContext_User_githubUrl(ctx, field)
 	case "portfolioUrl":
 		return ec.fieldContext_User_portfolioUrl(ctx, field)
-	case "resumeUrl":
-		return ec.fieldContext_User_resumeUrl(ctx, field)
 	case "avatarUrl":
 		return ec.fieldContext_User_avatarUrl(ctx, field)
 	case "userIntent":
@@ -3668,20 +3525,6 @@ func (ec *executionContext) field_Mutation_setUniversalDeadline_args(ctx context
 		return nil, err
 	}
 	args["reason"] = arg1
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_signUpload_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
-		func(ctx context.Context, v any) (model.SignUploadInput, error) {
-			return ec.unmarshalNSignUploadInput2githubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐSignUploadInput(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["input"] = arg0
 	return args, nil
 }
 
@@ -6401,50 +6244,6 @@ func (ec *executionContext) fieldContext_Mutation_setUniversalDeadline(ctx conte
 	return fc, nil
 }
 
-func (ec *executionContext) _Mutation_signUpload(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Mutation_signUpload(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().SignUpload(ctx, fc.Args["input"].(model.SignUploadInput))
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *model.UploadSignature) graphql.Marshaler {
-			return ec.marshalNUploadSignature2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUploadSignature(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Mutation_signUpload(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_UploadSignature(ctx, field)
-		},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = ec.Recover(ctx, r)
-			ec.Error(ctx, err)
-		}
-	}()
-	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_signUpload_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
-		ec.Error(ctx, err)
-		return fc, err
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Mutation_removeUser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -7246,29 +7045,6 @@ func (ec *executionContext) fieldContext_Project_team(_ context.Context, field g
 		},
 	}
 	return fc, nil
-}
-
-func (ec *executionContext) _Project_fileUrl(ctx context.Context, field graphql.CollectedField, obj *model.Project) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Project_fileUrl(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.FileURL, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
-			return ec.marshalOString2ᚖstring(ctx, selections, v)
-		},
-		true,
-		false,
-	)
-}
-func (ec *executionContext) fieldContext_Project_fileUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Project", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _Project_videoUrl(ctx context.Context, field graphql.CollectedField, obj *model.Project) (ret graphql.Marshaler) {
@@ -9802,176 +9578,6 @@ func (ec *executionContext) fieldContext_TeamPermissions_canApplyToProjects(_ co
 	return graphql.NewScalarFieldContext("TeamPermissions", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
-func (ec *executionContext) _UploadField_name(ctx context.Context, field graphql.CollectedField, obj *model.UploadField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_UploadField_name(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.Name, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_UploadField_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("UploadField", field, false, false, errors.New("field of type String does not have child fields"))
-}
-
-func (ec *executionContext) _UploadField_value(ctx context.Context, field graphql.CollectedField, obj *model.UploadField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_UploadField_value(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.Value, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_UploadField_value(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("UploadField", field, false, false, errors.New("field of type String does not have child fields"))
-}
-
-func (ec *executionContext) _UploadSignature_url(ctx context.Context, field graphql.CollectedField, obj *model.UploadSignature) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_UploadSignature_url(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.URL, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_UploadSignature_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("UploadSignature", field, false, false, errors.New("field of type String does not have child fields"))
-}
-
-func (ec *executionContext) _UploadSignature_key(ctx context.Context, field graphql.CollectedField, obj *model.UploadSignature) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_UploadSignature_key(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.Key, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_UploadSignature_key(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("UploadSignature", field, false, false, errors.New("field of type String does not have child fields"))
-}
-
-func (ec *executionContext) _UploadSignature_publicUrl(ctx context.Context, field graphql.CollectedField, obj *model.UploadSignature) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_UploadSignature_publicUrl(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.PublicURL, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
-			return ec.marshalOString2ᚖstring(ctx, selections, v)
-		},
-		true,
-		false,
-	)
-}
-func (ec *executionContext) fieldContext_UploadSignature_publicUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("UploadSignature", field, false, false, errors.New("field of type String does not have child fields"))
-}
-
-func (ec *executionContext) _UploadSignature_expiresAt(ctx context.Context, field graphql.CollectedField, obj *model.UploadSignature) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_UploadSignature_expiresAt(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.ExpiresAt, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_UploadSignature_expiresAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("UploadSignature", field, false, false, errors.New("field of type String does not have child fields"))
-}
-
-func (ec *executionContext) _UploadSignature_fields(ctx context.Context, field graphql.CollectedField, obj *model.UploadSignature) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_UploadSignature_fields(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.Fields, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v []*model.UploadField) graphql.Marshaler {
-			return ec.marshalNUploadField2ᚕᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUploadFieldᚄ(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_UploadSignature_fields(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "UploadSignature",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_UploadField(ctx, field)
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _User_id(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -10222,29 +9828,6 @@ func (ec *executionContext) _User_portfolioUrl(ctx context.Context, field graphq
 	)
 }
 func (ec *executionContext) fieldContext_User_portfolioUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("User", field, false, false, errors.New("field of type String does not have child fields"))
-}
-
-func (ec *executionContext) _User_resumeUrl(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_User_resumeUrl(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.ResumeURL, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
-			return ec.marshalOString2ᚖstring(ctx, selections, v)
-		},
-		true,
-		false,
-	)
-}
-func (ec *executionContext) fieldContext_User_resumeUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("User", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
@@ -11729,7 +11312,7 @@ func (ec *executionContext) unmarshalInputCreateProjectInput(ctx context.Context
 		asMap["externalResources"] = []any{}
 	}
 
-	fieldsInOrder := [...]string{"title", "summary", "description", "constraints", "disciplines", "teamSizeMin", "teamSizeMax", "fileUrl", "videoUrl", "lifecycleState", "approvalState", "requiredSkills", "niceToHaveSkills", "deliverables", "timeline", "evaluationCriteria", "externalResources", "ownerContactPreference", "applicationQuestions"}
+	fieldsInOrder := [...]string{"title", "summary", "description", "constraints", "disciplines", "teamSizeMin", "teamSizeMax", "videoUrl", "lifecycleState", "approvalState", "requiredSkills", "niceToHaveSkills", "deliverables", "timeline", "evaluationCriteria", "externalResources", "ownerContactPreference", "applicationQuestions"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -11785,13 +11368,6 @@ func (ec *executionContext) unmarshalInputCreateProjectInput(ctx context.Context
 				return it, err
 			}
 			it.TeamSizeMax = data
-		case "fileUrl":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("fileUrl"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.FileURL = data
 		case "videoUrl":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("videoUrl"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -11986,57 +11562,6 @@ func (ec *executionContext) unmarshalInputCreateTeamInput(ctx context.Context, o
 	return it, nil
 }
 
-func (ec *executionContext) unmarshalInputSignUploadInput(ctx context.Context, obj any) (model.SignUploadInput, error) {
-	var it model.SignUploadInput
-	if obj == nil {
-		return it, nil
-	}
-
-	asMap := map[string]any{}
-	for k, v := range obj.(map[string]any) {
-		asMap[k] = v
-	}
-
-	fieldsInOrder := [...]string{"kind", "filename", "contentType", "size"}
-	for _, k := range fieldsInOrder {
-		v, ok := asMap[k]
-		if !ok {
-			continue
-		}
-		switch k {
-		case "kind":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("kind"))
-			data, err := ec.unmarshalNUploadAssetKind2githubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUploadAssetKind(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Kind = data
-		case "filename":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filename"))
-			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Filename = data
-		case "contentType":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("contentType"))
-			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.ContentType = data
-		case "size":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("size"))
-			data, err := ec.unmarshalNInt2int(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Size = data
-		}
-	}
-	return it, nil
-}
-
 func (ec *executionContext) unmarshalInputUpdateProfileInput(ctx context.Context, obj any) (model.UpdateProfileInput, error) {
 	var it model.UpdateProfileInput
 	if obj == nil {
@@ -12048,7 +11573,7 @@ func (ec *executionContext) unmarshalInputUpdateProfileInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"fullName", "bio", "discipline", "university", "linkedinUrl", "githubUrl", "portfolioUrl", "resumeUrl", "avatarUrl", "userIntent", "resumeVisibility", "discord", "availabilityNote", "preferredProjectAreas", "skills", "tags", "profileComplete"}
+	fieldsInOrder := [...]string{"fullName", "bio", "discipline", "university", "linkedinUrl", "githubUrl", "portfolioUrl", "avatarUrl", "userIntent", "resumeVisibility", "discord", "availabilityNote", "preferredProjectAreas", "skills", "tags", "profileComplete"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -12104,13 +11629,6 @@ func (ec *executionContext) unmarshalInputUpdateProfileInput(ctx context.Context
 				return it, err
 			}
 			it.PortfolioURL = data
-		case "resumeUrl":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("resumeUrl"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.ResumeURL = data
 		case "avatarUrl":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("avatarUrl"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -12190,7 +11708,7 @@ func (ec *executionContext) unmarshalInputUpdateProjectInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"title", "summary", "description", "constraints", "disciplines", "teamSizeMin", "teamSizeMax", "status", "lifecycleState", "approvalState", "fileUrl", "videoUrl", "requiredSkills", "niceToHaveSkills", "deliverables", "timeline", "evaluationCriteria", "externalResources", "ownerContactPreference", "applicationQuestions"}
+	fieldsInOrder := [...]string{"title", "summary", "description", "constraints", "disciplines", "teamSizeMin", "teamSizeMax", "status", "lifecycleState", "approvalState", "videoUrl", "requiredSkills", "niceToHaveSkills", "deliverables", "timeline", "evaluationCriteria", "externalResources", "ownerContactPreference", "applicationQuestions"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -12267,13 +11785,6 @@ func (ec *executionContext) unmarshalInputUpdateProjectInput(ctx context.Context
 				return it, err
 			}
 			it.ApprovalState = data
-		case "fileUrl":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("fileUrl"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.FileURL = data
 		case "videoUrl":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("videoUrl"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -12469,7 +11980,7 @@ func (ec *executionContext) unmarshalInputUpsertMyProfileInput(ctx context.Conte
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"username", "email", "fullName", "bio", "discipline", "university", "linkedinUrl", "githubUrl", "portfolioUrl", "resumeUrl", "avatarUrl", "userIntent", "resumeVisibility", "discord", "availabilityNote", "preferredProjectAreas", "skills", "tags"}
+	fieldsInOrder := [...]string{"username", "email", "fullName", "bio", "discipline", "university", "linkedinUrl", "githubUrl", "portfolioUrl", "avatarUrl", "userIntent", "resumeVisibility", "discord", "availabilityNote", "preferredProjectAreas", "skills", "tags"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -12539,13 +12050,6 @@ func (ec *executionContext) unmarshalInputUpsertMyProfileInput(ctx context.Conte
 				return it, err
 			}
 			it.PortfolioURL = data
-		case "resumeUrl":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("resumeUrl"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.ResumeURL = data
 		case "avatarUrl":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("avatarUrl"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -13180,13 +12684,6 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "signUpload":
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_signUpload(ctx, field)
-			})
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
 		case "removeUser":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_removeUser(ctx, field)
@@ -13395,8 +12892,6 @@ func (ec *executionContext) _Project(ctx context.Context, sel ast.SelectionSet, 
 			}
 		case "team":
 			out.Values[i] = ec._Project_team(ctx, field, obj)
-		case "fileUrl":
-			out.Values[i] = ec._Project_fileUrl(ctx, field, obj)
 		case "videoUrl":
 			out.Values[i] = ec._Project_videoUrl(ctx, field, obj)
 		case "applications":
@@ -14401,106 +13896,6 @@ func (ec *executionContext) _TeamPermissions(ctx context.Context, sel ast.Select
 	return out
 }
 
-var uploadFieldImplementors = []string{"UploadField"}
-
-func (ec *executionContext) _UploadField(ctx context.Context, sel ast.SelectionSet, obj *model.UploadField) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, uploadFieldImplementors)
-
-	out := graphql.NewFieldSet(fields)
-	deferred := make(map[string]*graphql.FieldSet)
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("UploadField")
-		case "name":
-			out.Values[i] = ec._UploadField_name(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "value":
-			out.Values[i] = ec._UploadField_value(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch(ctx)
-	if out.Invalids > 0 {
-		return graphql.Null
-	}
-
-	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
-
-	for label, dfs := range deferred {
-		ec.ProcessDeferredGroup(graphql.DeferredGroup{
-			Label:    label,
-			Path:     graphql.GetPath(ctx),
-			FieldSet: dfs,
-			Context:  ctx,
-		})
-	}
-
-	return out
-}
-
-var uploadSignatureImplementors = []string{"UploadSignature"}
-
-func (ec *executionContext) _UploadSignature(ctx context.Context, sel ast.SelectionSet, obj *model.UploadSignature) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, uploadSignatureImplementors)
-
-	out := graphql.NewFieldSet(fields)
-	deferred := make(map[string]*graphql.FieldSet)
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("UploadSignature")
-		case "url":
-			out.Values[i] = ec._UploadSignature_url(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "key":
-			out.Values[i] = ec._UploadSignature_key(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "publicUrl":
-			out.Values[i] = ec._UploadSignature_publicUrl(ctx, field, obj)
-		case "expiresAt":
-			out.Values[i] = ec._UploadSignature_expiresAt(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "fields":
-			out.Values[i] = ec._UploadSignature_fields(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch(ctx)
-	if out.Invalids > 0 {
-		return graphql.Null
-	}
-
-	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
-
-	for label, dfs := range deferred {
-		ec.ProcessDeferredGroup(graphql.DeferredGroup{
-			Label:    label,
-			Path:     graphql.GetPath(ctx),
-			FieldSet: dfs,
-			Context:  ctx,
-		})
-	}
-
-	return out
-}
-
 var userImplementors = []string{"User"}
 
 func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj *model.User) graphql.Marshaler {
@@ -14546,8 +13941,6 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 			out.Values[i] = ec._User_githubUrl(ctx, field, obj)
 		case "portfolioUrl":
 			out.Values[i] = ec._User_portfolioUrl(ctx, field, obj)
-		case "resumeUrl":
-			out.Values[i] = ec._User_resumeUrl(ctx, field, obj)
 		case "avatarUrl":
 			out.Values[i] = ec._User_avatarUrl(ctx, field, obj)
 		case "userIntent":
@@ -15268,11 +14661,6 @@ func (ec *executionContext) marshalNResumeVisibility2githubᚗcomᚋlocalᚋquor
 	return v
 }
 
-func (ec *executionContext) unmarshalNSignUploadInput2githubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐSignUploadInput(ctx context.Context, v any) (model.SignUploadInput, error) {
-	res, err := ec.unmarshalInputSignUploadInput(ctx, v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
 func (ec *executionContext) unmarshalNString2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalString(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -15538,56 +14926,6 @@ func (ec *executionContext) unmarshalNUpdateProjectInput2githubᚗcomᚋlocalᚋ
 func (ec *executionContext) unmarshalNUpdateTeamInput2githubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUpdateTeamInput(ctx context.Context, v any) (model.UpdateTeamInput, error) {
 	res, err := ec.unmarshalInputUpdateTeamInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) unmarshalNUploadAssetKind2githubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUploadAssetKind(ctx context.Context, v any) (model.UploadAssetKind, error) {
-	var res model.UploadAssetKind
-	err := res.UnmarshalGQL(v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalNUploadAssetKind2githubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUploadAssetKind(ctx context.Context, sel ast.SelectionSet, v model.UploadAssetKind) graphql.Marshaler {
-	return v
-}
-
-func (ec *executionContext) marshalNUploadField2ᚕᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUploadFieldᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.UploadField) graphql.Marshaler {
-	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
-		fc := graphql.GetFieldContext(ctx)
-		fc.Result = &v[i]
-		return ec.marshalNUploadField2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUploadField(ctx, sel, v[i])
-	})
-
-	for _, e := range ret {
-		if e == graphql.Null {
-			return graphql.Null
-		}
-	}
-
-	return ret
-}
-
-func (ec *executionContext) marshalNUploadField2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUploadField(ctx context.Context, sel ast.SelectionSet, v *model.UploadField) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._UploadField(ctx, sel, v)
-}
-
-func (ec *executionContext) marshalNUploadSignature2githubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUploadSignature(ctx context.Context, sel ast.SelectionSet, v model.UploadSignature) graphql.Marshaler {
-	return ec._UploadSignature(ctx, sel, &v)
-}
-
-func (ec *executionContext) marshalNUploadSignature2ᚖgithubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUploadSignature(ctx context.Context, sel ast.SelectionSet, v *model.UploadSignature) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._UploadSignature(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNUpsertMyProfileInput2githubᚗcomᚋlocalᚋquorumᚋappsᚋapiᚋinternalᚋgraphᚋmodelᚐUpsertMyProfileInput(ctx context.Context, v any) (model.UpsertMyProfileInput, error) {

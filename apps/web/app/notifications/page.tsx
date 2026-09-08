@@ -2,13 +2,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Status, LoadingSkeleton } from "@/components/ui";
-import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
-import { NOTIFICATIONS_QUERY } from "@/lib/queries";
+import { userFacingError } from "@/lib/operations/client";
+import { operationRequest, useOperation } from "@/lib/operations/client";
 import type { Notification } from "@/types/domain";
 
 export default function NotificationsPage() {
   const router = useRouter();
-  const { data, error, loading, reload } = useGraphQL<{ myNotifications: Notification[] }>(NOTIFICATIONS_QUERY, {}, { auth: true });
+  const { data, error, loading, reload } = useOperation<{ myNotifications: Notification[] }>("NotificationsV1", {});
   const notifications = data?.myNotifications || [];
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -16,7 +16,7 @@ export default function NotificationsPage() {
     event.stopPropagation(); // Avoid triggering route navigation
     try {
       setActionError(null);
-      await graphqlRequest(`mutation MarkNotification($id: ID!) { markNotificationRead(notificationId: $id) }`, { id }, { auth: true });
+      await operationRequest("MarkNotificationReadV1", { notificationId: id });
       await reload();
     } catch (err) {
       setActionError(userFacingError(err));

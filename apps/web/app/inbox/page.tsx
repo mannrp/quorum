@@ -1,83 +1,66 @@
 "use client";
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Section, Status, Badge } from "@/components/ui";
-import { graphqlRequest, useGraphQL, userFacingError } from "@/lib/graphql";
-import { INBOX_QUERY, MESSAGES_QUERY } from "@/lib/queries";
+import { userFacingError } from "@/lib/operations/client";
+import { operationRequest, useOperation } from "@/lib/operations/client";
 import type { Message, User } from "@/types/domain";
 
 function InboxInner() {
   const searchParams = useSearchParams();
-  const queryUserId = searchParams.get("userId");
+  const recipientUsername = searchParams.get("username");
 
-  const { data, error, loading } = useGraphQL<{ me: User | null; myInbox: User[] }>(INBOX_QUERY, {}, { auth: true });
+  const { data, loading } = useOperation<{ me: User | null; myInbox: User[] }>("InboxV1", {});
   const [activeUser, setActiveUser] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
-  const [extraUser, setExtraUser] = useState<User | null>(null);
+  const [newRecipient, setNewRecipient] = useState<User | null>(null);
 
-  const rawUsers = useMemo(() => data?.myInbox || [], [data?.myInbox]);
-  const me = data?.me;
-
-  // Append queryUserId to inbox roster if they aren't already present
+  const inboxUsers = useMemo(() => data?.myInbox ?? [], [data?.myInbox]);
   const users = useMemo(() => {
-    if (extraUser && !rawUsers.some((u) => u.id === extraUser.id)) {
-      return [extraUser, ...rawUsers];
+    if (newRecipient && !inboxUsers.some((user) => user.id === newRecipient.id)) {
+      return [newRecipient, ...inboxUsers];
     }
-    return rawUsers;
-  }, [rawUsers, extraUser]);
-
+    return inboxUsers;
+  }, [inboxUsers, newRecipient]);
+  const me = data?.me;
   const activeUserData = users.find((user) => user.id === activeUser);
 
-  // 1. Resolve search parameter focus
   useEffect(() => {
-    if (queryUserId) {
-      const exists = rawUsers.find((u) => u.id === queryUserId);
-      if (exists) {
-        setActiveUser(exists.id);
-      } else {
-        // Fetch new target user profile details to start message
-        const fetchTarget = async () => {
-          try {
-            const res = await graphqlRequest<{ users: User[] }>(
-              `query inboxTargetQuery { users { id username fullName discipline } }`,
-              {},
-              { auth: true }
-            );
-            
-            const target = res.users.find((u) => u.id === queryUserId);
-            if (target) {
-              setExtraUser(target);
-              setActiveUser(target.id);
-            }
-          } catch (err) {
-            setNotice(userFacingError(err));
-          }
-        };
-        void fetchTarget();
-      }
-    } else if (!activeUser && rawUsers.length > 0) {
-      setActiveUser(rawUsers[0].id);
+    if (!recipientUsername) {
+      if (!activeUser && inboxUsers.length > 0) setActiveUser(inboxUsers[0].id);
+      return;
     }
-  }, [queryUserId, rawUsers, activeUser]);
 
-  // 2. Fetch thread messages
+    const existing = users.find((user) => user.username === recipientUsername);
+    if (existing) {
+      setActiveUser(existing.id);
+      return;
+    }
+
+    void operationRequest<{ user: User | null }>("MessageRecipientV1", { username: recipientUsername })
+      .then((result) => {
+        if (!result.user) throw new Error("Message recipient was not found.");
+        setNewRecipient(result.user);
+        setActiveUser(result.user.id);
+      })
+      .catch((cause) => setNotice(userFacingError(cause)));
+  }, [activeUser, inboxUsers, recipientUsername, users]);
+
   useEffect(() => {
     if (!activeUser) return;
-    graphqlRequest<{ myMessages: Message[] }>(MESSAGES_QUERY, { withUser: activeUser }, { auth: true })
+    void operationRequest<{ myMessages: Message[] }>("ThreadMessagesV1", { withUser: activeUser })
       .then((result) => setMessages(result.myMessages))
-      .catch((err) => setNotice(userFacingError(err)));
-  }, [activeUser, activeUserData, me]);
+      .catch((cause) => setNotice(userFacingError(cause)));
+  }, [activeUser]);
 
   const handleSend = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!text.trim() || !activeUser) return;
     try {
-      const result = await graphqlRequest<{ sendMessage: Message }>(
-        `mutation Send($receiverId: ID!, $body: String!) { sendMessage(receiverId: $receiverId, body: $body) { id body read createdAt sender { id username fullName } receiver { id username fullName } } }`,
+      const result = await operationRequest<{ sendMessage: Message }>(
+        "SendMessageV1",
         { receiverId: activeUser, body: text.trim() },
-        { auth: true }
       );
       setMessages((prev) => [...prev, result.sendMessage]);
       setText("");
@@ -91,7 +74,7 @@ function InboxInner() {
       const unread = messages.filter((message) => message.receiver.id === me?.id && !message.read);
       await Promise.all(
         unread.map((message) =>
-          graphqlRequest(`mutation MarkRead($id: ID!) { markRead(messageId: $id) }`, { id: message.id }, { auth: true })
+          operationRequest("MarkMessageReadV1", { messageId: message.id })
         )
       );
       setMessages((prev) =>
@@ -147,7 +130,7 @@ function InboxInner() {
               {activeUserData?.fullName || "Select conversation"}
             </span>
             <p className="text-[10px] text-[var(--muted-app)]">
-              {activeUserData ? `@${activeUserData.username} • ${activeUserData.discipline || "SOEN"}` : "Roster chats load after selection."}
+              {activeUserData ? `@${activeUserData.username} - ${activeUserData.discipline || "SOEN"}` : "Roster chats load after selection."}
             </p>
           </div>
           {activeUserData && (

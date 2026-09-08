@@ -14,12 +14,23 @@
     "dev:web": "npm run dev --workspace=@quorum/web",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
+    "test:web": "npm run test --workspace=@quorum/web",
+    "test:e2e": "node scripts/run-e2e.mjs",
+    "test:docker-context": "node scripts/verify-docker-context.mjs",
     "clear": "npm run clear --workspace=@quorum/web",
-    "migrate:api": "cd apps/api && go run ./cmd/migrate",
-    "smoke:api": "cd apps/api && go run ./cmd/e2e",
-    "smoke": "npm run smoke:api"
+    "infra:up": "docker compose -f compose.dev.yml up -d --wait",
+    "infra:down": "docker compose -f compose.dev.yml down",
+    "infra:status": "docker compose -f compose.dev.yml ps",
+    "dev:up": "node scripts/dev-up.mjs",
+    "db:migrate": "cd apps/api && go run ./cmd/migrate",
+    "db:init:local": "cd apps/api && go run ./cmd/localdb init",
+    "db:reset:local": "cd apps/api && go run ./cmd/localdb reset",
+    "db:bootstrap-roles": "cd apps/api && go run ./cmd/bootstrap-roles",
+    "db:generate": "cd apps/api && go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate",
+    "migrate:api": "npm run db:migrate"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.0",
     "turbo": "^2.0.11"
   }
 }

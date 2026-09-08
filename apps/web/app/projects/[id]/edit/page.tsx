@@ -1,17 +1,15 @@
 "use client";
 import { use, useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Section, Combobox, LoadingSkeleton } from "@/components/ui";
-import { useGraphQL, graphqlRequest, userFacingError } from "@/lib/graphql";
+import { userFacingError } from "@/lib/operations/client";
+import { operationRequest, useOperation } from "@/lib/operations/client";
 import { DISCIPLINE_OPTIONS, PROJECT_TEAM_SIZE_MAX, PROJECT_TEAM_SIZE_MIN } from "@/lib/policy";
-import { PROJECT_QUERY } from "@/lib/queries";
 import type { Project } from "@/types/domain";
 
 export default function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const router = useRouter();
-  const { data, error, loading, reload } = useGraphQL<{ project: Project | null }>(PROJECT_QUERY, { id }, { auth: true });
+  const { data, error, loading } = useOperation<{ project: Project | null }>("ProjectOwnerV1", { projectId: id });
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -37,23 +35,16 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
     setSaving(true);
 
     try {
-      await graphqlRequest(
-        `mutation UpdateProjectDetails($id: ID!, $input: UpdateProjectInput!) {
-          updateProject(id: $id, input: $input) { id }
-        }`,
+      await operationRequest(
+        "UpdateProjectV1",
         {
-          id,
+          projectId: id,
           input: {
-            title,
-            description,
-            constraints,
-            disciplines,
+            title, summary: data?.project?.summary ?? "", description, constraints, disciplines,
             teamSizeMin: data?.project?.teamSizeMin ?? PROJECT_TEAM_SIZE_MIN,
-            teamSizeMax: data?.project?.teamSizeMax ?? PROJECT_TEAM_SIZE_MAX,
-            status,
-          }
+            teamSizeMax: data?.project?.teamSizeMax ?? PROJECT_TEAM_SIZE_MAX, status,
+          },
         },
-        { auth: true }
       );
       setNotice("Project updated successfully. Applicants notified of material changes.");
     } catch (err) {
@@ -89,7 +80,7 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
 
       {/* Material change warning alert */}
       <div className="p-4 border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-950/10 text-xs leading-relaxed space-y-1">
-        <strong className="text-amber-800 dark:text-amber-400 block font-bold uppercase tracking-wider text-[9px]">⚠️ Warning: Material Scope Modification</strong>
+        <strong className="text-amber-800 dark:text-amber-400 block font-bold uppercase tracking-wider text-[9px]">Warning: Material Scope Modification</strong>
         <p className="text-stone-600 dark:text-slate-350">
           Updating the description, constraints, or disciplines after teams have submitted claims will automatically notify those groups and prompt their leads to review the changes.
         </p>

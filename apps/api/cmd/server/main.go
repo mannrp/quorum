@@ -31,17 +31,17 @@ func main() {
 	}
 	defer pool.Close()
 
-	if err := bootstrapAdmins(ctx, pool, cfg.AdminEmails); err != nil {
-		logger.Error("admin bootstrap failed", "error", err)
+	listener, err := server.Listen(cfg)
+	if err != nil {
+		logger.Error("api listener failed", "error", err)
 		os.Exit(1)
 	}
-
 	httpServer := server.NewHTTPServer(cfg, server.NewHandler(cfg, pool, logger))
 
 	errs := make(chan error, 1)
 	go func() {
-		logger.Info("api listening", "addr", "http://localhost:"+cfg.Port)
-		errs <- httpServer.ListenAndServe()
+		logger.Info("api listening", "network", listener.Addr().Network(), "addr", listener.Addr().String())
+		errs <- httpServer.Serve(listener)
 	}()
 
 	stop := make(chan os.Signal, 1)
@@ -63,18 +63,4 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("api stopped")
-}
-
-func bootstrapAdmins(ctx context.Context, pool *pgxpool.Pool, emails []string) error {
-	if len(emails) == 0 {
-		return nil
-	}
-	_, err := pool.Exec(ctx, `
-		INSERT INTO admin_users (user_id)
-		SELECT id
-		FROM users
-		WHERE lower(email) = ANY($1::text[])
-		ON CONFLICT DO NOTHING
-	`, emails)
-	return err
 }
